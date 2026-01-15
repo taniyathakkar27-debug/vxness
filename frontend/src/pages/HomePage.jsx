@@ -951,22 +951,12 @@ const HomePage = () => {
 
   const handleLogin = () => {
     setIsMenuOpen(false);
-    const url = getTradeUrl('/login');
-    if (url.startsWith('http')) {
-      window.location.href = url;
-    } else {
-      navigate(url);
-    }
+    window.location.href = getTradeUrl('/login');
   };
 
   const handleSignUp = () => {
     setIsMenuOpen(false);
-    const url = getTradeUrl('/signup');
-    if (url.startsWith('http')) {
-      window.location.href = url;
-    } else {
-      navigate(url);
-    }
+    window.location.href = getTradeUrl('/signup');
   };
 
   const features = [
