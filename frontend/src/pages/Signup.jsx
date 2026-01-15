@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { signup } from "../api/auth";
 import { API_URL } from "../config/api";
-import logo from "../assets/nalmifx.png";
+import logo from "../assets/vxness.png";
 
 const countries = [
   { code: "+1", name: "United States", flag: "🇺🇸" },

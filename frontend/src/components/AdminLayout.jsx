@@ -23,6 +23,7 @@ import {
   Palette,
   Mail,
 } from "lucide-react";
+import logo from "../assets/vxness.png";
 
 const AdminLayout = ({ children, title, subtitle }) => {
   const navigate = useNavigate();
@@ -103,25 +104,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
         {/* Logo */}
         <div className="p-4 flex items-center justify-between border-b border-gray-800">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
-              <img
-                src="/src/assets/dashlogo.png"
-                alt="Vxness Logo"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.style.display = "none";
-                  e.target.parentElement.innerHTML = `
-          <div class="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded flex items-center justify-center flex-shrink-0">
-            <span class="text-white font-bold text-sm">V</span>
-          </div>
-        `;
-                }}
-              />
-            </div>
-            {sidebarExpanded && (
-              <span className="text-white font-semibold">Admin</span>
-            )}
+            <img src={logo} alt="Vxness" className="h-8 w-auto" />
           </div>
           <button
             onClick={() => setSidebarExpanded(!sidebarExpanded)}

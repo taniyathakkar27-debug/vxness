@@ -887,6 +887,7 @@ import {
   FaAndroid,
 } from "react-icons/fa";
 import { IoMdArrowDropdown } from "react-icons/io";
+import vxnessLogo from "../assets/vxness.png";
 
 const HomePage = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -1100,12 +1101,7 @@ const HomePage = () => {
           <div className="flex justify-between items-center">
             {/* Logo */}
             <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center font-bold text-black">
-                VX
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                Vxness
-              </span>
+              <img src={vxnessLogo} alt="Vxness" className="h-10 w-auto" />
             </div>
 
             {/* Desktop Navigation */}
@@ -1668,12 +1664,7 @@ const HomePage = () => {
             {/* Brand Column */}
             <div className="lg:col-span-2">
               <div className="flex items-center space-x-2 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center font-bold text-black">
-                  VX
-                </div>
-                <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                  Vxness
-                </span>
+                <img src={vxnessLogo} alt="Vxness" className="h-10 w-auto" />
               </div>
               <p className="text-gray-400 mb-6 max-w-md">
                 Advanced trading platform for everyone. Secure, fast, and

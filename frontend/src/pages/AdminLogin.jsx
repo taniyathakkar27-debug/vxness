@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import logo from '../assets/vxness.png'
 
 const AdminLogin = () => {
   const navigate = useNavigate()
@@ -48,6 +49,11 @@ const AdminLogin = () => {
         >
           <X size={16} className="text-gray-400" />
         </button>
+
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <img src={logo} alt="Vxness" className="h-12 w-auto" />
+        </div>
 
         {/* Admin Badge */}
         <div className="flex items-center gap-2 mb-6">
