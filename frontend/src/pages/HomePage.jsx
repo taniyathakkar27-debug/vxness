@@ -934,15 +934,39 @@ const HomePage = () => {
     setActiveSection(sectionId);
   };
 
+  // Get the base URL for trade subdomain
+  const getTradeUrl = (path) => {
+    const hostname = window.location.hostname;
+    // In production, redirect to trade.vxness.com
+    if (hostname === 'vxness.com' || hostname === 'www.vxness.com') {
+      return `https://trade.vxness.com${path}`;
+    }
+    // In development, use query param for testing
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${path}?subdomain=trade`;
+    }
+    // Already on trade subdomain or other
+    return path;
+  };
+
   const handleLogin = () => {
     setIsMenuOpen(false);
-    navigate("/user/login");
+    const url = getTradeUrl('/login');
+    if (url.startsWith('http')) {
+      window.location.href = url;
+    } else {
+      navigate(url);
+    }
   };
 
   const handleSignUp = () => {
     setIsMenuOpen(false);
-
-    navigate("/user/signup");
+    const url = getTradeUrl('/signup');
+    if (url.startsWith('http')) {
+      window.location.href = url;
+    } else {
+      navigate(url);
+    }
   };
 
   const features = [
