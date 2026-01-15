@@ -26,7 +26,7 @@ const AdminLogin = () => {
     if (formData.email === 'admin@admin.com' && formData.password === 'admin123') {
       localStorage.setItem('adminToken', 'admin-authenticated')
       localStorage.setItem('adminUser', JSON.stringify({ email: formData.email, role: 'admin' }))
-      navigate('/admin/dashboard')
+      navigate('/dashboard')
     } else {
       setError('Invalid admin credentials')
     }
