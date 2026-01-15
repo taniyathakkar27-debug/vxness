@@ -83,6 +83,10 @@ function TradeRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/user/login" element={<Navigate to="/login" replace />} />
+      <Route path="/user/signup" element={<Navigate to="/signup" replace />} />
+      <Route path="/users/login" element={<Navigate to="/login" replace />} />
+      <Route path="/users/signup" element={<Navigate to="/signup" replace />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/mobile" element={<MobileTradingApp />} />
       <Route path="/account" element={<Account />} />
