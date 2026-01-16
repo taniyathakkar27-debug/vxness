@@ -58,9 +58,12 @@ const HomePage = () => {
       const isPositive = markets[currentMarketIndex].changeType === "positive";
       
       for (let i = 0; i < 20; i++) {
-        const randomVariation = (Math.random() - 0.5) * 0.02;
-        const trend = isPositive ? 0.001 * i : -0.001 * i;
-        const price = numPrice * (1 + trend + randomVariation + (changePercent / 100) * (i / 20));
+        // Increased volatility for more up-down movement
+        const randomVariation = (Math.random() - 0.5) * 0.06; // Increased from 0.02 to 0.06
+        const trend = isPositive ? 0.002 * i : -0.002 * i; // Increased from 0.001 to 0.002
+        const wavePattern = Math.sin(i * 0.5) * 0.03; // Added sine wave for more movement
+        
+        const price = numPrice * (1 + trend + randomVariation + wavePattern + (changePercent / 100) * (i / 20));
         
         data.push({
           time: `${i}:00`,
@@ -81,18 +84,39 @@ const HomePage = () => {
     return () => clearInterval(interval);
   }, [currentMarketIndex]);
 
-  // Dashboard preview chart data
+  // Dashboard preview chart data and order book
   const [dashboardChartData, setDashboardChartData] = useState([]);
+  const [buyOrders, setBuyOrders] = useState([
+    { price: 42.85, amount: 1.2 },
+    { price: 42.84, amount: 1.7 },
+    { price: 42.83, amount: 2.2 }
+  ]);
+  const [sellOrders, setSellOrders] = useState([
+    { price: 42.86, amount: 0.8 },
+    { price: 42.87, amount: 1.2 },
+    { price: 42.88, amount: 1.6 }
+  ]);
+  const [currentPrice, setCurrentPrice] = useState(42.855);
+  const [orderBookSpread, setOrderBookSpread] = useState({ bid: 42.85, ask: 42.86 });
+  const [priceTrend, setPriceTrend] = useState('up'); // 'up' or 'down'
+  const [volatility, setVolatility] = useState(0.5); // Controls how much up-down movement
   
   useEffect(() => {
     const generateDashboardData = () => {
       const data = [];
-      const basePrice = 42856.32;
+      let price = currentPrice;
       
       for (let i = 0; i < 15; i++) {
-        const randomVariation = (Math.random() - 0.5) * 0.01;
-        const trend = 0.0005 * i; // Slight upward trend
-        const price = basePrice * (1 + trend + randomVariation);
+        // Increased volatility for more dramatic movement
+        const wavePattern = Math.sin(i * 0.8) * 0.02; // Sine wave pattern
+        const randomStep = (Math.random() - 0.5) * 0.08; // Increased from 0.02 to 0.08
+        
+        // More aggressive trend based on current direction
+        const trendMultiplier = priceTrend === 'up' ? 0.0008 : -0.0008;
+        const trend = trendMultiplier * i;
+        
+        // Combine all factors
+        price = price * (1 + randomStep + wavePattern + trend);
         
         data.push({
           time: i,
@@ -102,15 +126,86 @@ const HomePage = () => {
       return data;
     };
 
+    const updateOrderBook = () => {
+      // Randomly change price trend direction for more volatility
+      if (Math.random() > 0.7) {
+        setPriceTrend(prev => prev === 'up' ? 'down' : 'up');
+      }
+      
+      // Increase volatility randomly
+      if (Math.random() > 0.8) {
+        setVolatility(prev => Math.min(prev + 0.1, 0.9));
+      } else if (Math.random() > 0.9) {
+        setVolatility(prev => Math.max(prev - 0.1, 0.2));
+      }
+
+      // Update current price with more dramatic fluctuations
+      const priceChange = (Math.random() - 0.5) * 0.4 * volatility; // Increased from 0.1 to 0.4
+      const newCurrentPrice = currentPrice * (1 + priceChange / 100);
+      setCurrentPrice(newCurrentPrice);
+
+      // Generate new buy orders based on current price with more spread
+      const newBuyOrders = [];
+      let buyPrice = newCurrentPrice * (0.99 - volatility * 0.01); // More spread with volatility
+      let totalBuyAmount = 0;
+      
+      for (let i = 0; i < 3; i++) {
+        // Larger price steps for buy orders
+        const priceStep = 0.02 + Math.random() * 0.03;
+        const price = buyPrice - (i * priceStep);
+        
+        // More variation in amounts
+        const amount = (0.8 + i * 0.4) + Math.random() * 0.8;
+        totalBuyAmount += amount;
+        
+        newBuyOrders.push({ 
+          price: parseFloat(price.toFixed(3)), 
+          amount: parseFloat(amount.toFixed(2)) 
+        });
+      }
+
+      // Generate new sell orders based on current price with more spread
+      const newSellOrders = [];
+      let sellPrice = newCurrentPrice * (1.01 + volatility * 0.01); // More spread with volatility
+      let totalSellAmount = 0;
+      
+      for (let i = 0; i < 3; i++) {
+        // Larger price steps for sell orders
+        const priceStep = 0.02 + Math.random() * 0.03;
+        const price = sellPrice + (i * priceStep);
+        
+        // More variation in amounts
+        const amount = (0.5 + i * 0.3) + Math.random() * 0.6;
+        totalSellAmount += amount;
+        
+        newSellOrders.push({ 
+          price: parseFloat(price.toFixed(3)), 
+          amount: parseFloat(amount.toFixed(2)) 
+        });
+      }
+
+      // Update spread (difference between best bid and ask)
+      setOrderBookSpread({
+        bid: newBuyOrders[0].price,
+        ask: newSellOrders[0].price
+      });
+
+      return { buyOrders: newBuyOrders, sellOrders: newSellOrders };
+    };
+
+    // Initialize
     setDashboardChartData(generateDashboardData());
 
-    // Update dashboard chart every 2 seconds
+    // Update interval - faster updates for more movement
     const interval = setInterval(() => {
+      const { buyOrders: newBuyOrders, sellOrders: newSellOrders } = updateOrderBook();
+      setBuyOrders(newBuyOrders);
+      setSellOrders(newSellOrders);
       setDashboardChartData(generateDashboardData());
-    }, 2000);
+    }, 1200); // Faster updates
 
     return () => clearInterval(interval);
-  }, []);
+  }, [currentPrice, priceTrend, volatility]);
 
   const scrollToSection = (sectionId) => {
     const element = document.getElementById(sectionId);
@@ -483,7 +578,15 @@ const HomePage = () => {
                 <div className="flex justify-between items-center mb-6">
                   <div className="flex items-center space-x-2 bg-gray-800 rounded-lg px-3 py-2">
                     <span className="font-medium">BTC/USDT</span>
-                    <span className="text-green-400 font-medium">+5.2%</span>
+                    <span className={`font-medium ${priceTrend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
+                      ${currentPrice.toFixed(3)}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-400">Spread</div>
+                    <div className="text-cyan-400 font-medium">
+                      ${(orderBookSpread.ask - orderBookSpread.bid).toFixed(3)}
+                    </div>
                   </div>
                 </div>
 
@@ -498,13 +601,14 @@ const HomePage = () => {
                         tick={{ fill: '#9ca3af', fontSize: 10 }}
                         axisLine={false}
                         tickLine={false}
+                        hide={true}
                       />
                       <YAxis 
                         stroke="#9ca3af"
                         tick={{ fill: '#9ca3af', fontSize: 10 }}
                         axisLine={false}
                         tickLine={false}
-                        domain={['dataMin - 100', 'dataMax + 100']}
+                        domain={['dataMin - 200', 'dataMax + 200']}
                         hide={true}
                       />
                       <Tooltip 
@@ -516,53 +620,83 @@ const HomePage = () => {
                         }}
                         labelStyle={{ color: '#9ca3af' }}
                         itemStyle={{ color: '#fff' }}
-                        formatter={(value) => [`$${value.toFixed(2)}`, 'BTC/USDT']}
+                        formatter={(value) => [`$${value.toFixed(3)}`, 'BTC/USDT']}
                       />
                       <Line
                         type="monotone"
                         dataKey="price"
-                        stroke="#10b981"
+                        stroke={priceTrend === 'up' ? "#10b981" : "#ef4444"}
                         strokeWidth={2}
                         dot={false}
-                        animationDuration={1000}
+                        animationDuration={800}
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  
+                  {/* Price trend indicator */}
+                  <div className={`absolute top-2 right-2 text-xs px-2 py-1 rounded ${priceTrend === 'up' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {priceTrend === 'up' ? '▲ BULLISH' : '▼ BEARISH'}
+                  </div>
                 </div>
 
                 {/* Order Book */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h4 className="text-green-400 font-medium mb-2">
-                      Buy Orders
+                    <h4 className="text-green-400 font-medium mb-2 flex justify-between">
+                      <span>Buy Orders</span>
+                      <span className="text-xs text-gray-400 font-normal">
+                        Total: {buyOrders.reduce((sum, order) => sum + order.amount, 0).toFixed(2)}
+                      </span>
                     </h4>
-                    {[42.85, 42.84, 42.83].map((price, i) => (
+                    {buyOrders.map((order, i) => (
                       <div
                         key={i}
-                        className="flex justify-between py-2 border-b border-gray-800"
+                        className="flex justify-between py-2 border-b border-gray-800 transition-all duration-500 hover:bg-gray-800/30 rounded px-2 group"
                       >
-                        <span className="text-green-400">
-                          ${price.toFixed(2)}
+                        <span className="text-green-400 group-hover:text-green-300 transition-colors">
+                          ${order.price.toFixed(3)}
                         </span>
-                        <span className="text-gray-400">{1.2 + i * 0.5}</span>
+                        <span className="text-gray-400 group-hover:text-white transition-colors">
+                          {order.amount.toFixed(2)}
+                        </span>
                       </div>
                     ))}
                   </div>
                   <div>
-                    <h4 className="text-red-400 font-medium mb-2">
-                      Sell Orders
+                    <h4 className="text-red-400 font-medium mb-2 flex justify-between">
+                      <span>Sell Orders</span>
+                      <span className="text-xs text-gray-400 font-normal">
+                        Total: {sellOrders.reduce((sum, order) => sum + order.amount, 0).toFixed(2)}
+                      </span>
                     </h4>
-                    {[42.86, 42.87, 42.88].map((price, i) => (
+                    {sellOrders.map((order, i) => (
                       <div
                         key={i}
-                        className="flex justify-between py-2 border-b border-gray-800"
+                        className="flex justify-between py-2 border-b border-gray-800 transition-all duration-500 hover:bg-gray-800/30 rounded px-2 group"
                       >
-                        <span className="text-red-400">
-                          ${price.toFixed(2)}
+                        <span className="text-red-400 group-hover:text-red-300 transition-colors">
+                          ${order.price.toFixed(3)}
                         </span>
-                        <span className="text-gray-400">{0.8 + i * 0.4}</span>
+                        <span className="text-gray-400 group-hover:text-white transition-colors">
+                          {order.amount.toFixed(2)}
+                        </span>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Current Price Indicator */}
+                <div className="mt-4 pt-4 border-t border-gray-800">
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm text-gray-400">Current Price</div>
+                    <div className="flex items-center space-x-2">
+                      <div className={`text-lg font-bold ${priceTrend === 'up' ? 'text-green-400 animate-pulse' : 'text-red-400 animate-pulse'}`}>
+                        ${currentPrice.toFixed(3)}
+                      </div>
+                      <div className={`text-xs px-2 py-1 rounded ${priceTrend === 'up' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {volatility > 0.7 ? 'HIGH VOL' : volatility > 0.4 ? 'MED VOL' : 'LOW VOL'}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -719,7 +853,7 @@ const HomePage = () => {
                     stroke={markets[currentMarketIndex].changeType === "positive" ? "#10b981" : "#ef4444"}
                     strokeWidth={2}
                     fill="url(#priceGradient)"
-                    animationDuration={1000}
+                    animationDuration={800}
                   />
                 </AreaChart>
               </ResponsiveContainer>
