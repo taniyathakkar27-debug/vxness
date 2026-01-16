@@ -35,36 +35,36 @@ const AdminLayout = ({ children, title, subtitle }) => {
     {
       name: "Overview Dashboard",
       icon: LayoutDashboard,
-      path: "/admin/dashboard",
+      path: "/dashboard",
     },
-    { name: "User Management", icon: Users, path: "/admin/users" },
-    { name: "Trade Management", icon: TrendingUp, path: "/admin/trades" },
-    { name: "Fund Management", icon: Wallet, path: "/admin/funds" },
-    { name: "Bank Settings", icon: Building2, path: "/admin/bank-settings" },
-    { name: "IB Management", icon: UserCog, path: "/admin/ib-management" },
-    { name: "Forex Charges", icon: DollarSign, path: "/admin/forex-charges" },
-    { name: "Earnings Report", icon: TrendingUp, path: "/admin/earnings" },
-    { name: "Copy Trade Management", icon: Copy, path: "/admin/copy-trade" },
-    { name: "Prop Firm Challenges", icon: Trophy, path: "/admin/prop-firm" },
-    { name: "Account Types", icon: CreditCard, path: "/admin/account-types" },
-    { name: "Theme Settings", icon: Palette, path: "/admin/theme" },
-    { name: "Email Templates", icon: Mail, path: "/admin/email-templates" },
-    { name: "Admin Management", icon: Shield, path: "/admin/admin-management" },
-    { name: "KYC Verification", icon: FileCheck, path: "/admin/kyc" },
-    { name: "Support Tickets", icon: HeadphonesIcon, path: "/admin/support" },
+    { name: "User Management", icon: Users, path: "/users" },
+    { name: "Trade Management", icon: TrendingUp, path: "/trades" },
+    { name: "Fund Management", icon: Wallet, path: "/funds" },
+    { name: "Bank Settings", icon: Building2, path: "/bank-settings" },
+    { name: "IB Management", icon: UserCog, path: "/ib-management" },
+    { name: "Forex Charges", icon: DollarSign, path: "/forex-charges" },
+    { name: "Earnings Report", icon: TrendingUp, path: "/earnings" },
+    { name: "Copy Trade Management", icon: Copy, path: "/copy-trade" },
+    { name: "Prop Firm Challenges", icon: Trophy, path: "/prop-firm" },
+    { name: "Account Types", icon: CreditCard, path: "/account-types" },
+    { name: "Theme Settings", icon: Palette, path: "/theme" },
+    { name: "Email Templates", icon: Mail, path: "/email-templates" },
+    { name: "Admin Management", icon: Shield, path: "/admin-management" },
+    { name: "KYC Verification", icon: FileCheck, path: "/kyc" },
+    { name: "Support Tickets", icon: HeadphonesIcon, path: "/support" },
   ];
 
   useEffect(() => {
     const adminToken = localStorage.getItem("adminToken");
     if (!adminToken) {
-      navigate("/admin");
+      navigate("/");
     }
   }, [navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("adminToken");
     localStorage.removeItem("adminUser");
-    navigate("/admin");
+    navigate("/");
   };
 
   const isActive = (path) => location.pathname === path;

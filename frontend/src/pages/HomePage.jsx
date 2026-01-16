@@ -63,13 +63,12 @@ const HomePage = () => {
 
   const handleLogin = () => {
     setIsMenuOpen(false);
-    navigate("/user/login");
+    window.location.href = "https://trade.vxness.com/login";
   };
 
   const handleSignUp = () => {
     setIsMenuOpen(false);
-
-    navigate("/user/signup");
+    window.location.href = "https://trade.vxness.com/signup";
   };
 
   const features = [
