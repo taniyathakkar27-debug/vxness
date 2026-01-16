@@ -14,11 +14,14 @@ import {
   FiGlobe,
   FiLock,
 } from "react-icons/fi";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 
 const HomePage = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("home");
   const [scrollY, setScrollY] = useState(0);
+  const [chartData, setChartData] = useState([]);
+  const [currentMarketIndex, setCurrentMarketIndex] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,6 +47,70 @@ const HomePage = () => {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [activeSection]);
+
+  // Generate animated chart data
+  useEffect(() => {
+    const generateChartData = () => {
+      const data = [];
+      const basePrice = markets[currentMarketIndex].price.replace(/[$,]/g, '');
+      const numPrice = parseFloat(basePrice);
+      const changePercent = parseFloat(markets[currentMarketIndex].change.replace(/[%+]/g, ''));
+      const isPositive = markets[currentMarketIndex].changeType === "positive";
+      
+      for (let i = 0; i < 20; i++) {
+        const randomVariation = (Math.random() - 0.5) * 0.02;
+        const trend = isPositive ? 0.001 * i : -0.001 * i;
+        const price = numPrice * (1 + trend + randomVariation + (changePercent / 100) * (i / 20));
+        
+        data.push({
+          time: `${i}:00`,
+          price: price,
+          volume: Math.random() * 1000000000 + 500000000,
+        });
+      }
+      return data;
+    };
+
+    setChartData(generateChartData());
+
+    // Auto-rotate through markets every 5 seconds
+    const interval = setInterval(() => {
+      setCurrentMarketIndex((prev) => (prev + 1) % markets.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [currentMarketIndex]);
+
+  // Dashboard preview chart data
+  const [dashboardChartData, setDashboardChartData] = useState([]);
+  
+  useEffect(() => {
+    const generateDashboardData = () => {
+      const data = [];
+      const basePrice = 42856.32;
+      
+      for (let i = 0; i < 15; i++) {
+        const randomVariation = (Math.random() - 0.5) * 0.01;
+        const trend = 0.0005 * i; // Slight upward trend
+        const price = basePrice * (1 + trend + randomVariation);
+        
+        data.push({
+          time: i,
+          price: price,
+        });
+      }
+      return data;
+    };
+
+    setDashboardChartData(generateDashboardData());
+
+    // Update dashboard chart every 2 seconds
+    const interval = setInterval(() => {
+      setDashboardChartData(generateDashboardData());
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const scrollToSection = (sectionId) => {
     const element = document.getElementById(sectionId);
@@ -414,17 +481,6 @@ const HomePage = () => {
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl">
                 {/* Dashboard Header */}
                 <div className="flex justify-between items-center mb-6">
-                  <div className="flex space-x-2">
-                    <button className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-sm font-medium">
-                      Spot
-                    </button>
-                    <button className="px-4 py-2 rounded-lg bg-gray-800 text-sm font-medium hover:bg-gray-700">
-                      Futures
-                    </button>
-                    <button className="px-4 py-2 rounded-lg bg-gray-800 text-sm font-medium hover:bg-gray-700">
-                      Earn
-                    </button>
-                  </div>
                   <div className="flex items-center space-x-2 bg-gray-800 rounded-lg px-3 py-2">
                     <span className="font-medium">BTC/USDT</span>
                     <span className="text-green-400 font-medium">+5.2%</span>
@@ -433,18 +489,45 @@ const HomePage = () => {
 
                 {/* Chart Area */}
                 <div className="h-48 bg-gray-950 rounded-xl mb-6 relative overflow-hidden">
-                  {/* Simulated Chart Lines */}
-                  <div className="absolute inset-0">
-                    <div className="absolute top-1/4 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent animate-pulse"></div>
-                    <div
-                      className="absolute top-1/2 w-full h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent animate-pulse"
-                      style={{ animationDelay: "1s" }}
-                    ></div>
-                    <div
-                      className="absolute top-3/4 w-full h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent animate-pulse"
-                      style={{ animationDelay: "2s" }}
-                    ></div>
-                  </div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={dashboardChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis 
+                        dataKey="time" 
+                        stroke="#9ca3af"
+                        tick={{ fill: '#9ca3af', fontSize: 10 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        stroke="#9ca3af"
+                        tick={{ fill: '#9ca3af', fontSize: 10 }}
+                        axisLine={false}
+                        tickLine={false}
+                        domain={['dataMin - 100', 'dataMax + 100']}
+                        hide={true}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#1f2937', 
+                          border: '1px solid #374151',
+                          borderRadius: '4px',
+                          fontSize: '12px'
+                        }}
+                        labelStyle={{ color: '#9ca3af' }}
+                        itemStyle={{ color: '#fff' }}
+                        formatter={(value) => [`$${value.toFixed(2)}`, 'BTC/USDT']}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="price"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        dot={false}
+                        animationDuration={1000}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
 
                 {/* Order Book */}
@@ -562,38 +645,104 @@ const HomePage = () => {
           </div>
 
           <div className="rounded-2xl overflow-hidden border border-gray-800 bg-gray-900/50">
-            {/* Table Header */}
-            <div className="grid grid-cols-4 gap-4 p-6 bg-gray-900 border-b border-gray-800">
-              <div className="font-medium text-gray-400">Pair</div>
-              <div className="font-medium text-gray-400">Price</div>
-              <div className="font-medium text-gray-400">24h Change</div>
-              <div className="font-medium text-gray-400">24h Volume</div>
-            </div>
-
-            {/* Table Rows */}
-            {markets.map((market, index) => (
-              <div
-                key={index}
-                className="grid grid-cols-4 gap-4 p-6 border-b border-gray-800 last:border-b-0 hover:bg-gray-800/30 transition-colors"
-              >
-                <div className="font-medium flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 flex items-center justify-center text-xs font-bold">
-                    {market.symbol.split("/")[0].charAt(0)}
+            {/* Chart Header */}
+            <div className="p-6 bg-gray-900 border-b border-gray-800">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 flex items-center justify-center text-sm font-bold">
+                    {markets[currentMarketIndex].symbol.split("/")[0].charAt(0)}
                   </div>
-                  <span>{market.symbol}</span>
+                  <div>
+                    <div className="text-xl font-bold">{markets[currentMarketIndex].symbol}</div>
+                    <div className="text-gray-400 text-sm">24h Trading Chart</div>
+                  </div>
                 </div>
-                <div className="font-medium">{market.price}</div>
-                <div
-                  className={`font-medium ${market.changeType === "positive"
+                <div className="text-right">
+                  <div className="text-2xl font-bold">{markets[currentMarketIndex].price}</div>
+                  <div className={`font-medium ${markets[currentMarketIndex].changeType === "positive"
                       ? "text-green-400"
                       : "text-red-400"
                     }`}
-                >
-                  {market.change}
+                  >
+                    {markets[currentMarketIndex].change}
+                  </div>
                 </div>
-                <div className="text-gray-400">{market.volume}</div>
               </div>
-            ))}
+              
+              {/* Market Indicators */}
+              <div className="flex space-x-6 text-sm">
+                <div>
+                  <span className="text-gray-400">Volume: </span>
+                  <span className="text-white font-medium">{markets[currentMarketIndex].volume}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Status: </span>
+                  <span className="text-green-400 font-medium">Live</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Chart Area */}
+            <div className="p-6">
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={markets[currentMarketIndex].changeType === "positive" ? "#10b981" : "#ef4444"} stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor={markets[currentMarketIndex].changeType === "positive" ? "#10b981" : "#ef4444"} stopOpacity={0.1}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis 
+                    dataKey="time" 
+                    stroke="#9ca3af"
+                    tick={{ fill: '#9ca3af', fontSize: 12 }}
+                  />
+                  <YAxis 
+                    stroke="#9ca3af"
+                    tick={{ fill: '#9ca3af', fontSize: 12 }}
+                    domain={['dataMin - 100', 'dataMax + 100']}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1f2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px'
+                    }}
+                    labelStyle={{ color: '#9ca3af' }}
+                    itemStyle={{ color: '#fff' }}
+                    formatter={(value) => [`$${value.toFixed(2)}`, 'Price']}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    stroke={markets[currentMarketIndex].changeType === "positive" ? "#10b981" : "#ef4444"}
+                    strokeWidth={2}
+                    fill="url(#priceGradient)"
+                    animationDuration={1000}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Market Selector */}
+            <div className="p-4 bg-gray-900 border-t border-gray-800">
+              <div className="flex space-x-2 overflow-x-auto">
+                {markets.map((market, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentMarketIndex(index)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                      index === currentMarketIndex
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
+                        : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                    }`}
+                  >
+                    {market.symbol}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -792,16 +941,6 @@ const HomePage = () => {
                 </li>
                 <li>
                   <button className="text-gray-400 hover:text-cyan-400 transition-colors text-left">
-                    Careers
-                  </button>
-                </li>
-                <li>
-                  <button className="text-gray-400 hover:text-cyan-400 transition-colors text-left">
-                    Blog
-                  </button>
-                </li>
-                <li>
-                  <button className="text-gray-400 hover:text-cyan-400 transition-colors text-left">
                     Legal
                   </button>
                 </li>
@@ -813,18 +952,13 @@ const HomePage = () => {
               <h4 className="text-lg font-bold mb-4">Support</h4>
               <ul className="space-y-3">
                 <li>
-                  <button className="text-gray-400 hover:text-cyan-400 transition-colors text-left">
+                  <button   onClick={() => scrollToSection("home")}className="text-gray-400 hover:text-cyan-400 transition-colors text-left">
                     Help Center
                   </button>
                 </li>
                 <li>
-                  <button className="text-gray-400 hover:text-cyan-400 transition-colors text-left">
+                  <button onClick={() => scrollToSection("home")} className="text-gray-400 hover:text-cyan-400 transition-colors text-left">
                     Contact Us
-                  </button>
-                </li>
-                <li>
-                  <button className="text-gray-400 hover:text-cyan-400 transition-colors text-left">
-                    API Docs
                   </button>
                 </li>
               </ul>
