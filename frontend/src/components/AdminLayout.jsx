@@ -23,7 +23,6 @@ import {
   Palette,
   Mail,
 } from "lucide-react";
-import logo from "../assets/vxness.png";
 
 const AdminLayout = ({ children, title, subtitle }) => {
   const navigate = useNavigate();
@@ -36,36 +35,36 @@ const AdminLayout = ({ children, title, subtitle }) => {
     {
       name: "Overview Dashboard",
       icon: LayoutDashboard,
-      path: "/dashboard",
+      path: "/admin/dashboard",
     },
-    { name: "User Management", icon: Users, path: "/users" },
-    { name: "Trade Management", icon: TrendingUp, path: "/trades" },
-    { name: "Fund Management", icon: Wallet, path: "/funds" },
-    { name: "Bank Settings", icon: Building2, path: "/bank-settings" },
-    { name: "IB Management", icon: UserCog, path: "/ib-management" },
-    { name: "Forex Charges", icon: DollarSign, path: "/forex-charges" },
-    { name: "Earnings Report", icon: TrendingUp, path: "/earnings" },
-    { name: "Copy Trade Management", icon: Copy, path: "/copy-trade" },
-    { name: "Prop Firm Challenges", icon: Trophy, path: "/prop-firm" },
-    { name: "Account Types", icon: CreditCard, path: "/account-types" },
-    { name: "Theme Settings", icon: Palette, path: "/theme" },
-    { name: "Email Templates", icon: Mail, path: "/email-templates" },
-    { name: "Admin Management", icon: Shield, path: "/admin-management" },
-    { name: "KYC Verification", icon: FileCheck, path: "/kyc" },
-    { name: "Support Tickets", icon: HeadphonesIcon, path: "/support" },
+    { name: "User Management", icon: Users, path: "/admin/users" },
+    { name: "Trade Management", icon: TrendingUp, path: "/admin/trades" },
+    { name: "Fund Management", icon: Wallet, path: "/admin/funds" },
+    { name: "Bank Settings", icon: Building2, path: "/admin/bank-settings" },
+    { name: "IB Management", icon: UserCog, path: "/admin/ib-management" },
+    { name: "Forex Charges", icon: DollarSign, path: "/admin/forex-charges" },
+    { name: "Earnings Report", icon: TrendingUp, path: "/admin/earnings" },
+    { name: "Copy Trade Management", icon: Copy, path: "/admin/copy-trade" },
+    { name: "Prop Firm Challenges", icon: Trophy, path: "/admin/prop-firm" },
+    { name: "Account Types", icon: CreditCard, path: "/admin/account-types" },
+    { name: "Theme Settings", icon: Palette, path: "/admin/theme" },
+    { name: "Email Templates", icon: Mail, path: "/admin/email-templates" },
+    { name: "Admin Management", icon: Shield, path: "/admin/admin-management" },
+    { name: "KYC Verification", icon: FileCheck, path: "/admin/kyc" },
+    { name: "Support Tickets", icon: HeadphonesIcon, path: "/admin/support" },
   ];
 
   useEffect(() => {
     const adminToken = localStorage.getItem("adminToken");
     if (!adminToken) {
-      navigate("/");
+      navigate("/admin");
     }
   }, [navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("adminToken");
     localStorage.removeItem("adminUser");
-    navigate("/");
+    navigate("/admin");
   };
 
   const isActive = (path) => location.pathname === path;
@@ -92,10 +91,9 @@ const AdminLayout = ({ children, title, subtitle }) => {
         className={`
           fixed lg:static inset-y-0 left-0 z-50
           ${sidebarExpanded ? "w-64" : "w-16"} 
-          ${
-            mobileMenuOpen
-              ? "translate-x-0"
-              : "-translate-x-full lg:translate-x-0"
+          ${mobileMenuOpen
+            ? "translate-x-0"
+            : "-translate-x-full lg:translate-x-0"
           }
           bg-dark-900 border-r border-gray-800 flex flex-col 
           transition-all duration-300 ease-in-out
@@ -104,7 +102,25 @@ const AdminLayout = ({ children, title, subtitle }) => {
         {/* Logo */}
         <div className="p-4 flex items-center justify-between border-b border-gray-800">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="Vxness" className="h-8 w-auto" />
+            <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <img
+                src="/favicon.png"
+                alt="Vxness Logo"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.style.display = "none";
+                  e.target.parentElement.innerHTML = `
+          <div class="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded flex items-center justify-center flex-shrink-0">
+            <span class="text-white font-bold text-sm">V</span>
+          </div>
+        `;
+                }}
+              />
+            </div>
+            {sidebarExpanded && (
+              <span className="text-white font-semibold">Admin</span>
+            )}
           </div>
           <button
             onClick={() => setSidebarExpanded(!sidebarExpanded)}
@@ -129,11 +145,10 @@ const AdminLayout = ({ children, title, subtitle }) => {
                 navigate(item.path);
                 setMobileMenuOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
-                isActive(item.path)
-                  ? "bg-red-500 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-dark-700"
-              }`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${isActive(item.path)
+                ? "bg-red-500 text-white"
+                : "text-gray-400 hover:text-white hover:bg-dark-700"
+                }`}
               title={!sidebarExpanded ? item.name : ""}
             >
               <item.icon size={18} className="flex-shrink-0" />
