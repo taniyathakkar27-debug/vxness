@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import logoImage from '../assets/vxness.png'
 
 const AdminLogin = () => {
   const navigate = useNavigate()
@@ -63,7 +64,7 @@ const AdminLogin = () => {
         {/* Logo */}
         <div className="flex justify-center mb-6">
           <img 
-            src="https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/render/image/public/document-uploads/vxness-logo-1766736768413.png?width=8000&height=8000&resize=contain" 
+            src={logoImage}
             alt="vxness Logo" 
             className="h-12 w-auto object-contain"
           />

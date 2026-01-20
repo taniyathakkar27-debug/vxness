@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { X, Mail, ChevronDown, Search, Eye, EyeOff, RefreshCw, ArrowLeft } from 'lucide-react'
 import { signup } from '../api/auth'
 import { API_URL } from '../config/api'
-
+import logoImage from '../assets/vxness.png'
 const countries = [
   { code: '+1', name: 'United States', flag: '🇺🇸' },
   { code: '+1', name: 'Canada', flag: '🇨🇦' },
@@ -314,7 +314,7 @@ const Signup = () => {
         {/* Logo */}
         <div className="flex justify-center mb-6">
           <img 
-            src="https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/render/image/public/document-uploads/vxness-logo-1766736768413.png?width=8000&height=8000&resize=contain" 
+            src={logoImage} 
             alt="vxness Logo" 
             className="h-12 w-auto object-contain"
           />
