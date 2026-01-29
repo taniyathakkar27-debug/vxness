@@ -46,7 +46,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'
 const TRADE_URL = process.env.TRADE_URL || 'http://localhost:5173'
 const ADMIN_URL = process.env.ADMIN_URL || 'http://localhost:5173'
 const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [FRONTEND_URL, TRADE_URL, ADMIN_URL, 'https://BlueStone.com', 'https://www.BlueStone.com', 'https://trade.BlueStone.com', 'https://admin.BlueStone.com', 'https://api.BlueStone.com'] 
+  ? [FRONTEND_URL, TRADE_URL, ADMIN_URL, 'https://Vxness.com', 'https://www.Vxness.com', 'https://trade.Vxness.com', 'https://admin.Vxness.com', 'https://api.Vxness.com'] 
   : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173']
 
 // Socket.IO for real-time updates
@@ -321,7 +321,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 // Health check
 app.get('/', (req, res) => {
-  res.json({ message: 'BlueStone API is running', version: '1.0.0' })
+  res.json({ message: 'Vxness API is running', version: '1.0.0' })
 })
 
 const PORT = process.env.PORT || 5000

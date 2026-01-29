@@ -127,7 +127,7 @@ const ChatBot = () => {
       const welcomeMessage = {
         id: Date.now(),
         type: 'bot',
-        text: `Hi ${user.name || 'there'}! 👋\n\nWelcome to BlueStone Support! I'm your virtual assistant and I'm here to help you navigate our trading platform.\n\nYou can ask me about:\n• Deposits & Withdrawals\n• Trading & Orders\n• Account Setup\n• Copy Trading\n• IB Program\n\nOr choose from the quick options below!`,
+        text: `Hi ${user.name || 'there'}! 👋\n\nWelcome to Vxness Support! I'm your virtual assistant and I'm here to help you navigate our trading platform.\n\nYou can ask me about:\n• Deposits & Withdrawals\n• Trading & Orders\n• Account Setup\n• Copy Trading\n• IB Program\n\nOr choose from the quick options below!`,
         timestamp: new Date()
       }
       setMessages([welcomeMessage])
@@ -311,36 +311,37 @@ const ChatBot = () => {
       {/* Chat Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 z-50 ${
+        className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 z-40 ${
           isOpen 
             ? 'bg-red-500 hover:bg-red-600 rotate-0' 
-            : 'bg-accent-green hover:bg-green-600 animate-bounce'
+            : 'bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-600 hover:via-teal-600 hover:to-emerald-600 animate-bounce'
         }`}
         style={{ animationDuration: '2s' }}
       >
         {isOpen ? (
-          <X size={24} className="text-white" />
+          <X size={20} className="text-white sm:w-6 sm:h-6" />
         ) : (
-          <MessageCircle size={24} className="text-black" />
+          <MessageCircle size={20} className="text-white sm:w-6 sm:h-6" />
         )}
       </button>
 
       {/* Chat Window */}
       {isOpen && (
         <div 
-          className={`fixed bottom-24 right-6 w-96 h-[550px] rounded-2xl shadow-2xl flex flex-col overflow-hidden z-50 transition-all duration-300 ${
+          className={`fixed bottom-20 sm:bottom-24 right-2 sm:right-6 w-[calc(100vw-16px)] sm:w-96 h-[calc(100vh-200px)] sm:h-[400px] max-h-[400px] rounded-2xl shadow-2xl flex flex-col overflow-hidden z-40 transition-all duration-300 ${
             isDarkMode ? 'bg-dark-800 border border-gray-700' : 'bg-white border border-gray-200'
           }`}
+          style={{ top: '100px' }}
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-accent-green to-green-600 px-4 py-4 flex items-center gap-3">
+          <div className="bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 px-4 py-4 flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
               <Bot size={22} className="text-white" />
             </div>
             <div className="flex-1">
-              <h3 className="text-white font-semibold">BlueStone Support</h3>
+              <h3 className="text-white font-semibold">Vxness Support</h3>
               <p className="text-white/80 text-xs flex items-center gap-1">
-                <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></span>
+                <span className="w-2 h-2 bg-emerald-300 rounded-full animate-pulse"></span>
                 {waitingForHuman ? 'Waiting for human agent...' : 'Online - Ready to help'}
               </p>
             </div>
@@ -360,13 +361,13 @@ const ChatBot = () => {
                   {/* Avatar */}
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                     msg.type === 'user' 
-                      ? 'bg-accent-green' 
+                      ? 'bg-gradient-to-r from-cyan-500 to-emerald-500' 
                       : isDarkMode ? 'bg-dark-700' : 'bg-gray-200'
                   }`}>
                     {msg.type === 'user' ? (
-                      <User size={16} className="text-black" />
+                      <User size={16} className="text-white" />
                     ) : (
-                      <Bot size={16} className={isDarkMode ? 'text-accent-green' : 'text-gray-600'} />
+                      <Bot size={16} className={isDarkMode ? 'text-emerald-400' : 'text-gray-600'} />
                     )}
                   </div>
 
@@ -374,7 +375,7 @@ const ChatBot = () => {
                   <div>
                     <div className={`rounded-2xl px-4 py-3 ${
                       msg.type === 'user'
-                        ? 'bg-accent-green text-black rounded-br-md'
+                        ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-white rounded-br-md'
                         : isDarkMode 
                           ? 'bg-dark-700 text-white rounded-bl-md' 
                           : 'bg-white text-gray-800 rounded-bl-md shadow-sm'
@@ -389,7 +390,7 @@ const ChatBot = () => {
                     {msg.showHumanOption && !waitingForHuman && (
                       <button
                         onClick={connectToHuman}
-                        className="mt-2 flex items-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-colors"
+                        className="mt-2 flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-600 hover:to-emerald-600 text-white text-sm rounded-lg transition-colors"
                       >
                         <Headphones size={16} />
                         Connect to Human Support
@@ -405,7 +406,7 @@ const ChatBot = () => {
               <div className="flex justify-start">
                 <div className="flex gap-2">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-dark-700' : 'bg-gray-200'}`}>
-                    <Bot size={16} className={isDarkMode ? 'text-accent-green' : 'text-gray-600'} />
+                    <Bot size={16} className={isDarkMode ? 'text-emerald-400' : 'text-gray-600'} />
                   </div>
                   <div className={`rounded-2xl px-4 py-3 ${isDarkMode ? 'bg-dark-700' : 'bg-white shadow-sm'}`}>
                     <div className="flex gap-1">
@@ -463,7 +464,7 @@ const ChatBot = () => {
                 disabled={!inputValue.trim()}
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
                   inputValue.trim()
-                    ? 'bg-accent-green text-black hover:bg-green-600'
+                    ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-white hover:from-cyan-600 hover:to-emerald-600'
                     : isDarkMode ? 'bg-dark-600 text-gray-500' : 'bg-gray-200 text-gray-400'
                 }`}
               >

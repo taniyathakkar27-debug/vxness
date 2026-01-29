@@ -24,7 +24,8 @@ import {
   BookOpen,
   Layers,
   Sun,
-  Moon
+  Moon,
+  Activity
 } from 'lucide-react'
 import logo from '../assets/logo.png'
 import { useTheme } from '../context/ThemeContext'
@@ -55,6 +56,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
     { name: 'User Management', icon: Users, path: '/admin/users', permission: 'canManageUsers' },
     { name: 'Trade Management', icon: TrendingUp, path: '/admin/trades', permission: 'canManageTrades' },
     { name: 'Book Management', icon: BookOpen, path: '/admin/book-management', permission: 'canManageTrades' },
+    { name: 'Technical Analysis', icon: Activity, path: '/admin/technical-analysis', permission: 'canManageTrades' },
     { name: 'Fund Management', icon: Wallet, path: '/admin/funds', permission: 'canManageDeposits' },
     { name: 'Bank Settings', icon: Building2, path: '/admin/bank-settings', permission: 'canManageSettings' },
     { name: 'IB Management', icon: UserCog, path: '/admin/ib-management', permission: 'canManageIB' },
@@ -121,8 +123,9 @@ const AdminLayout = ({ children, title, subtitle }) => {
         {/* Logo */}
         <div className={`p-4 flex items-center justify-between border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
-            <img src={logo} alt="BlueStone" className="h-16 object-contain flex-shrink-0" />
-            {sidebarExpanded} 
+            {sidebarExpanded && (
+              <img src={logo} alt="Vxness" className="h-16 object-contain flex-shrink-0" />
+            )}
           </div>
           <button 
             onClick={() => setSidebarExpanded(!sidebarExpanded)}
