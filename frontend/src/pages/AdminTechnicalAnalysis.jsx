@@ -2,29 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { 
   TrendingUp, 
   TrendingDown, 
-  Activity,
-  BarChart3,
-  LineChart,
-  CandlestickChart,
-  Target,
-  AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
   Minus,
   RefreshCw,
-  Clock,
-  Zap,
-  Globe,
-  DollarSign,
-  Percent,
-  ChevronDown,
-  ChevronUp,
-  Eye,
   Bell,
-  Settings,
-  Filter,
-  Download,
-  Share2
+ 
 } from 'lucide-react'
 import AdminLayout from '../components/AdminLayout'
 import { useTheme } from '../context/ThemeContext'
