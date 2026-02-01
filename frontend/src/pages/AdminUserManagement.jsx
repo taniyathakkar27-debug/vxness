@@ -26,7 +26,8 @@ import {
   CreditCard,
   Plus,
   Minus,
-  Key
+  Key,
+  Globe
 } from 'lucide-react'
 
 const AdminUserManagement = () => {
@@ -591,6 +592,16 @@ const AdminUserManagement = () => {
                       {selectedUser.isBanned ? 'Banned' : selectedUser.isBlocked ? 'Blocked' : 'Active'}
                     </p>
                   </div>
+                </div>
+                <div className="bg-dark-700 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Globe size={14} className="text-gray-500" />
+                    <p className="text-gray-500 text-xs">Last Login IP</p>
+                  </div>
+                  <p className="text-white font-mono text-sm">{selectedUser.lastLoginIP || 'Never logged in'}</p>
+                  {selectedUser.lastLoginAt && (
+                    <p className="text-gray-400 text-xs mt-1">Last login: {new Date(selectedUser.lastLoginAt).toLocaleString()}</p>
+                  )}
                 </div>
                 <div className="bg-dark-700 p-3 rounded-lg">
                   <p className="text-gray-500 text-xs mb-1">Email</p>
@@ -1561,6 +1572,7 @@ const AdminUserManagement = () => {
                 <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">User</th>
                 <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Email</th>
                 <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Phone</th>
+                <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Last Login IP</th>
                 <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Balance</th>
                 <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Status</th>
                 <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Joined</th>
@@ -1570,13 +1582,13 @@ const AdminUserManagement = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-8">
+                  <td colSpan="8" className="text-center py-8">
                     <RefreshCw size={24} className="text-gray-500 animate-spin mx-auto" />
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-8 text-gray-500">
+                  <td colSpan="8" className="text-center py-8 text-gray-500">
                     {searchTerm ? 'No users found matching your search' : 'No users registered yet'}
                   </td>
                 </tr>
@@ -1603,6 +1615,17 @@ const AdminUserManagement = () => {
                       <div className="flex items-center gap-2 text-gray-400">
                         <Phone size={14} />
                         <span>{user.phone || 'N/A'}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <Globe size={14} />
+                        <div>
+                          <span className="font-mono text-xs">{user.lastLoginIP || 'N/A'}</span>
+                          {user.lastLoginAt && (
+                            <p className="text-gray-500 text-xs">{new Date(user.lastLoginAt).toLocaleDateString()}</p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="py-4 px-4">

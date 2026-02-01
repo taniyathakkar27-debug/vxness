@@ -257,6 +257,18 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' })
     }
 
+    // Capture user IP address
+    const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+                     req.headers['x-real-ip'] || 
+                     req.connection?.remoteAddress || 
+                     req.socket?.remoteAddress ||
+                     'Unknown'
+    
+    // Update last login info
+    user.lastLoginIP = clientIP
+    user.lastLoginAt = new Date()
+    await user.save({ validateBeforeSave: false })
+
     // Generate token
     const token = generateToken(user._id)
 
