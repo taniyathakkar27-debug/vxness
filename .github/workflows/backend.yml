@@ -41,12 +41,13 @@ jobs:
           echo "Copied backend files to production"
 
       - name: Install backend dependencies
-        working-directory: ~/vxness/backend
-        run: npm install --production
+        run: |
+          cd ~/vxness/backend
+          npm install --production
 
       - name: Restart backend server
-        working-directory: ~/vxness/backend
         run: |
-          pm2 restart vxness-api || pm2 start server.js --name vxness-api
+          cd ~/vxness/backend
+          pm2 restart vxness-api || pm2 start server.js --name vxness-api --cwd ~/vxness/backend
           pm2 save
           echo "Backend deployed successfully!"
