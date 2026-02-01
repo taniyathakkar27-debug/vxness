@@ -104,7 +104,7 @@ const LandingPage = () => {
                 onClick={() => window.location.href = '/user/login'}
                 className="text-white hover:text-emerald-400 transition-colors font-medium"
               >
-                Login
+                Hari
               </button>
               <button 
                 onClick={() => window.location.href = '/user/signup'}
