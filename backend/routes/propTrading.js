@@ -8,7 +8,7 @@ import propTradingEngine from '../services/propTradingEngine.js'
 
 const router = express.Router()
 
-// ==================== PUBLIC ROUTES ====================
+// ==================== PUBLIC ROUTES ==================
 
 // GET /api/prop/status - Check if challenge mode is enabled
 router.get('/status', async (req, res) => {
