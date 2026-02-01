@@ -104,7 +104,7 @@ const TradingPage = () => {
   const [killSwitchTimeLeft, setKillSwitchTimeLeft] = useState('')
   const [globalNotification, setGlobalNotification] = useState('')
 
-  const categories = ['All', 'Starred', 'Forex', 'Metals', 'Commodities', 'Crypto']
+  const categories = ['All', 'Starred', 'Forex', 'Metals', 'Crypto']
 
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
@@ -1065,7 +1065,13 @@ const TradingPage = () => {
   }
 
   // Filter instruments: show all when "All" tab or searching, popular for specific categories
+  // Only show instruments that have live prices (bid > 0)
   const filteredInstruments = instruments.filter(inst => {
+    // First check: only show instruments with live prices
+    if (!inst.bid || inst.bid <= 0) {
+      return false
+    }
+    
     const matchesSearch = inst.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inst.name.toLowerCase().includes(searchTerm.toLowerCase())
     
