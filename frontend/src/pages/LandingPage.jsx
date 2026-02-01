@@ -104,7 +104,7 @@ const LandingPage = () => {
                 onClick={() => window.location.href = '/user/login'}
                 className="text-white hover:text-emerald-400 transition-colors font-medium"
               >
-                Hari
+                Login 
               </button>
               <button 
                 onClick={() => window.location.href = '/user/signup'}
@@ -150,7 +150,7 @@ const LandingPage = () => {
           <div className="pt-24 sm:pt-28 md:pt-32 animate-fade-in">
             <div className="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 rounded-full px-3 sm:px-4 py-1.5 sm:py-2">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-emerald-400 text-xs sm:text-sm font-medium">Live Trading Platform</span>
+              <span className="text-emerald-400 text-xs sm:text-sm font-medium">Live Trading Platform Harishankar</span>
             </div>
           </div>
 
