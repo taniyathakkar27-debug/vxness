@@ -105,15 +105,16 @@ const AdminLayout = ({ children, title, subtitle }) => {
       >
         {/* Logo */}
         <div className={`p-4 flex items-center justify-between border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
-          <div className="flex items-center gap-2">
-            <img src={logoImage} alt="vxness" className="h-8 w-auto object-contain flex-shrink-0" />
-            {sidebarExpanded }
-          </div>
+          {sidebarExpanded && (
+            <div className="flex items-center gap-2">
+              <img src={logoImage} alt="vxness" className="h-12 w-auto object-contain flex-shrink-0" />
+            </div>
+          )}
           <button 
             onClick={() => setSidebarExpanded(!sidebarExpanded)}
-            className={`hidden lg:block p-1 rounded transition-colors ${isDarkMode ? 'hover:bg-dark-700' : 'hover:bg-gray-100'}`}
+            className={`${!sidebarExpanded ? 'mx-auto' : ''} hidden lg:block p-1 rounded transition-colors ${isDarkMode ? 'hover:bg-dark-700' : 'hover:bg-gray-100'}`}
           >
-            <Menu size={18} className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} />
+            <Menu size={20} className={isDarkMode ? 'text-gray-400' : 'text-gray-600'} />
           </button>
           <button 
             onClick={() => setMobileMenuOpen(false)}
