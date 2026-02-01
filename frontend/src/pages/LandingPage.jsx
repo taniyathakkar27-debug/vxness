@@ -104,13 +104,13 @@ const LandingPage = () => {
                 onClick={() => window.location.href = '/user/login'}
                 className="text-white hover:text-emerald-400 transition-colors font-medium"
               >
-                Login 
+                Hari
               </button>
               <button 
                 onClick={() => window.location.href = '/user/signup'}
                 className="bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-600 hover:via-teal-600 hover:to-emerald-600 text-white px-6 py-2.5 rounded-full font-medium transition-all transform hover:scale-105"
               >
-                Get Hari
+                Get Started
               </button>
             </div>
           </div>
