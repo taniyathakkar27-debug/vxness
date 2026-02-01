@@ -25,4 +25,10 @@ jobs:
         working-directory: ./frontend
         run: |
           npm run build
+          echo "Frontend built successfully!"
+
+      - name: Deploy to production path
+        run: |
+          rm -rf ~/vxness/frontend/dist
+          cp -r ./frontend/dist ~/vxness/frontend/
           echo "Frontend deployed successfully!"
