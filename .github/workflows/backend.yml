@@ -1,0 +1,29 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm install --production
+
+      - name: Restart backend server
+        working-directory: ./backend
+        run: |
+          pm2 restart vxness-api || pm2 start server.js --name vxness-api
+          pm2 save
+          echo "Backend deployed successfully!"
