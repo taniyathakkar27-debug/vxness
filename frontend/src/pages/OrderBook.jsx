@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import { useInvestorMode, investorReadOnlyCSS } from '../hooks/useInvestorMode'
+import priceStreamService from '../services/priceStream'
 import { 
   LayoutDashboard, 
   User,
@@ -91,31 +92,62 @@ const OrderBook = () => {
     }
   }, [accounts, selectedAccount])
 
-  // Fetch live prices periodically
+  // Fetch live prices via WebSocket streaming
   useEffect(() => {
-    const fetchPrices = async () => {
+    const unsubscribe = priceStreamService.subscribe('orderBook', (prices, updated, timestamp) => {
+      if (!prices || Object.keys(prices).length === 0) return
+      
+      setLivePrices(prev => {
+        const merged = { ...prev }
+        Object.entries(prices).forEach(([symbol, price]) => {
+          if (price && price.bid) {
+            merged[symbol] = price
+          }
+        })
+        return merged
+      })
+    })
+    
+    return () => unsubscribe()
+  }, [])
+
+  // Fallback: Fetch prices via API if WebSocket prices are empty
+  useEffect(() => {
+    const fetchPricesForTrades = async () => {
       const symbols = [...new Set(openTrades.map(t => t.symbol))]
-      if (symbols.length === 0) return
+      
+      const missingSymbols = symbols.filter(s => !livePrices[s]?.bid)
+      if (missingSymbols.length === 0) return
       
       try {
         const res = await fetch(`${API_URL}/prices/batch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbols })
+          body: JSON.stringify({ symbols: missingSymbols })
         })
         const data = await res.json()
         if (data.success && data.prices) {
-          setLivePrices(data.prices)
+          setLivePrices(prev => {
+            const merged = { ...prev }
+            Object.entries(data.prices).forEach(([symbol, price]) => {
+              if (price && price.bid) {
+                merged[symbol] = price
+              }
+            })
+            return merged
+          })
         }
       } catch (e) {
         console.error('Error fetching prices:', e)
       }
     }
 
-    fetchPrices()
-    const interval = setInterval(fetchPrices, 3000)
-    return () => clearInterval(interval)
-  }, [openTrades])
+    if (openTrades.length > 0) {
+      fetchPricesForTrades()
+      const interval = setInterval(fetchPricesForTrades, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [openTrades, livePrices])
 
   const fetchAccounts = async () => {
     try {
