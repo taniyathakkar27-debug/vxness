@@ -50,7 +50,8 @@ const AdminTradeManagement = () => {
     quantity: 0,
     stopLoss: '',
     takeProfit: '',
-    realizedPnl: 0
+    realizedPnl: 0,
+    openedAt: ''
   })
   const [marketPrices, setMarketPrices] = useState({})
   const [loadingPrices, setLoadingPrices] = useState(false)
@@ -269,7 +270,8 @@ const AdminTradeManagement = () => {
           quantity: parseFloat(editForm.quantity),
           stopLoss: editForm.stopLoss ? parseFloat(editForm.stopLoss) : null,
           takeProfit: editForm.takeProfit ? parseFloat(editForm.takeProfit) : null,
-          realizedPnl: editForm.realizedPnl ? parseFloat(editForm.realizedPnl) : null
+          realizedPnl: editForm.realizedPnl ? parseFloat(editForm.realizedPnl) : null,
+          openedAt: editForm.openedAt ? new Date(editForm.openedAt).toISOString() : null
         })
       })
       const data = await res.json()
@@ -324,13 +326,23 @@ const AdminTradeManagement = () => {
 
   const openEditModal = (trade) => {
     setSelectedTrade(trade)
+    // Format date for datetime-local input - use openedAt field with local timezone
+    const dateObj = new Date(trade.openedAt || trade.createdAt || Date.now())
+    // Format as YYYY-MM-DDTHH:MM for datetime-local input (local time, not UTC)
+    const year = dateObj.getFullYear()
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0')
+    const day = String(dateObj.getDate()).padStart(2, '0')
+    const hours = String(dateObj.getHours()).padStart(2, '0')
+    const minutes = String(dateObj.getMinutes()).padStart(2, '0')
+    const openTimeFormatted = `${year}-${month}-${day}T${hours}:${minutes}`
     setEditForm({
       openPrice: trade.openPrice || 0,
       closePrice: trade.closePrice || '',
       quantity: trade.quantity || 0,
       stopLoss: trade.stopLoss || '',
       takeProfit: trade.takeProfit || '',
-      realizedPnl: trade.realizedPnl || 0
+      realizedPnl: trade.realizedPnl || 0,
+      openedAt: openTimeFormatted
     })
     setShowEditModal(true)
   }
@@ -563,6 +575,8 @@ const AdminTradeManagement = () => {
                     <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Side</th>
                     <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Lots</th>
                     <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Open Price</th>
+                    <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Date</th>
+                    <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Time</th>
                     <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">P&L</th>
                     <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Status</th>
                     <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Actions</th>
@@ -585,6 +599,19 @@ const AdminTradeManagement = () => {
                       </td>
                       <td className="py-4 px-4 text-white">{trade.quantity}</td>
                       <td className="py-4 px-4 text-gray-400">${trade.openPrice?.toFixed(5)}</td>
+                      <td className="py-4 px-4 text-gray-400 text-sm">
+                        {(trade.openedAt || trade.createdAt) ? new Date(trade.openedAt || trade.createdAt).toLocaleDateString('en-IN', { 
+                          day: '2-digit', 
+                          month: 'short', 
+                          year: 'numeric'
+                        }) : '-'}
+                      </td>
+                      <td className="py-4 px-4 text-gray-400 text-sm">
+                        {(trade.openedAt || trade.createdAt) ? new Date(trade.openedAt || trade.createdAt).toLocaleTimeString('en-IN', { 
+                          hour: '2-digit', 
+                          minute: '2-digit'
+                        }) : '-'}
+                      </td>
                       <td className={`py-4 px-4 font-medium ${calculateFloatingPnl(trade) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                         {calculateFloatingPnl(trade) >= 0 ? '+' : ''}${calculateFloatingPnl(trade).toFixed(2)}
                       </td>
@@ -923,6 +950,17 @@ const AdminTradeManagement = () => {
                     placeholder="Optional"
                   />
                 </div>
+              </div>
+
+              {/* Open Date/Time */}
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">Open Date & Time</label>
+                <input
+                  type="datetime-local"
+                  value={editForm.openedAt}
+                  onChange={(e) => setEditForm({ ...editForm, openedAt: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-lg text-white"
+                />
               </div>
 
               {/* Close Price & PnL - for closed trades or to close open trades */}

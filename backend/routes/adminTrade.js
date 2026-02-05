@@ -129,7 +129,7 @@ router.put('/modify/:tradeId', async (req, res) => {
 router.put('/edit/:tradeId', async (req, res) => {
   try {
     const { tradeId } = req.params
-    const { openPrice, closePrice, quantity, stopLoss, takeProfit, realizedPnl } = req.body
+    const { openPrice, closePrice, quantity, stopLoss, takeProfit, realizedPnl, openedAt } = req.body
 
     const trade = await Trade.findById(tradeId)
     if (!trade) {
@@ -142,7 +142,8 @@ router.put('/edit/:tradeId', async (req, res) => {
       quantity: trade.quantity,
       stopLoss: trade.stopLoss,
       takeProfit: trade.takeProfit,
-      realizedPnl: trade.realizedPnl
+      realizedPnl: trade.realizedPnl,
+      openedAt: trade.openedAt
     }
 
     // Update fields
@@ -150,6 +151,7 @@ router.put('/edit/:tradeId', async (req, res) => {
     if (quantity !== undefined) trade.quantity = quantity
     if (stopLoss !== undefined) trade.stopLoss = stopLoss
     if (takeProfit !== undefined) trade.takeProfit = takeProfit
+    if (openedAt !== undefined && openedAt !== null) trade.openedAt = new Date(openedAt)
     
     // If close price is set, update P&L and potentially close the trade
     if (closePrice !== undefined && closePrice !== null && closePrice !== '') {
