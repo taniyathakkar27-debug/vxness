@@ -436,31 +436,27 @@ const Dashboard = () => {
 
   return (
     <div className={`h-screen flex transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
-      {/* Read-only CSS for investor mode - disable ALL interactive elements */}
+      {/* Read-only CSS for investor mode - disable action buttons only, NOT navigation */}
       {isInvestorMode && (
         <style>{`
-          .investor-readonly button:not(.allow-investor),
-          .investor-readonly input:not(.allow-investor),
-          .investor-readonly select:not(.allow-investor),
-          .investor-readonly textarea:not(.allow-investor),
-          .investor-readonly [role="button"]:not(.allow-investor) {
+          .investor-action-disabled button:not(.allow-investor),
+          .investor-action-disabled input:not(.allow-investor),
+          .investor-action-disabled select:not(.allow-investor),
+          .investor-action-disabled textarea:not(.allow-investor),
+          .investor-action-disabled [role="button"]:not(.allow-investor) {
             pointer-events: none !important;
             opacity: 0.6 !important;
             cursor: not-allowed !important;
           }
-          .investor-readonly a:not(.allow-investor) {
+          .investor-action-disabled a:not(.allow-investor) {
             pointer-events: none !important;
-          }
-          .investor-readonly nav button:not(.allow-investor) {
-            pointer-events: none !important;
-            opacity: 0.6 !important;
           }
         `}</style>
       )}
       
       {/* Collapsible Sidebar - Fixed */}
       <aside 
-        className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out ${isInvestorMode ? 'investor-readonly' : ''}`}
+        className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out`}
         onMouseEnter={() => setSidebarExpanded(true)}
         onMouseLeave={() => setSidebarExpanded(false)}
       >
@@ -520,7 +516,7 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Content - Scrollable */}
-      <main className={`flex-1 overflow-y-auto ${isInvestorMode ? 'investor-readonly' : ''}`}>
+      <main className={`flex-1 overflow-y-auto ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
         {/* Welcome Banner */}
         <div className={`relative border-b ${isDarkMode ? 'bg-gradient-to-r from-dark-800 via-dark-900 to-dark-800 border-gray-800' : 'bg-gradient-to-r from-gray-100 via-white to-gray-100 border-gray-200'}`}>
           <div className="flex items-center justify-between px-6 py-3">
