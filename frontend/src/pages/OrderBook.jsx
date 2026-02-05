@@ -52,7 +52,9 @@ const OrderBook = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 20
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  // Get user - for investor mode, use investor account's user data
+  const investorAccount = isInvestorMode ? JSON.parse(sessionStorage.getItem('investorAccount') || '{}') : null
+  const user = isInvestorMode ? (investorAccount?.user || {}) : JSON.parse(localStorage.getItem('user') || '{}')
 
   // Menu items - investor can only access Dashboard and Orders
   const investorAllowedMenus = ['Dashboard', 'Orders']
@@ -75,10 +77,13 @@ const OrderBook = () => {
   }, [])
 
   useEffect(() => {
-    if (user._id) {
+    if (isInvestorMode && investorAccount?._id) {
+      // For investor mode, use the investor account directly
+      setAccounts([investorAccount])
+    } else if (user._id) {
       fetchAccounts()
     }
-  }, [user._id])
+  }, [user._id, isInvestorMode])
 
   useEffect(() => {
     if (accounts.length > 0) {
