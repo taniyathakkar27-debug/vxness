@@ -62,18 +62,34 @@ const AdminLayout = ({ children, title, subtitle }) => {
     { name: 'Technical Analysis', icon: LineChart, path: '/admin/technical-analysis' },
   ]
 
+  const isInvestorMode = localStorage.getItem('investorMode') === 'true'
+
   useEffect(() => {
     const adminToken = localStorage.getItem('adminToken')
-    if (!adminToken) {
+    const investorMode = localStorage.getItem('investorMode')
+    
+    // Allow access if admin token exists OR investor mode is active
+    if (!adminToken && !investorMode) {
       navigate('/admin')
     }
   }, [navigate])
 
   const handleLogout = () => {
+    // Clear both admin and investor data
     localStorage.removeItem('adminToken')
     localStorage.removeItem('adminUser')
+    localStorage.removeItem('investorMode')
+    localStorage.removeItem('investorAccessType')
+    localStorage.removeItem('investorAccount')
+    localStorage.removeItem('investorAccountId')
     toast.success('Logged out successfully!')
-    navigate('/admin')
+    
+    // Redirect based on who was logged in
+    if (isInvestorMode) {
+      navigate('/investor/login')
+    } else {
+      navigate('/admin')
+    }
   }
 
   const isActive = (path) => location.pathname === path
@@ -87,6 +103,14 @@ const AdminLayout = ({ children, title, subtitle }) => {
 
   return (
     <div className={`min-h-screen flex transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+      {/* Investor Read-Only Banner */}
+      {isInvestorMode && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-yellow-500 text-black py-2 px-4 text-center font-medium">
+          <Eye size={16} className="inline mr-2" />
+          Investor Mode - Read Only Access (All actions are disabled)
+        </div>
+      )}
+      
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
@@ -183,9 +207,9 @@ const AdminLayout = ({ children, title, subtitle }) => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto min-w-0">
+      <main className={`flex-1 overflow-auto min-w-0 ${isInvestorMode ? 'pt-10' : ''}`}>
         {/* Header */}
-        <header className={`sticky top-0 z-30 backdrop-blur-sm flex items-center justify-between px-4 sm:px-6 py-4 border-b ${isDarkMode ? 'bg-dark-900/95 border-gray-800' : 'bg-white/95 border-gray-200'}`}>
+        <header className={`sticky top-0 z-30 backdrop-blur-sm flex items-center justify-between px-4 sm:px-6 py-4 border-b ${isDarkMode ? 'bg-dark-900/95 border-gray-800' : 'bg-white/95 border-gray-200'} ${isInvestorMode ? 'mt-0' : ''}`}>
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setMobileMenuOpen(true)}
@@ -198,9 +222,13 @@ const AdminLayout = ({ children, title, subtitle }) => {
               {subtitle && <p className={`text-sm hidden sm:block ${isDarkMode ? 'text-gray-500' : 'text-gray-600'}`}>{subtitle}</p>}
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 text-red-500 rounded-full text-xs sm:text-sm">
-            <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-            <span className="hidden sm:inline">Admin Mode</span>
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs sm:text-sm ${
+            isInvestorMode 
+              ? 'bg-yellow-500/20 text-yellow-500' 
+              : 'bg-red-500/20 text-red-500'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${isInvestorMode ? 'bg-yellow-500' : 'bg-red-500'}`}></span>
+            <span className="hidden sm:inline">{isInvestorMode ? 'Investor Mode (Read-Only)' : 'Admin Mode'}</span>
           </div>
         </header>
 

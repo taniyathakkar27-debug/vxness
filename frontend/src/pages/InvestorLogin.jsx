@@ -28,14 +28,16 @@ const InvestorLogin = () => {
       const data = await res.json()
 
       if (data.success) {
-        // Store access type and account info
+        // Store access type and account info for investor view
         localStorage.setItem('investorAccessType', data.accessType)
         localStorage.setItem('investorAccount', JSON.stringify(data.account))
+        localStorage.setItem('investorMode', 'true')
+        localStorage.setItem('investorAccountId', data.account._id)
         
-        toast.success(`Logged in with ${data.accessType === 'investor' ? 'Investor (Read-Only)' : 'Master (Full)'} access`)
+        toast.success('Logged in with Investor (Read-Only) access')
         
-        // Navigate to investor dashboard
-        navigate(`/investor/dashboard/${data.account._id}`)
+        // Navigate to admin dashboard in read-only mode
+        navigate('/admin/dashboard')
       } else {
         toast.error(data.message || 'Invalid credentials')
       }
