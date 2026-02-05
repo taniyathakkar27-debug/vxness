@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
+import { useInvestorMode, investorReadOnlyCSS } from '../hooks/useInvestorMode'
 import { 
   LayoutDashboard, 
   User,
@@ -35,6 +36,7 @@ import logoImage from '../assets/logo.png'
 const OrderBook = () => {
   const navigate = useNavigate()
   const { isDarkMode, toggleDarkMode } = useTheme()
+  const { isInvestorMode } = useInvestorMode()
   const [activeMenu, setActiveMenu] = useState('Orders')
   const [sidebarExpanded, setSidebarExpanded] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
@@ -319,6 +321,8 @@ const OrderBook = () => {
 
   return (
     <div className={`min-h-screen flex transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+      {/* Investor Read-Only CSS */}
+      {isInvestorMode && <style>{investorReadOnlyCSS}</style>}
       {/* Mobile Header */}
       {isMobile && (
         <header className={`fixed top-0 left-0 right-0 z-40 px-4 py-3 flex items-center gap-4 ${isDarkMode ? 'bg-dark-800 border-b border-gray-800' : 'bg-white border-b border-gray-200'}`}>
@@ -381,7 +385,7 @@ const OrderBook = () => {
       )}
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-auto ${isMobile ? 'pt-14' : ''}`}>
+      <main className={`flex-1 overflow-auto ${isMobile ? 'pt-14' : ''} ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
         {!isMobile && (
           <header className={`flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
             <div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useInvestorMode, investorReadOnlyCSS } from '../hooks/useInvestorMode'
 import { 
   LayoutDashboard, 
   User,
@@ -38,6 +39,7 @@ const Account = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { isDarkMode, toggleDarkMode } = useTheme()
+  const { isInvestorMode, investorUser } = useInvestorMode()
   const [showFailModal, setShowFailModal] = useState(false)
   const [failReason, setFailReason] = useState('')
   const [activeMenu, setActiveMenu] = useState('Account')
@@ -574,6 +576,8 @@ const Account = () => {
 
   return (
     <div className={`h-screen flex flex-col md:flex-row transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+      {/* Investor Read-Only CSS */}
+      {isInvestorMode && <style>{investorReadOnlyCSS}</style>}
       {/* Mobile Header */}
       {isMobile && (
         <header className={`fixed top-0 left-0 right-0 z-40 px-4 py-3 flex items-center gap-4 ${isDarkMode ? 'bg-dark-800 border-b border-gray-800' : 'bg-white border-b border-gray-200'}`}>
@@ -644,7 +648,7 @@ const Account = () => {
       )}
 
       {/* Main Content - Scrollable */}
-      <main className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
+      <main className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''} ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
         <div className={`${isMobile ? 'p-4' : 'p-6'}`}>
           {/* Success/Error Messages */}
           {success && (

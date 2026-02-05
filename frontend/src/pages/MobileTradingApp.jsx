@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useInvestorMode, investorReadOnlyCSS } from '../hooks/useInvestorMode'
 import { 
   Home, BarChart2, TrendingUp, LineChart, MoreHorizontal,
   Copy, Users, HelpCircle, FileText, UserCircle, LogOut, Wallet,
@@ -15,6 +16,7 @@ import { API_URL } from '../config/api'
 const MobileTradingApp = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { isInvestorMode } = useInvestorMode()
   const accountIdFromUrl = searchParams.get('account')
   const [activeTab, setActiveTab] = useState(accountIdFromUrl ? 'trade' : 'home')
   const [showMoreMenu, setShowMoreMenu] = useState(false)
@@ -1364,8 +1366,10 @@ const MobileTradingApp = () => {
 
   return (
     <div className="min-h-screen bg-dark-900 flex flex-col">
+      {/* Investor Read-Only CSS */}
+      {isInvestorMode && <style>{investorReadOnlyCSS}</style>}
       {/* Main Content */}
-      <main className="flex-1 overflow-hidden">
+      <main className={`flex-1 overflow-hidden ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
         {activeTab === 'home' && renderHome()}
         {activeTab === 'market' && renderMarket()}
         {activeTab === 'trade' && renderTrade()}
