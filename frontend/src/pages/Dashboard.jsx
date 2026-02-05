@@ -436,33 +436,31 @@ const Dashboard = () => {
 
   return (
     <div className={`h-screen flex transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
-      {/* Investor Read-Only Mode Banner */}
-      {isInvestorMode && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-yellow-500 text-black py-2 px-4 text-center font-medium text-sm">
-          👁️ Investor Mode - Read Only Access (Account: {investorAccount?.accountId})
-        </div>
-      )}
-      
-      {/* Read-only CSS for investor mode */}
+      {/* Read-only CSS for investor mode - disable ALL interactive elements */}
       {isInvestorMode && (
         <style>{`
           .investor-readonly button:not(.allow-investor),
           .investor-readonly input:not(.allow-investor),
           .investor-readonly select:not(.allow-investor),
-          .investor-readonly textarea:not(.allow-investor) {
+          .investor-readonly textarea:not(.allow-investor),
+          .investor-readonly [role="button"]:not(.allow-investor) {
             pointer-events: none !important;
-            opacity: 0.7 !important;
+            opacity: 0.6 !important;
             cursor: not-allowed !important;
           }
           .investor-readonly a:not(.allow-investor) {
             pointer-events: none !important;
+          }
+          .investor-readonly nav button:not(.allow-investor) {
+            pointer-events: none !important;
+            opacity: 0.6 !important;
           }
         `}</style>
       )}
       
       {/* Collapsible Sidebar - Fixed */}
       <aside 
-        className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out`}
+        className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out ${isInvestorMode ? 'investor-readonly' : ''}`}
         onMouseEnter={() => setSidebarExpanded(true)}
         onMouseLeave={() => setSidebarExpanded(false)}
       >
@@ -522,7 +520,7 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Content - Scrollable */}
-      <main className={`flex-1 overflow-y-auto ${isInvestorMode ? 'investor-readonly pt-10' : ''}`}>
+      <main className={`flex-1 overflow-y-auto ${isInvestorMode ? 'investor-readonly' : ''}`}>
         {/* Welcome Banner */}
         <div className={`relative border-b ${isDarkMode ? 'bg-gradient-to-r from-dark-800 via-dark-900 to-dark-800 border-gray-800' : 'bg-gradient-to-r from-gray-100 via-white to-gray-100 border-gray-200'}`}>
           <div className="flex items-center justify-between px-6 py-3">
