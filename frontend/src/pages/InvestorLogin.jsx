@@ -28,15 +28,12 @@ const InvestorLogin = () => {
       const data = await res.json()
 
       if (data.success) {
-        // Clear any admin data first
-        localStorage.removeItem('adminToken')
-        localStorage.removeItem('adminUser')
-        
-        // Store access type and account info for investor view
-        localStorage.setItem('investorAccessType', data.accessType)
-        localStorage.setItem('investorAccount', JSON.stringify(data.account))
-        localStorage.setItem('investorMode', 'true')
-        localStorage.setItem('investorAccountId', data.account._id)
+        // Use sessionStorage for investor (tab-specific, doesn't affect other tabs)
+        // This keeps admin session separate in other tabs
+        sessionStorage.setItem('investorAccessType', data.accessType)
+        sessionStorage.setItem('investorAccount', JSON.stringify(data.account))
+        sessionStorage.setItem('investorMode', 'true')
+        sessionStorage.setItem('investorAccountId', data.account._id)
         
         toast.success('Logged in with Investor (Read-Only) access')
         

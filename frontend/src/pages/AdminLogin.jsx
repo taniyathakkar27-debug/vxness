@@ -26,12 +26,6 @@ const AdminLogin = () => {
     
     // Simple admin credentials check (in production, use proper backend auth)
     if (formData.email === 'admin@vxness.com' && formData.password === 'admin123') {
-      // Clear any investor mode data first
-      localStorage.removeItem('investorMode')
-      localStorage.removeItem('investorAccessType')
-      localStorage.removeItem('investorAccount')
-      localStorage.removeItem('investorAccountId')
-      
       localStorage.setItem('adminToken', 'admin-authenticated')
       localStorage.setItem('adminUser', JSON.stringify({ email: formData.email, role: 'admin' }))
       toast.success('Admin login successful!')

@@ -62,15 +62,15 @@ const AdminLayout = ({ children, title, subtitle }) => {
     { name: 'Technical Analysis', icon: LineChart, path: '/admin/technical-analysis' },
   ]
 
-  // Check if user is in investor mode (NOT admin)
-  // Admin has adminToken, Investor has investorMode but NO adminToken
+  // Check if user is in investor mode (uses sessionStorage - tab specific)
+  // Admin uses localStorage, Investor uses sessionStorage
   const adminToken = localStorage.getItem('adminToken')
-  const investorModeFlag = localStorage.getItem('investorMode') === 'true'
-  const isInvestorMode = investorModeFlag && !adminToken
+  const investorModeFlag = sessionStorage.getItem('investorMode') === 'true'
+  const isInvestorMode = investorModeFlag
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken')
-    const investorMode = localStorage.getItem('investorMode')
+    const investorMode = sessionStorage.getItem('investorMode')
     
     // Allow access if admin token exists OR investor mode is active
     if (!token && !investorMode) {
@@ -79,17 +79,22 @@ const AdminLayout = ({ children, title, subtitle }) => {
   }, [navigate])
 
   const handleLogout = () => {
-    // Clear both admin and investor data
+    // Redirect based on who was logged in
+    const wasInvestor = isInvestorMode
+    
+    // Clear admin data (localStorage)
     localStorage.removeItem('adminToken')
     localStorage.removeItem('adminUser')
-    localStorage.removeItem('investorMode')
-    localStorage.removeItem('investorAccessType')
-    localStorage.removeItem('investorAccount')
-    localStorage.removeItem('investorAccountId')
+    
+    // Clear investor data (sessionStorage - tab specific)
+    sessionStorage.removeItem('investorMode')
+    sessionStorage.removeItem('investorAccessType')
+    sessionStorage.removeItem('investorAccount')
+    sessionStorage.removeItem('investorAccountId')
+    
     toast.success('Logged out successfully!')
     
-    // Redirect based on who was logged in
-    if (isInvestorMode) {
+    if (wasInvestor) {
       navigate('/investor/login')
     } else {
       navigate('/admin')
