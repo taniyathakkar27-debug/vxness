@@ -38,6 +38,9 @@ const InstructionsPage = () => {
     } catch (error) {}
   }
 
+  // Menu items - investor can only access Dashboard and Orders
+  const investorAllowedMenus = ['Dashboard', 'Orders']
+
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { name: 'Account', icon: User, path: '/account' },
@@ -160,18 +163,24 @@ const InstructionsPage = () => {
             <img src={logoImage} alt="vxness" className="h-8 w-auto object-contain" />
           </div>
           <nav className="flex-1 px-2">
-            {menuItems.map((item) => (
-              <button
-                key={item.name}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
-                  item.name === 'Instructions' ? 'bg-accent-green text-black' : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-dark-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <item.icon size={18} className="flex-shrink-0" />
-                {sidebarExpanded && <span className="text-sm font-medium">{item.name}</span>}
-              </button>
-            ))}
+            {menuItems.map((item) => {
+              const isDisabledForInvestor = isInvestorMode && !investorAllowedMenus.includes(item.name)
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => !isDisabledForInvestor && navigate(item.path)}
+                  disabled={isDisabledForInvestor}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
+                    isDisabledForInvestor
+                      ? 'opacity-40 cursor-not-allowed text-gray-500'
+                      : item.name === 'Instructions' ? 'bg-accent-green text-black' : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-dark-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <item.icon size={18} className="flex-shrink-0" />
+                  {sidebarExpanded && <span className="text-sm font-medium">{item.name}</span>}
+                </button>
+              )
+            })}
           </nav>
           <div className={`p-2 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
             <button onClick={toggleDarkMode} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-dark-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}>

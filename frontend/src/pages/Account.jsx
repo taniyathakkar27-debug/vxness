@@ -88,6 +88,9 @@ const Account = () => {
   const tabs = challengeModeEnabled ? ['Real', 'Demo', 'Challenge', 'Archived'] : ['Real', 'Demo', 'Archived']
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
+  // Menu items - investor can only access Dashboard and Orders
+  const investorAllowedMenus = ['Dashboard', 'Orders']
+
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { name: 'Account', icon: User, path: '/account' },
@@ -609,21 +612,27 @@ const Account = () => {
           </div>
 
           <nav className="flex-1 px-2 overflow-y-auto">
-            {menuItems.map((item) => (
-              <button
-                key={item.name}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
-                  activeMenu === item.name 
-                    ? 'bg-accent-green text-black' 
-                    : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-dark-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-                title={!sidebarExpanded ? item.name : ''}
-              >
-                <item.icon size={18} className="flex-shrink-0" />
-                {sidebarExpanded && <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>}
-              </button>
-            ))}
+            {menuItems.map((item) => {
+              const isDisabledForInvestor = isInvestorMode && !investorAllowedMenus.includes(item.name)
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => !isDisabledForInvestor && navigate(item.path)}
+                  disabled={isDisabledForInvestor}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
+                    isDisabledForInvestor
+                      ? 'opacity-40 cursor-not-allowed text-gray-500'
+                      : activeMenu === item.name 
+                        ? 'bg-accent-green text-black' 
+                        : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-dark-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                  title={!sidebarExpanded ? item.name : ''}
+                >
+                  <item.icon size={18} className="flex-shrink-0" />
+                  {sidebarExpanded && <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>}
+                </button>
+              )
+            })}
           </nav>
 
           <div className={`p-2 border-t shrink-0 ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
