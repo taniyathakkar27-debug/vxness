@@ -225,10 +225,28 @@ const AdminLayout = ({ children, title, subtitle }) => {
         </header>
 
         {/* Page Content */}
-        <div className="p-4 sm:p-6">
+        <div className={`p-4 sm:p-6 ${isInvestorMode ? 'investor-read-only' : ''}`}>
           {children}
         </div>
       </main>
+      
+      {/* Investor Mode Overlay - blocks all clicks */}
+      {isInvestorMode && (
+        <style>{`
+          .investor-read-only button:not([data-allow-investor]),
+          .investor-read-only input:not([data-allow-investor]),
+          .investor-read-only select:not([data-allow-investor]),
+          .investor-read-only textarea:not([data-allow-investor]),
+          .investor-read-only [role="button"]:not([data-allow-investor]) {
+            pointer-events: none !important;
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+          }
+          .investor-read-only a:not([data-allow-investor]) {
+            pointer-events: none !important;
+          }
+        `}</style>
+      )}
     </div>
   )
 }

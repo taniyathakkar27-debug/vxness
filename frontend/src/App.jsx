@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { InvestorProvider } from './context/InvestorContext'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
@@ -48,8 +49,9 @@ import AdminInvestorAccess from './pages/AdminInvestorAccess'
 
 function App() {
   return (
-    <Router>
-      <Routes>
+    <InvestorProvider>
+      <Router>
+        <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Navigate to="/user/login" replace />} />
         <Route path="/signup" element={<Navigate to="/user/signup" replace />} />
@@ -98,8 +100,9 @@ function App() {
         <Route path="/investor/dashboard/:accountId" element={<InvestorDashboard />} />
         <Route path="/:slug/login" element={<BrandedLogin />} />
         <Route path="/:slug/signup" element={<BrandedSignup />} />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </InvestorProvider>
   )
 }
 
