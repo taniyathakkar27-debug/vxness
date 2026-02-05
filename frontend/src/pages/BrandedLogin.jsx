@@ -73,6 +73,13 @@ const BrandedLogin = () => {
         throw new Error(data.message || 'Login failed')
       }
       
+      // Clear any investor mode data (user is logging in normally)
+      sessionStorage.removeItem('investorMode')
+      sessionStorage.removeItem('investorAccount')
+      sessionStorage.removeItem('investorAccountId')
+      sessionStorage.removeItem('investorAccessType')
+      sessionStorage.removeItem('investorUserId')
+      
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
       

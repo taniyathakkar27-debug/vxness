@@ -37,6 +37,13 @@ const Login = () => {
     
     try {
       const response = await login(formData)
+      // Clear any investor mode data (user is logging in normally)
+      sessionStorage.removeItem('investorMode')
+      sessionStorage.removeItem('investorAccount')
+      sessionStorage.removeItem('investorAccountId')
+      sessionStorage.removeItem('investorAccessType')
+      sessionStorage.removeItem('investorUserId')
+      
       localStorage.setItem('token', response.token)
       localStorage.setItem('user', JSON.stringify(response.user))
       toast.success('Login successful!')
