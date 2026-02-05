@@ -450,7 +450,7 @@ const OrderBook = () => {
             <div className={`flex border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
               <button
                 onClick={() => setActiveTab('positions')}
-                className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
+                className={`allow-investor flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
                   activeTab === 'positions' ? 'bg-accent-green/10 text-accent-green border-b-2 border-accent-green' : isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
@@ -458,7 +458,7 @@ const OrderBook = () => {
               </button>
               <button
                 onClick={() => setActiveTab('history')}
-                className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
+                className={`allow-investor flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
                   activeTab === 'history' ? 'bg-accent-green/10 text-accent-green border-b-2 border-accent-green' : isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
@@ -466,7 +466,7 @@ const OrderBook = () => {
               </button>
               <button
                 onClick={() => setActiveTab('pending')}
-                className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
+                className={`allow-investor flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 ${
                   activeTab === 'pending' ? 'bg-accent-green/10 text-accent-green border-b-2 border-accent-green' : isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
