@@ -103,14 +103,6 @@ const AdminLayout = ({ children, title, subtitle }) => {
 
   return (
     <div className={`min-h-screen flex transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
-      {/* Investor Read-Only Banner */}
-      {isInvestorMode && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-yellow-500 text-black py-2 px-4 text-center font-medium">
-          <Eye size={16} className="inline mr-2" />
-          Investor Mode - Read Only Access (All actions are disabled)
-        </div>
-      )}
-      
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
@@ -207,9 +199,9 @@ const AdminLayout = ({ children, title, subtitle }) => {
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-auto min-w-0 ${isInvestorMode ? 'pt-10' : ''}`}>
+      <main className="flex-1 overflow-auto min-w-0">
         {/* Header */}
-        <header className={`sticky top-0 z-30 backdrop-blur-sm flex items-center justify-between px-4 sm:px-6 py-4 border-b ${isDarkMode ? 'bg-dark-900/95 border-gray-800' : 'bg-white/95 border-gray-200'} ${isInvestorMode ? 'mt-0' : ''}`}>
+        <header className={`sticky top-0 z-30 backdrop-blur-sm flex items-center justify-between px-4 sm:px-6 py-4 border-b ${isDarkMode ? 'bg-dark-900/95 border-gray-800' : 'bg-white/95 border-gray-200'}`}>
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setMobileMenuOpen(true)}
