@@ -28,6 +28,10 @@ const InvestorLogin = () => {
       const data = await res.json()
 
       if (data.success) {
+        // Clear any admin data first
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('adminUser')
+        
         // Store access type and account info for investor view
         localStorage.setItem('investorAccessType', data.accessType)
         localStorage.setItem('investorAccount', JSON.stringify(data.account))

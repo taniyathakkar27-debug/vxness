@@ -62,14 +62,18 @@ const AdminLayout = ({ children, title, subtitle }) => {
     { name: 'Technical Analysis', icon: LineChart, path: '/admin/technical-analysis' },
   ]
 
-  const isInvestorMode = localStorage.getItem('investorMode') === 'true'
+  // Check if user is in investor mode (NOT admin)
+  // Admin has adminToken, Investor has investorMode but NO adminToken
+  const adminToken = localStorage.getItem('adminToken')
+  const investorModeFlag = localStorage.getItem('investorMode') === 'true'
+  const isInvestorMode = investorModeFlag && !adminToken
 
   useEffect(() => {
-    const adminToken = localStorage.getItem('adminToken')
+    const token = localStorage.getItem('adminToken')
     const investorMode = localStorage.getItem('investorMode')
     
     // Allow access if admin token exists OR investor mode is active
-    if (!adminToken && !investorMode) {
+    if (!token && !investorMode) {
       navigate('/admin')
     }
   }, [navigate])
