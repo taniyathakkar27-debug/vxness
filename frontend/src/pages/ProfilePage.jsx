@@ -508,7 +508,7 @@ const ProfilePage = () => {
                   disabled={isDisabledForInvestor}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
                     isDisabledForInvestor
-                      ? 'opacity-40 cursor-not-allowed text-gray-500'
+                      ? 'opacity-80 cursor-not-allowed text-gray-500'
                       : item.name === 'Profile' ? 'bg-accent-green text-black' : isDarkMode ? 'text-gray-400 hover:text-white hover:bg-dark-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
