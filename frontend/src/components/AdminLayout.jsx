@@ -26,7 +26,8 @@ import {
   Gift,
   Sun,
   Moon,
-  LineChart
+  LineChart,
+  Eye
 } from 'lucide-react'
 import logoImage from '../assets/logo.png'
 import { useTheme } from '../context/ThemeContext'
@@ -51,6 +52,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
     { name: 'Copy Trade Management', icon: Copy, path: '/admin/copy-trade' },
     { name: 'Prop Firm Challenges', icon: Trophy, path: '/admin/prop-firm' },
     { name: 'Account Types', icon: CreditCard, path: '/admin/account-types' },
+    { name: 'Investor Access', icon: Eye, path: '/admin/investor-access' },
     { name: 'Theme Settings', icon: Palette, path: '/admin/theme' },
     { name: 'Email Templates', icon: Mail, path: '/admin/email-templates' },
     { name: 'Bonus Management', icon: Gift, path: '/admin/bonus-management' },

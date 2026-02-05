@@ -14,7 +14,9 @@ import {
   Lock,
   X,
   Check,
-  Ban
+  Ban,
+  Key,
+  Copy
 } from 'lucide-react'
 import { API_URL } from '../config/api'
 
@@ -36,6 +38,9 @@ const AdminAccounts = () => {
     status: ''
   })
   const [newPin, setNewPin] = useState('')
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [accountPasswords, setAccountPasswords] = useState({ masterPassword: '', investorPassword: '' })
+  const [loadingPasswords, setLoadingPasswords] = useState(false)
 
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
@@ -82,6 +87,54 @@ const AdminAccounts = () => {
     } catch (error) {
       setError('Error updating account')
     }
+  }
+
+  // Fetch account passwords
+  const fetchAccountPasswords = async (account) => {
+    setSelectedAccount(account)
+    setLoadingPasswords(true)
+    setShowPasswordModal(true)
+    try {
+      const res = await fetch(`${API_URL}/trading-accounts/${account._id}/passwords`)
+      const data = await res.json()
+      if (data.success) {
+        setAccountPasswords({
+          masterPassword: data.masterPassword,
+          investorPassword: data.investorPassword
+        })
+      }
+    } catch (error) {
+      toast.error('Error fetching passwords')
+    }
+    setLoadingPasswords(false)
+  }
+
+  // Regenerate password
+  const regeneratePassword = async (type) => {
+    if (!selectedAccount) return
+    try {
+      const res = await fetch(`${API_URL}/trading-accounts/${selectedAccount._id}/regenerate-password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setAccountPasswords(prev => ({
+          ...prev,
+          [type === 'master' ? 'masterPassword' : 'investorPassword']: data.password
+        }))
+        toast.success(`${type === 'master' ? 'Master' : 'Investor'} password regenerated!`)
+      }
+    } catch (error) {
+      toast.error('Error regenerating password')
+    }
+  }
+
+  // Copy to clipboard
+  const copyToClipboard = (text, label) => {
+    navigator.clipboard.writeText(text)
+    toast.success(`${label} copied to clipboard!`)
   }
 
   const handleResetPin = async () => {
@@ -249,6 +302,9 @@ const AdminAccounts = () => {
                           <button onClick={() => openEditModal(account)} className="p-2 hover:bg-dark-600 rounded-lg transition-colors text-gray-400 hover:text-white" title="Edit">
                             <Edit size={16} />
                           </button>
+                          <button onClick={() => fetchAccountPasswords(account)} className="p-2 hover:bg-dark-600 rounded-lg transition-colors text-gray-400 hover:text-green-500" title="View Passwords">
+                            <Key size={16} />
+                          </button>
                           <button onClick={() => { setSelectedAccount(account); setShowResetPinModal(true); setError(''); }} className="p-2 hover:bg-dark-600 rounded-lg transition-colors text-gray-400 hover:text-yellow-500" title="Reset PIN">
                             <Lock size={16} />
                           </button>
@@ -346,6 +402,86 @@ const AdminAccounts = () => {
             <div className="flex gap-3">
               <button onClick={() => { setShowResetPinModal(false); setNewPin(''); }} className="flex-1 bg-dark-700 text-white py-3 rounded-lg hover:bg-dark-600">Cancel</button>
               <button onClick={handleResetPin} className="flex-1 bg-red-500 text-white font-medium py-3 rounded-lg hover:bg-red-600">Reset PIN</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Modal */}
+      {showPasswordModal && selectedAccount && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-dark-800 rounded-xl p-6 w-full max-w-md border border-gray-700">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-white font-semibold text-lg">Account Passwords</h3>
+              <button onClick={() => { setShowPasswordModal(false); setAccountPasswords({ masterPassword: '', investorPassword: '' }); }} className="text-gray-400 hover:text-white"><X size={20} /></button>
+            </div>
+
+            <div className="mb-4 p-3 bg-dark-700 rounded-lg">
+              <p className="text-gray-400 text-sm">Account ID</p>
+              <p className="text-white font-mono">{selectedAccount.accountId}</p>
+            </div>
+
+            {loadingPasswords ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw size={24} className="text-gray-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Master Password */}
+                <div className="p-4 bg-dark-700 rounded-lg border border-gray-600">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-gray-400 text-sm">Master Password</p>
+                    <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded">Full Access</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={accountPasswords.masterPassword}
+                      readOnly
+                      className="flex-1 bg-dark-600 border border-gray-600 rounded-lg px-3 py-2 text-white font-mono text-lg tracking-wider"
+                    />
+                    <button onClick={() => copyToClipboard(accountPasswords.masterPassword, 'Master Password')} className="p-2 bg-dark-600 hover:bg-dark-500 rounded-lg text-gray-400 hover:text-white" title="Copy">
+                      <Copy size={18} />
+                    </button>
+                    <button onClick={() => regeneratePassword('master')} className="p-2 bg-dark-600 hover:bg-dark-500 rounded-lg text-gray-400 hover:text-yellow-500" title="Regenerate">
+                      <RefreshCw size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Investor Password */}
+                <div className="p-4 bg-dark-700 rounded-lg border border-gray-600">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-gray-400 text-sm">Investor Password</p>
+                    <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">Read Only</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={accountPasswords.investorPassword}
+                      readOnly
+                      className="flex-1 bg-dark-600 border border-gray-600 rounded-lg px-3 py-2 text-white font-mono text-lg tracking-wider"
+                    />
+                    <button onClick={() => copyToClipboard(accountPasswords.investorPassword, 'Investor Password')} className="p-2 bg-dark-600 hover:bg-dark-500 rounded-lg text-gray-400 hover:text-white" title="Copy">
+                      <Copy size={18} />
+                    </button>
+                    <button onClick={() => regeneratePassword('investor')} className="p-2 bg-dark-600 hover:bg-dark-500 rounded-lg text-gray-400 hover:text-yellow-500" title="Regenerate">
+                      <RefreshCw size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mt-4">
+                  <p className="text-yellow-500 text-sm">
+                    <strong>Master:</strong> Full trading access<br/>
+                    <strong>Investor:</strong> View-only access (for demo/presentation)
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => { setShowPasswordModal(false); setAccountPasswords({ masterPassword: '', investorPassword: '' }); }} className="flex-1 bg-dark-700 text-white py-3 rounded-lg hover:bg-dark-600">Close</button>
             </div>
           </div>
         </div>

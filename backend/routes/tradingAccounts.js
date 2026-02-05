@@ -500,4 +500,130 @@ router.post('/:id/reset-demo', async (req, res) => {
   }
 })
 
+// GET /api/trading-accounts/:accountId/passwords - Get account passwords (admin only)
+router.get('/:accountId/passwords', async (req, res) => {
+  try {
+    const account = await TradingAccount.findById(req.params.accountId)
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Account not found' })
+    }
+
+    // Generate passwords if they don't exist (for existing accounts)
+    if (!account.masterPassword || !account.investorPassword) {
+      account.masterPassword = account.masterPassword || TradingAccount.generatePassword()
+      account.investorPassword = account.investorPassword || TradingAccount.generatePassword()
+      await account.save()
+    }
+
+    res.json({
+      success: true,
+      accountId: account.accountId,
+      masterPassword: account.masterPassword,
+      investorPassword: account.investorPassword
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching passwords', error: error.message })
+  }
+})
+
+// PUT /api/trading-accounts/:accountId/regenerate-password - Regenerate password
+router.put('/:accountId/regenerate-password', async (req, res) => {
+  try {
+    const { type } = req.body // 'master' or 'investor'
+    const account = await TradingAccount.findById(req.params.accountId)
+    
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Account not found' })
+    }
+
+    const newPassword = TradingAccount.generatePassword()
+    
+    if (type === 'master') {
+      account.masterPassword = newPassword
+    } else if (type === 'investor') {
+      account.investorPassword = newPassword
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid password type. Use "master" or "investor"' })
+    }
+
+    await account.save()
+
+    res.json({
+      success: true,
+      message: `${type === 'master' ? 'Master' : 'Investor'} password regenerated successfully`,
+      password: newPassword
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error regenerating password', error: error.message })
+  }
+})
+
+// PUT /api/trading-accounts/:accountId/set-passwords - Admin sets custom passwords
+router.put('/:accountId/set-passwords', async (req, res) => {
+  try {
+    const { masterPassword, investorPassword } = req.body
+    const account = await TradingAccount.findById(req.params.accountId)
+    
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Account not found' })
+    }
+
+    if (masterPassword) {
+      account.masterPassword = masterPassword
+    }
+    if (investorPassword) {
+      account.investorPassword = investorPassword
+    }
+
+    await account.save()
+
+    res.json({
+      success: true,
+      message: 'Passwords updated successfully',
+      masterPassword: account.masterPassword,
+      investorPassword: account.investorPassword
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error setting passwords', error: error.message })
+  }
+})
+
+// POST /api/trading-accounts/investor-login - Investor login (read-only access)
+router.post('/investor-login', async (req, res) => {
+  try {
+    const { accountId, password } = req.body
+
+    const account = await TradingAccount.findOne({ accountId })
+      .populate('userId', 'firstName lastName email')
+      .populate('accountTypeId', 'name')
+
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Account not found' })
+    }
+
+    // Check investor password only
+    if (account.investorPassword !== password) {
+      return res.status(401).json({ success: false, message: 'Invalid password' })
+    }
+
+    res.json({
+      success: true,
+      accessType: 'investor', // Always read-only for investor login
+      account: {
+        _id: account._id,
+        accountId: account.accountId,
+        balance: account.balance,
+        credit: account.credit,
+        leverage: account.leverage,
+        status: account.status,
+        isDemo: account.isDemo,
+        user: account.userId,
+        accountType: account.accountTypeId
+      }
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error logging in', error: error.message })
+  }
+})
+
 export default router

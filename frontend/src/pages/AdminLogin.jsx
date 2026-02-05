@@ -125,6 +125,16 @@ const AdminLogin = () => {
             User Login
           </button>
         </p>
+
+        {/* Investor Login Link */}
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <p className="text-center text-gray-500 text-sm">
+            Trading Account Access?{' '}
+            <button onClick={() => navigate('/investor/login')} className="text-green-500 hover:text-green-400 hover:underline font-medium">
+              Investor Login
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   )

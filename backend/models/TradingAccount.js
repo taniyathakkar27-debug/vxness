@@ -53,8 +53,26 @@ const tradingAccountSchema = new mongoose.Schema({
   isDemo: {
     type: Boolean,
     default: false
+  },
+  masterPassword: {
+    type: String,
+    default: null
+  },
+  investorPassword: {
+    type: String,
+    default: null
   }
 }, { timestamps: true })
+
+// Generate random password (8 characters: letters + numbers)
+tradingAccountSchema.statics.generatePassword = function() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  let password = ''
+  for (let i = 0; i < 8; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return password
+}
 
 // Generate unique account ID (numbers only, 8 digits)
 tradingAccountSchema.statics.generateAccountId = async function() {

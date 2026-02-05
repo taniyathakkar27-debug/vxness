@@ -42,6 +42,9 @@ import AdminEmailTemplates from './pages/AdminEmailTemplates'
 import AdminBonusManagement from './pages/AdminBonusManagement'
 import AdminTechnicalAnalysis from './pages/AdminTechnicalAnalysis'
 import LandingPage from './pages/LandingPage'
+import InvestorLogin from './pages/InvestorLogin'
+import InvestorDashboard from './pages/InvestorDashboard'
+import AdminInvestorAccess from './pages/AdminInvestorAccess'
 
 function App() {
   return (
@@ -88,8 +91,11 @@ function App() {
         <Route path="/admin/email-templates" element={<AdminEmailTemplates />} />
         <Route path="/admin/bonus-management" element={<AdminBonusManagement />} />
         <Route path="/admin/technical-analysis" element={<AdminTechnicalAnalysis />} />
+        <Route path="/admin/investor-access" element={<AdminInvestorAccess />} />
         <Route path="/buy-challenge" element={<BuyChallengePage />} />
         <Route path="/challenge-dashboard" element={<ChallengeDashboardPage />} />
+        <Route path="/investor/login" element={<InvestorLogin />} />
+        <Route path="/investor/dashboard/:accountId" element={<InvestorDashboard />} />
         <Route path="/:slug/login" element={<BrandedLogin />} />
         <Route path="/:slug/signup" element={<BrandedSignup />} />
       </Routes>
