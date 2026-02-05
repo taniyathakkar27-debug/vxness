@@ -55,7 +55,14 @@ const Dashboard = () => {
   const forexHeatmapRef = useRef(null)
   const forexScreenerRef = useRef(null)
   
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  // Check if investor mode (read-only)
+  const isInvestorMode = sessionStorage.getItem('investorMode') === 'true'
+  const investorAccount = isInvestorMode ? JSON.parse(sessionStorage.getItem('investorAccount') || '{}') : null
+  
+  // Use investor account user or regular logged in user
+  const user = isInvestorMode 
+    ? (investorAccount?.user || {})
+    : JSON.parse(localStorage.getItem('user') || '{}')
 
   // Handle responsive view switching
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
@@ -79,6 +86,11 @@ const Dashboard = () => {
 
   // Check auth status on mount
   const checkAuthStatus = async () => {
+    // Skip auth check for investor mode - they have their own session
+    if (isInvestorMode) {
+      return
+    }
+    
     const token = localStorage.getItem('token')
     if (!token || !user._id) {
       navigate('/user/login')
@@ -327,10 +339,21 @@ const Dashboard = () => {
   ]
 
   const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    toast.success('Logged out successfully!')
-    navigate('/user/login')
+    if (isInvestorMode) {
+      // Clear investor session data
+      sessionStorage.removeItem('investorMode')
+      sessionStorage.removeItem('investorAccessType')
+      sessionStorage.removeItem('investorAccount')
+      sessionStorage.removeItem('investorAccountId')
+      sessionStorage.removeItem('investorUserId')
+      toast.success('Logged out successfully!')
+      navigate('/investor/login')
+    } else {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      toast.success('Logged out successfully!')
+      navigate('/user/login')
+    }
   }
 
   // Load TradingView widgets - re-render when theme changes
@@ -413,6 +436,30 @@ const Dashboard = () => {
 
   return (
     <div className={`h-screen flex transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+      {/* Investor Read-Only Mode Banner */}
+      {isInvestorMode && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-yellow-500 text-black py-2 px-4 text-center font-medium text-sm">
+          👁️ Investor Mode - Read Only Access (Account: {investorAccount?.accountId})
+        </div>
+      )}
+      
+      {/* Read-only CSS for investor mode */}
+      {isInvestorMode && (
+        <style>{`
+          .investor-readonly button:not(.allow-investor),
+          .investor-readonly input:not(.allow-investor),
+          .investor-readonly select:not(.allow-investor),
+          .investor-readonly textarea:not(.allow-investor) {
+            pointer-events: none !important;
+            opacity: 0.7 !important;
+            cursor: not-allowed !important;
+          }
+          .investor-readonly a:not(.allow-investor) {
+            pointer-events: none !important;
+          }
+        `}</style>
+      )}
+      
       {/* Collapsible Sidebar - Fixed */}
       <aside 
         className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out`}
@@ -463,7 +510,7 @@ const Dashboard = () => {
           
           <button 
             onClick={handleLogout}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors rounded-lg ${
+            className={`allow-investor w-full flex items-center gap-3 px-3 py-2.5 transition-colors rounded-lg ${
               isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
             }`}
             title={!sidebarExpanded ? 'Log Out' : ''}
@@ -475,7 +522,7 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Content - Scrollable */}
-      <main className="flex-1 overflow-y-auto">
+      <main className={`flex-1 overflow-y-auto ${isInvestorMode ? 'investor-readonly pt-10' : ''}`}>
         {/* Welcome Banner */}
         <div className={`relative border-b ${isDarkMode ? 'bg-gradient-to-r from-dark-800 via-dark-900 to-dark-800 border-gray-800' : 'bg-gradient-to-r from-gray-100 via-white to-gray-100 border-gray-200'}`}>
           <div className="flex items-center justify-between px-6 py-3">

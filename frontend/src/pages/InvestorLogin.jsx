@@ -29,16 +29,18 @@ const InvestorLogin = () => {
 
       if (data.success) {
         // Use sessionStorage for investor (tab-specific, doesn't affect other tabs)
-        // This keeps admin session separate in other tabs
         sessionStorage.setItem('investorAccessType', data.accessType)
         sessionStorage.setItem('investorAccount', JSON.stringify(data.account))
         sessionStorage.setItem('investorMode', 'true')
         sessionStorage.setItem('investorAccountId', data.account._id)
         
+        // Store user info to simulate logged in user for dashboard
+        sessionStorage.setItem('investorUserId', data.account.user?._id || '')
+        
         toast.success('Logged in with Investor (Read-Only) access')
         
-        // Navigate to admin dashboard in read-only mode
-        navigate('/admin/dashboard')
+        // Navigate to user dashboard (not admin) in read-only mode
+        navigate('/dashboard')
       } else {
         toast.error(data.message || 'Invalid credentials')
       }
