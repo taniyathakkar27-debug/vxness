@@ -12,7 +12,8 @@ import {
   Plus,
   Edit,
   X,
-  Trash2
+  Trash2,
+  GitMerge
 } from 'lucide-react'
 import metaApiService from '../services/metaApi'
 import binanceApiService from '../services/binanceApi'
@@ -28,6 +29,9 @@ const AdminTradeManagement = () => {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showCloseModal, setShowCloseModal] = useState(false)
+  const [showNettingModal, setShowNettingModal] = useState(false)
+  const [nettablePositions, setNettablePositions] = useState([])
+  const [nettingLoading, setNettingLoading] = useState(false)
   const [selectedTrade, setSelectedTrade] = useState(null)
   const [users, setUsers] = useState([])
   const [tradingAccounts, setTradingAccounts] = useState([])
@@ -345,6 +349,58 @@ const AdminTradeManagement = () => {
     setShowEditModal(true)
   }
 
+  // Fetch nettable positions
+  const fetchNettablePositions = async () => {
+    setNettingLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/admin/trade/nettable`)
+      const data = await res.json()
+      if (data.success) {
+        setNettablePositions(data.nettablePositions || [])
+      }
+    } catch (error) {
+      console.error('Error fetching nettable positions:', error)
+      toast.error('Failed to fetch nettable positions')
+    }
+    setNettingLoading(false)
+  }
+
+  // Handle netting trades
+  const handleNetTrades = async (position) => {
+    if (!confirm(`Net all ${position.symbol} trades for account ${position.accountId}?\n\nBUY: ${position.totalBuyQty} lots\nSELL: ${position.totalSellQty} lots\nNettable: ${position.nettableQty} lots`)) {
+      return
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/admin/trade/net-trades`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tradingAccountId: position.tradingAccountId,
+          symbol: position.symbol,
+          adminId: JSON.parse(localStorage.getItem('adminUser') || '{}')._id,
+          prices: livePrices
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(`${data.message}\nTotal P&L: $${data.totalPnl?.toFixed(2)}\nNet Position: ${data.summary?.netPosition}`)
+        fetchNettablePositions()
+        fetchTrades()
+      } else {
+        toast.error(data.message || 'Failed to net trades')
+      }
+    } catch (error) {
+      console.error('Error netting trades:', error)
+      toast.error('Error netting trades')
+    }
+  }
+
+  const openNettingModal = () => {
+    fetchNettablePositions()
+    setShowNettingModal(true)
+  }
+
   const openCloseModal = async (trade) => {
     setSelectedTrade(trade)
     setShowCloseModal(true)
@@ -469,6 +525,12 @@ const AdminTradeManagement = () => {
               className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg flex items-center gap-2"
             >
               <Plus size={18} /> Create Trade
+            </button>
+            <button
+              onClick={openNettingModal}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2"
+            >
+              <GitMerge size={18} /> Net Trades
             </button>
             <div className="relative">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -1095,6 +1157,93 @@ const AdminTradeManagement = () => {
                   className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
                 >
                   Close Trade
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Netting Modal */}
+      {showNettingModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <GitMerge size={24} className="text-purple-500" /> Net Trades
+                </h2>
+                <p className="text-gray-400 text-sm mt-1">Merge opposite positions on same symbol</p>
+              </div>
+              <button onClick={() => setShowNettingModal(false)} className="text-gray-400 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6">
+              {nettingLoading ? (
+                <div className="text-center py-8 text-gray-400">
+                  <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
+                  Loading nettable positions...
+                </div>
+              ) : nettablePositions.length === 0 ? (
+                <div className="text-center py-8">
+                  <GitMerge size={48} className="mx-auto text-gray-600 mb-4" />
+                  <p className="text-gray-400">No nettable positions found</p>
+                  <p className="text-gray-500 text-sm mt-2">Netting requires both BUY and SELL trades on the same symbol in an account</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-4">
+                    <p className="text-purple-400 text-sm">
+                      <strong>Netting</strong> will close opposite positions and leave only the net position. 
+                      P&L will be calculated and added to account balance.
+                    </p>
+                  </div>
+                  {nettablePositions.map((position, index) => (
+                    <div key={index} className="bg-dark-700 rounded-lg p-4 border border-gray-700">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="text-white font-medium">{position.symbol}</p>
+                          <p className="text-gray-400 text-sm">Account: {position.accountId}</p>
+                          <p className="text-gray-500 text-xs">{position.userName} ({position.userEmail})</p>
+                        </div>
+                        <button
+                          onClick={() => handleNetTrades(position)}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2"
+                        >
+                          <GitMerge size={16} /> Net
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="bg-green-500/10 rounded-lg p-2 text-center">
+                          <p className="text-green-500 font-medium">{position.buyCount} BUY</p>
+                          <p className="text-gray-400">{position.totalBuyQty.toFixed(2)} lots</p>
+                        </div>
+                        <div className="bg-red-500/10 rounded-lg p-2 text-center">
+                          <p className="text-red-500 font-medium">{position.sellCount} SELL</p>
+                          <p className="text-gray-400">{position.totalSellQty.toFixed(2)} lots</p>
+                        </div>
+                        <div className="bg-purple-500/10 rounded-lg p-2 text-center">
+                          <p className="text-purple-400 font-medium">Nettable</p>
+                          <p className="text-white">{position.nettableQty.toFixed(2)} lots</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-3 pt-6">
+                <button
+                  onClick={() => setShowNettingModal(false)}
+                  className="flex-1 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={fetchNettablePositions}
+                  className="px-4 py-2 bg-dark-600 hover:bg-dark-500 text-white rounded-lg flex items-center gap-2"
+                >
+                  <RefreshCw size={16} /> Refresh
                 </button>
               </div>
             </div>

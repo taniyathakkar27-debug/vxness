@@ -924,4 +924,249 @@ router.get('/logs', async (req, res) => {
   }
 })
 
+// POST /api/admin/trade/net-trades - Net opposite trades for same symbol in an account
+router.post('/net-trades', async (req, res) => {
+  try {
+    const { tradingAccountId, symbol, adminId, prices } = req.body
+
+    if (!tradingAccountId || !symbol) {
+      return res.status(400).json({
+        success: false,
+        message: 'Trading account ID and symbol are required'
+      })
+    }
+
+    // Get all open trades for this account and symbol
+    const openTrades = await Trade.find({
+      tradingAccountId,
+      symbol,
+      status: 'OPEN'
+    }).sort({ openedAt: 1 })
+
+    if (openTrades.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Need at least 2 open trades to net'
+      })
+    }
+
+    // Separate BUY and SELL trades
+    const buyTrades = openTrades.filter(t => t.side === 'BUY')
+    const sellTrades = openTrades.filter(t => t.side === 'SELL')
+
+    if (buyTrades.length === 0 || sellTrades.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Need both BUY and SELL trades to net'
+      })
+    }
+
+    // Calculate total quantities
+    const totalBuyQty = buyTrades.reduce((sum, t) => sum + t.quantity, 0)
+    const totalSellQty = sellTrades.reduce((sum, t) => sum + t.quantity, 0)
+
+    // Get current price for P&L calculation
+    const currentPrice = prices?.[symbol] || {}
+    const bid = currentPrice.bid || buyTrades[0].openPrice
+    const ask = currentPrice.ask || sellTrades[0].openPrice
+
+    const nettedTrades = []
+    let totalPnl = 0
+
+    // Net the smaller side completely
+    if (totalBuyQty <= totalSellQty) {
+      // Close all BUY trades
+      for (const trade of buyTrades) {
+        const pnl = (bid - trade.openPrice) * trade.quantity * trade.contractSize - (trade.swap || 0)
+        trade.closePrice = bid
+        trade.realizedPnl = pnl
+        trade.status = 'CLOSED'
+        trade.closedBy = 'ADMIN'
+        trade.closedAt = new Date()
+        trade.adminModified = true
+        trade.adminModifiedAt = new Date()
+        await trade.save()
+        nettedTrades.push({ tradeId: trade.tradeId, side: 'BUY', quantity: trade.quantity, pnl })
+        totalPnl += pnl
+      }
+
+      // Partially close SELL trades to match BUY quantity
+      let remainingQtyToClose = totalBuyQty
+      for (const trade of sellTrades) {
+        if (remainingQtyToClose <= 0) break
+
+        const qtyToClose = Math.min(trade.quantity, remainingQtyToClose)
+        const pnl = (trade.openPrice - ask) * qtyToClose * trade.contractSize - (trade.swap || 0) * (qtyToClose / trade.quantity)
+
+        if (qtyToClose >= trade.quantity) {
+          // Close entire trade
+          trade.closePrice = ask
+          trade.realizedPnl = pnl
+          trade.status = 'CLOSED'
+          trade.closedBy = 'ADMIN'
+          trade.closedAt = new Date()
+          trade.adminModified = true
+          trade.adminModifiedAt = new Date()
+          await trade.save()
+          nettedTrades.push({ tradeId: trade.tradeId, side: 'SELL', quantity: trade.quantity, pnl, action: 'closed' })
+        } else {
+          // Partial close - reduce quantity
+          const originalQty = trade.quantity
+          trade.quantity = trade.quantity - qtyToClose
+          trade.marginUsed = trade.marginUsed * (trade.quantity / originalQty)
+          trade.adminModified = true
+          trade.adminModifiedAt = new Date()
+          await trade.save()
+          nettedTrades.push({ tradeId: trade.tradeId, side: 'SELL', quantity: qtyToClose, pnl, action: 'partial', remainingQty: trade.quantity })
+        }
+
+        totalPnl += pnl
+        remainingQtyToClose -= qtyToClose
+      }
+    } else {
+      // Close all SELL trades
+      for (const trade of sellTrades) {
+        const pnl = (trade.openPrice - ask) * trade.quantity * trade.contractSize - (trade.swap || 0)
+        trade.closePrice = ask
+        trade.realizedPnl = pnl
+        trade.status = 'CLOSED'
+        trade.closedBy = 'ADMIN'
+        trade.closedAt = new Date()
+        trade.adminModified = true
+        trade.adminModifiedAt = new Date()
+        await trade.save()
+        nettedTrades.push({ tradeId: trade.tradeId, side: 'SELL', quantity: trade.quantity, pnl })
+        totalPnl += pnl
+      }
+
+      // Partially close BUY trades to match SELL quantity
+      let remainingQtyToClose = totalSellQty
+      for (const trade of buyTrades) {
+        if (remainingQtyToClose <= 0) break
+
+        const qtyToClose = Math.min(trade.quantity, remainingQtyToClose)
+        const pnl = (bid - trade.openPrice) * qtyToClose * trade.contractSize - (trade.swap || 0) * (qtyToClose / trade.quantity)
+
+        if (qtyToClose >= trade.quantity) {
+          // Close entire trade
+          trade.closePrice = bid
+          trade.realizedPnl = pnl
+          trade.status = 'CLOSED'
+          trade.closedBy = 'ADMIN'
+          trade.closedAt = new Date()
+          trade.adminModified = true
+          trade.adminModifiedAt = new Date()
+          await trade.save()
+          nettedTrades.push({ tradeId: trade.tradeId, side: 'BUY', quantity: trade.quantity, pnl, action: 'closed' })
+        } else {
+          // Partial close - reduce quantity
+          const originalQty = trade.quantity
+          trade.quantity = trade.quantity - qtyToClose
+          trade.marginUsed = trade.marginUsed * (trade.quantity / originalQty)
+          trade.adminModified = true
+          trade.adminModifiedAt = new Date()
+          await trade.save()
+          nettedTrades.push({ tradeId: trade.tradeId, side: 'BUY', quantity: qtyToClose, pnl, action: 'partial', remainingQty: trade.quantity })
+        }
+
+        totalPnl += pnl
+        remainingQtyToClose -= qtyToClose
+      }
+    }
+
+    // Update account balance with total P&L
+    const account = await TradingAccount.findById(tradingAccountId)
+    if (account) {
+      account.balance += totalPnl
+      await account.save()
+    }
+
+    // Log the action
+    if (adminId) {
+      await AdminLog.create({
+        adminId,
+        action: 'TRADE_NETTING',
+        targetType: 'ACCOUNT',
+        targetId: tradingAccountId,
+        reason: `Netted ${symbol} trades`,
+        newValue: { 
+          symbol,
+          nettedTrades: nettedTrades.length,
+          totalPnl,
+          buyQty: totalBuyQty,
+          sellQty: totalSellQty
+        }
+      })
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully netted ${nettedTrades.length} trades for ${symbol}`,
+      nettedTrades,
+      totalPnl,
+      summary: {
+        totalBuyQty,
+        totalSellQty,
+        netPosition: totalBuyQty > totalSellQty ? `BUY ${(totalBuyQty - totalSellQty).toFixed(2)}` : `SELL ${(totalSellQty - totalBuyQty).toFixed(2)}`
+      }
+    })
+  } catch (error) {
+    console.error('Error netting trades:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// GET /api/admin/trade/nettable - Get accounts with nettable trades (opposite positions on same symbol)
+router.get('/nettable', async (req, res) => {
+  try {
+    // Find all open trades grouped by account and symbol
+    const nettablePositions = await Trade.aggregate([
+      { $match: { status: 'OPEN' } },
+      {
+        $group: {
+          _id: { tradingAccountId: '$tradingAccountId', symbol: '$symbol' },
+          trades: { $push: { side: '$side', quantity: '$quantity', tradeId: '$tradeId' } },
+          buyCount: { $sum: { $cond: [{ $eq: ['$side', 'BUY'] }, 1, 0] } },
+          sellCount: { $sum: { $cond: [{ $eq: ['$side', 'SELL'] }, 1, 0] } },
+          totalBuyQty: { $sum: { $cond: [{ $eq: ['$side', 'BUY'] }, '$quantity', 0] } },
+          totalSellQty: { $sum: { $cond: [{ $eq: ['$side', 'SELL'] }, '$quantity', 0] } }
+        }
+      },
+      {
+        $match: {
+          buyCount: { $gt: 0 },
+          sellCount: { $gt: 0 }
+        }
+      }
+    ])
+
+    // Populate account details
+    const results = []
+    for (const pos of nettablePositions) {
+      const account = await TradingAccount.findById(pos._id.tradingAccountId)
+        .populate('userId', 'firstName email')
+      
+      if (account) {
+        results.push({
+          tradingAccountId: pos._id.tradingAccountId,
+          accountId: account.accountId,
+          userName: account.userId?.firstName || 'N/A',
+          userEmail: account.userId?.email || 'N/A',
+          symbol: pos._id.symbol,
+          buyCount: pos.buyCount,
+          sellCount: pos.sellCount,
+          totalBuyQty: pos.totalBuyQty,
+          totalSellQty: pos.totalSellQty,
+          nettableQty: Math.min(pos.totalBuyQty, pos.totalSellQty)
+        })
+      }
+    }
+
+    res.json({ success: true, nettablePositions: results })
+  } catch (error) {
+    console.error('Error fetching nettable positions:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
 export default router
