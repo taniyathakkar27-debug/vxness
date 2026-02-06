@@ -224,7 +224,6 @@ const AdminMarginAlerts = () => {
       contactPreference: 'notification_only'
     })
     setSelectedAccount(null)
-    fetchAllAccounts() // Refresh accounts list when modal opens
     setShowModal(true)
   }
 

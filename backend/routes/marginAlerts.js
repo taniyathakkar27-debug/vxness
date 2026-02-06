@@ -76,7 +76,7 @@ router.post('/', async (req, res) => {
       marginThreshold,
       notes: notes || '',
       contactPreference: contactPreference || 'notification_only',
-      ...(adminId && { setBy: adminId })
+      setBy: adminId
     })
 
     await alert.save()

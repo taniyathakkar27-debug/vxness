@@ -29,7 +29,7 @@ const marginAlertSchema = new mongoose.Schema({
   setBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
-    default: null
+    required: true
   },
   // Notes for admin (e.g., "Call user immediately")
   notes: {
