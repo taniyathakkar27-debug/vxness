@@ -1065,13 +1065,8 @@ const TradingPage = () => {
   }
 
   // Filter instruments: show all when "All" tab or searching, popular for specific categories
-  // Only show instruments that have live prices (bid > 0)
+  // Show popular instruments even without prices (prices will load async from AllTick)
   const filteredInstruments = instruments.filter(inst => {
-    // First check: only show instruments with live prices
-    if (!inst.bid || inst.bid <= 0) {
-      return false
-    }
-    
     const matchesSearch = inst.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inst.name.toLowerCase().includes(searchTerm.toLowerCase())
     
@@ -1085,12 +1080,13 @@ const TradingPage = () => {
       return inst.starred
     }
     
-    // When viewing "All", show ALL instruments
+    // When viewing "All", show instruments with prices only (too many otherwise)
     if (activeCategory === 'All') {
-      return true
+      return inst.bid > 0
     }
     
-    // For specific categories (Forex, Metals, etc.), show only popular by default
+    // For specific categories (Forex, Metals, Crypto), show popular instruments
+    // Popular instruments show even without prices (prices load async)
     return inst.category === activeCategory && inst.popular
   })
 
