@@ -31,6 +31,54 @@ router.get('/all', async (req, res) => {
   }
 })
 
+// GET /api/trading-accounts/search - Search trading accounts (admin)
+router.get('/search', async (req, res) => {
+  try {
+    const { q } = req.query
+    if (!q || q.length < 2) {
+      return res.json({ accounts: [] })
+    }
+
+    // Search by account ID or user email/name
+    const accounts = await TradingAccount.find({
+      $or: [
+        { accountId: { $regex: q, $options: 'i' } }
+      ]
+    })
+      .populate('userId', 'firstName email phone')
+      .populate('accountTypeId', 'name')
+      .limit(20)
+
+    // Also search by user email/name
+    const User = (await import('../models/User.js')).default
+    const users = await User.find({
+      $or: [
+        { email: { $regex: q, $options: 'i' } },
+        { firstName: { $regex: q, $options: 'i' } }
+      ]
+    }).select('_id')
+
+    const userIds = users.map(u => u._id)
+    const accountsByUser = await TradingAccount.find({
+      userId: { $in: userIds }
+    })
+      .populate('userId', 'firstName email phone')
+      .populate('accountTypeId', 'name')
+      .limit(20)
+
+    // Combine and deduplicate
+    const allAccounts = [...accounts, ...accountsByUser]
+    const uniqueAccounts = allAccounts.filter((account, index, self) =>
+      index === self.findIndex(a => a._id.toString() === account._id.toString())
+    )
+
+    res.json({ accounts: uniqueAccounts.slice(0, 20) })
+  } catch (error) {
+    console.error('Error searching accounts:', error)
+    res.status(500).json({ message: 'Error searching accounts', error: error.message })
+  }
+})
+
 // POST /api/trading-accounts - Create trading account
 router.post('/', async (req, res) => {
   try {

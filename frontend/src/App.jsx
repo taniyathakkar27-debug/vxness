@@ -46,6 +46,7 @@ import LandingPage from './pages/LandingPage'
 import InvestorLogin from './pages/InvestorLogin'
 import InvestorDashboard from './pages/InvestorDashboard'
 import AdminInvestorAccess from './pages/AdminInvestorAccess'
+import AdminMarginAlerts from './pages/AdminMarginAlerts'
 
 function App() {
   return (
@@ -94,6 +95,7 @@ function App() {
         <Route path="/admin/bonus-management" element={<AdminBonusManagement />} />
         <Route path="/admin/technical-analysis" element={<AdminTechnicalAnalysis />} />
         <Route path="/admin/investor-access" element={<AdminInvestorAccess />} />
+        <Route path="/admin/margin-alerts" element={<AdminMarginAlerts />} />
         <Route path="/buy-challenge" element={<BuyChallengePage />} />
         <Route path="/challenge-dashboard" element={<ChallengeDashboardPage />} />
         <Route path="/investor/login" element={<InvestorLogin />} />
