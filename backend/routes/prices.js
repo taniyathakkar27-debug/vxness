@@ -100,13 +100,38 @@ const CRYPTO_SYMBOLS = Object.keys(ALLTICK_SYMBOL_MAP).filter(s => s.endsWith('U
 // All supported symbols
 const ALLTICK_SYMBOLS = Object.keys(ALLTICK_SYMBOL_MAP)
 
-// Fetch price from AllTick API
+// Fallback static prices for Forex/Metals when API fails
+const FALLBACK_PRICES = {
+  // Forex Majors (approximate market prices)
+  'EURUSD': { bid: 1.0850, ask: 1.0852 },
+  'GBPUSD': { bid: 1.2650, ask: 1.2652 },
+  'USDJPY': { bid: 149.50, ask: 149.52 },
+  'USDCHF': { bid: 0.8820, ask: 0.8822 },
+  'AUDUSD': { bid: 0.6550, ask: 0.6552 },
+  'NZDUSD': { bid: 0.6150, ask: 0.6152 },
+  'USDCAD': { bid: 1.3550, ask: 1.3552 },
+  'EURGBP': { bid: 0.8580, ask: 0.8582 },
+  'EURJPY': { bid: 162.20, ask: 162.22 },
+  'GBPJPY': { bid: 189.10, ask: 189.12 },
+  'EURCHF': { bid: 0.9570, ask: 0.9572 },
+  'EURAUD': { bid: 1.6560, ask: 1.6562 },
+  'AUDCAD': { bid: 0.8880, ask: 0.8882 },
+  'AUDJPY': { bid: 97.90, ask: 97.92 },
+  'CADJPY': { bid: 110.30, ask: 110.32 },
+  // Metals
+  'XAUUSD': { bid: 2870.00, ask: 2870.50 },
+  'XAGUSD': { bid: 32.10, ask: 32.12 },
+  'XPTUSD': { bid: 1020.00, ask: 1021.00 },
+  'XPDUSD': { bid: 980.00, ask: 981.00 },
+}
+
+// Fetch price from AllTick API with fallback
 async function getAllTickPrice(symbol) {
   try {
     const alltickCode = ALLTICK_SYMBOL_MAP[symbol]
     if (!alltickCode) {
       console.error(`No AllTick mapping for symbol: ${symbol}`)
-      return null
+      return FALLBACK_PRICES[symbol] || null
     }
 
     const query = {
@@ -119,16 +144,16 @@ async function getAllTickPrice(symbol) {
     const encodedQuery = encodeURIComponent(JSON.stringify(query))
     const url = `${ALLTICK_FOREX_API}?token=${ALLTICK_API_TOKEN}&query=${encodedQuery}`
     
-    const response = await fetch(url)
+    const response = await fetch(url, { timeout: 5000 })
     if (!response.ok) {
       console.error(`AllTick error for ${symbol}: ${response.status}`)
-      return null
+      return FALLBACK_PRICES[symbol] || null
     }
     
     const data = await response.json()
     if (data.ret !== 200 || !data.data?.tick_list?.[0]) {
       console.error(`AllTick invalid response for ${symbol}:`, data.msg || 'No data')
-      return null
+      return FALLBACK_PRICES[symbol] || null
     }
     
     const tick = data.data.tick_list[0]
@@ -140,10 +165,10 @@ async function getAllTickPrice(symbol) {
     } else if (bid) {
       return { bid, ask: bid }
     }
-    return null
+    return FALLBACK_PRICES[symbol] || null
   } catch (e) {
     console.error(`AllTick error for ${symbol}:`, e.message)
-    return null
+    return FALLBACK_PRICES[symbol] || null
   }
 }
 
@@ -155,6 +180,13 @@ async function getAllTickBatchPrices(symbols) {
   try {
     // Filter to only symbols we have mappings for
     const validSymbols = symbols.filter(s => ALLTICK_SYMBOL_MAP[s])
+    
+    // First, add fallback prices for all requested symbols
+    for (const symbol of validSymbols) {
+      if (FALLBACK_PRICES[symbol]) {
+        prices[symbol] = FALLBACK_PRICES[symbol]
+      }
+    }
     
     // Split into chunks
     for (let i = 0; i < validSymbols.length; i += CHUNK_SIZE) {
@@ -170,7 +202,7 @@ async function getAllTickBatchPrices(symbols) {
       const url = `${ALLTICK_FOREX_API}?token=${ALLTICK_API_TOKEN}&query=${encodedQuery}`
       
       try {
-        const response = await fetch(url)
+        const response = await fetch(url, { timeout: 5000 })
         if (!response.ok) {
           console.error(`AllTick batch error chunk ${i}: ${response.status}`)
           continue
