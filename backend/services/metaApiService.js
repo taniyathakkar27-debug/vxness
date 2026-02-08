@@ -75,8 +75,9 @@ const CRYPTO_SYMBOLS = SUPPORTED_SYMBOLS.filter(s =>
   !s.includes('CNH') && !s.includes('HUF') && !s.includes('CZK')
 )
 
-// Fallback static prices
+// Fallback static prices for ALL 116 supported symbols
 const FALLBACK_PRICES = {
+  // ========== FOREX MAJORS (7) ==========
   'EURUSD': { bid: 1.0850, ask: 1.0852 },
   'GBPUSD': { bid: 1.2650, ask: 1.2652 },
   'USDJPY': { bid: 149.50, ask: 149.52 },
@@ -84,10 +85,125 @@ const FALLBACK_PRICES = {
   'AUDUSD': { bid: 0.6550, ask: 0.6552 },
   'NZDUSD': { bid: 0.6150, ask: 0.6152 },
   'USDCAD': { bid: 1.3550, ask: 1.3552 },
+  
+  // ========== FOREX CROSSES (21) ==========
+  'EURGBP': { bid: 0.8580, ask: 0.8582 },
+  'EURJPY': { bid: 162.20, ask: 162.22 },
+  'GBPJPY': { bid: 189.10, ask: 189.12 },
+  'EURCHF': { bid: 0.9570, ask: 0.9572 },
+  'EURAUD': { bid: 1.6560, ask: 1.6562 },
+  'EURCAD': { bid: 1.4700, ask: 1.4702 },
+  'GBPAUD': { bid: 1.9320, ask: 1.9322 },
+  'GBPCAD': { bid: 1.7150, ask: 1.7152 },
+  'AUDCAD': { bid: 0.8880, ask: 0.8882 },
+  'AUDJPY': { bid: 97.90, ask: 97.92 },
+  'CADJPY': { bid: 110.30, ask: 110.32 },
+  'CHFJPY': { bid: 169.50, ask: 169.52 },
+  'NZDJPY': { bid: 91.80, ask: 91.82 },
+  'AUDNZD': { bid: 1.0650, ask: 1.0652 },
+  'CADCHF': { bid: 0.6510, ask: 0.6512 },
+  'GBPCHF': { bid: 1.1150, ask: 1.1152 },
+  'GBPNZD': { bid: 2.0550, ask: 2.0552 },
+  'EURNZD': { bid: 1.7620, ask: 1.7622 },
+  'NZDCAD': { bid: 0.8340, ask: 0.8342 },
+  'NZDCHF': { bid: 0.5420, ask: 0.5422 },
+  'AUDCHF': { bid: 0.5780, ask: 0.5782 },
+  
+  // ========== FOREX EXOTICS (36) ==========
+  'USDSGD': { bid: 1.3420, ask: 1.3422 },
+  'EURSGD': { bid: 1.4560, ask: 1.4562 },
+  'GBPSGD': { bid: 1.6980, ask: 1.6982 },
+  'AUDSGD': { bid: 0.8790, ask: 0.8792 },
+  'SGDJPY': { bid: 111.40, ask: 111.42 },
+  'USDHKD': { bid: 7.8150, ask: 7.8152 },
+  'USDZAR': { bid: 18.50, ask: 18.52 },
+  'EURZAR': { bid: 20.08, ask: 20.10 },
+  'GBPZAR': { bid: 23.40, ask: 23.42 },
+  'ZARJPY': { bid: 8.08, ask: 8.09 },
+  'USDTRY': { bid: 32.50, ask: 32.52 },
+  'EURTRY': { bid: 35.26, ask: 35.28 },
+  'TRYJPY': { bid: 4.60, ask: 4.61 },
+  'USDMXN': { bid: 17.20, ask: 17.22 },
+  'EURMXN': { bid: 18.66, ask: 18.68 },
+  'MXNJPY': { bid: 8.69, ask: 8.70 },
+  'USDPLN': { bid: 4.02, ask: 4.022 },
+  'EURPLN': { bid: 4.36, ask: 4.362 },
+  'GBPPLN': { bid: 5.08, ask: 5.082 },
+  'USDSEK': { bid: 10.45, ask: 10.452 },
+  'EURSEK': { bid: 11.34, ask: 11.342 },
+  'GBPSEK': { bid: 13.22, ask: 13.222 },
+  'SEKJPY': { bid: 14.31, ask: 14.32 },
+  'USDNOK': { bid: 10.85, ask: 10.852 },
+  'EURNOK': { bid: 11.77, ask: 11.772 },
+  'GBPNOK': { bid: 13.72, ask: 13.722 },
+  'NOKJPY': { bid: 13.78, ask: 13.79 },
+  'USDDKK': { bid: 6.92, ask: 6.922 },
+  'EURDKK': { bid: 7.51, ask: 7.512 },
+  'DKKJPY': { bid: 21.61, ask: 21.62 },
+  'USDCNH': { bid: 7.25, ask: 7.252 },
+  'CNHJPY': { bid: 20.62, ask: 20.63 },
+  'USDHUF': { bid: 365.50, ask: 365.70 },
+  'EURHUF': { bid: 396.60, ask: 396.80 },
+  'USDCZK': { bid: 23.45, ask: 23.47 },
+  'EURCZK': { bid: 25.44, ask: 25.46 },
+  
+  // ========== METALS (4) ==========
   'XAUUSD': { bid: 2870.00, ask: 2870.50 },
   'XAGUSD': { bid: 32.10, ask: 32.12 },
+  'XPTUSD': { bid: 1020.00, ask: 1021.00 },
+  'XPDUSD': { bid: 980.00, ask: 981.00 },
+  
+  // ========== COMMODITIES (4) ==========
+  'USOIL': { bid: 72.50, ask: 72.55 },
+  'UKOIL': { bid: 76.80, ask: 76.85 },
+  'NGAS': { bid: 2.85, ask: 2.86 },
+  'COPPER': { bid: 4.25, ask: 4.26 },
+  
+  // ========== CRYPTO (44) - Binance provides live prices ==========
   'BTCUSD': { bid: 97000.00, ask: 97050.00 },
-  'ETHUSD': { bid: 2650.00, ask: 2652.00 }
+  'ETHUSD': { bid: 2650.00, ask: 2652.00 },
+  'LTCUSD': { bid: 105.00, ask: 105.20 },
+  'XRPUSD': { bid: 2.45, ask: 2.46 },
+  'BCHUSD': { bid: 420.00, ask: 420.50 },
+  'BNBUSD': { bid: 580.00, ask: 580.50 },
+  'ADAUSD': { bid: 0.95, ask: 0.952 },
+  'DOTUSD': { bid: 7.50, ask: 7.52 },
+  'SOLUSD': { bid: 195.00, ask: 195.20 },
+  'DOGEUSD': { bid: 0.32, ask: 0.321 },
+  'MATICUSD': { bid: 0.45, ask: 0.452 },
+  'AVAXUSD': { bid: 38.50, ask: 38.55 },
+  'LINKUSD': { bid: 18.50, ask: 18.52 },
+  'UNIUSD': { bid: 12.50, ask: 12.52 },
+  'ATOMUSD': { bid: 9.80, ask: 9.82 },
+  'XLMUSD': { bid: 0.42, ask: 0.421 },
+  'ALGOUSD': { bid: 0.38, ask: 0.381 },
+  'VETUSD': { bid: 0.045, ask: 0.0451 },
+  'ICPUSD': { bid: 12.80, ask: 12.82 },
+  'FILUSD': { bid: 5.80, ask: 5.82 },
+  'TRXUSD': { bid: 0.24, ask: 0.241 },
+  'ETCUSD': { bid: 28.50, ask: 28.55 },
+  'XMRUSD': { bid: 185.00, ask: 185.50 },
+  'EOSUSD': { bid: 0.85, ask: 0.852 },
+  'AAVEUSD': { bid: 280.00, ask: 280.50 },
+  'MKRUSD': { bid: 1850.00, ask: 1852.00 },
+  'COMPUSD': { bid: 85.00, ask: 85.20 },
+  'SNXUSD': { bid: 3.20, ask: 3.22 },
+  'YFIUSD': { bid: 8500.00, ask: 8510.00 },
+  'SUSHIUSD': { bid: 1.45, ask: 1.46 },
+  'NEARUSD': { bid: 5.20, ask: 5.22 },
+  'FTMUSD': { bid: 0.72, ask: 0.722 },
+  'SANDUSD': { bid: 0.58, ask: 0.582 },
+  'MANAUSD': { bid: 0.52, ask: 0.522 },
+  'AXSUSD': { bid: 8.20, ask: 8.22 },
+  'GALAUSD': { bid: 0.042, ask: 0.0422 },
+  'APEUSD': { bid: 1.35, ask: 1.36 },
+  'GMTUSD': { bid: 0.22, ask: 0.221 },
+  'OPUSD': { bid: 2.15, ask: 2.16 },
+  'ARBUSD': { bid: 0.85, ask: 0.852 },
+  'PEPEUSD': { bid: 0.000018, ask: 0.0000181 },
+  'SHIBUSD': { bid: 0.000022, ask: 0.0000221 },
+  'TONUSD': { bid: 5.50, ask: 5.52 },
+  'HBARUSD': { bid: 0.28, ask: 0.281 }
 }
 
 class MetaApiService {
@@ -347,31 +463,95 @@ class MetaApiService {
 
   async fetchBatchPrices(symbols) {
     const prices = {}
+    const now = Date.now()
     
-    // First, add any cached prices
+    // First, add any cached prices (if fresh enough - 5 seconds)
     symbols.forEach(symbol => {
       const cached = this.prices.get(symbol)
-      if (cached) {
+      if (cached && (now - (cached.time || 0)) < 5000) {
         prices[symbol] = cached
-      } else if (FALLBACK_PRICES[symbol]) {
-        prices[symbol] = FALLBACK_PRICES[symbol]
       }
     })
 
-    // If connected via WebSocket, prices should already be streaming
-    if (this.isConnected) {
-      return prices
-    }
+    // Separate crypto and non-crypto symbols
+    const missingSymbols = symbols.filter(s => !prices[s])
+    const cryptoSymbols = missingSymbols.filter(s => this.isCrypto(s))
+    const forexSymbols = missingSymbols.filter(s => !this.isCrypto(s))
 
-    // Otherwise, fetch missing prices via REST (limited to avoid rate limits)
-    const missingSymbols = symbols.filter(s => !prices[s]).slice(0, 10)
-    
-    for (const symbol of missingSymbols) {
-      const price = await this.fetchPrice(symbol)
-      if (price) {
-        prices[symbol] = price
+    // Fetch crypto prices from Binance (free, no auth, fast)
+    if (cryptoSymbols.length > 0) {
+      try {
+        const binanceResponse = await fetch('https://api.binance.com/api/v3/ticker/bookTicker')
+        if (binanceResponse.ok) {
+          const tickers = await binanceResponse.json()
+          const tickerMap = {}
+          tickers.forEach(t => { tickerMap[t.symbol] = t })
+          
+          cryptoSymbols.forEach(symbol => {
+            // Convert our symbol to Binance format (e.g., BTCUSD -> BTCUSDT)
+            const binanceSymbol = symbol.replace('USD', 'USDT')
+            const ticker = tickerMap[binanceSymbol]
+            if (ticker) {
+              const price = {
+                bid: parseFloat(ticker.bidPrice),
+                ask: parseFloat(ticker.askPrice),
+                time: now
+              }
+              prices[symbol] = price
+              this.prices.set(symbol, price)
+            }
+          })
+        }
+      } catch (e) {
+        console.error('[MetaApi] Binance fetch error:', e.message)
       }
     }
+
+    // Fetch forex/metals prices from MetaApi REST API (or use fallback)
+    for (const symbol of forexSymbols) {
+      // Try MetaApi REST if configured
+      if (META_API_TOKEN && META_API_ACCOUNT_ID) {
+        try {
+          const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
+          const response = await fetch(
+            `${META_API_REST_URL}/users/current/accounts/${META_API_ACCOUNT_ID}/symbols/${metaSymbol}/current-price`,
+            {
+              headers: { 'auth-token': META_API_TOKEN },
+              timeout: 3000
+            }
+          )
+          
+          if (response.ok) {
+            const data = await response.json()
+            if (data.bid && data.ask) {
+              const price = {
+                bid: parseFloat(data.bid),
+                ask: parseFloat(data.ask),
+                time: now
+              }
+              prices[symbol] = price
+              this.prices.set(symbol, price)
+              continue
+            }
+          }
+        } catch (e) {
+          // Silent fail, use fallback
+        }
+      }
+      
+      // Use fallback prices if MetaApi fails
+      if (FALLBACK_PRICES[symbol]) {
+        prices[symbol] = { ...FALLBACK_PRICES[symbol], time: now }
+        this.prices.set(symbol, prices[symbol])
+      }
+    }
+
+    // Fill remaining missing with fallback
+    symbols.forEach(symbol => {
+      if (!prices[symbol] && FALLBACK_PRICES[symbol]) {
+        prices[symbol] = { ...FALLBACK_PRICES[symbol], time: now }
+      }
+    })
 
     return prices
   }

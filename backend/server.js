@@ -96,45 +96,52 @@ async function initMetaApiConnection() {
   }
 }
 
-// Background price streaming via MetaApi REST API (fallback when WebSocket not available)
+// Background price streaming via MetaApi REST API
 async function streamPrices() {
-  if (priceSubscribers.size === 0) return
-  
   const now = Date.now()
   const updatedPrices = {}
   
-  // If MetaApi WebSocket is connected, prices are already streaming
-  // Otherwise, fetch via REST API
-  if (!metaApiConnected) {
-    try {
-      // Fetch prices for popular symbols via MetaApi REST
-      const popularSymbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD', 'ETHUSD']
-      const prices = await metaApiService.fetchBatchPrices(popularSymbols)
-      
-      Object.entries(prices).forEach(([symbol, price]) => {
+  // Always fetch prices via REST API for all symbols
+  // MetaApi WebSocket may not stream all symbols, so REST is more reliable
+  try {
+    // Get ALL supported symbols from MetaApi service
+    const allSymbols = metaApiService.getSymbols()
+    const prices = await metaApiService.fetchBatchPrices(allSymbols)
+    
+    Object.entries(prices).forEach(([symbol, price]) => {
+      if (price && price.bid) {
         priceCache.set(symbol, { ...price, time: now })
         updatedPrices[symbol] = price
-      })
-    } catch (e) {
-      console.error('[MetaApi] REST fetch error:', e.message)
-    }
+      }
+    })
+  } catch (e) {
+    console.error('[MetaApi] REST fetch error:', e.message)
   }
   
-  // Broadcast prices to subscribers
-  io.to('prices').emit('priceStream', {
-    prices: Object.fromEntries(priceCache),
-    updated: updatedPrices,
-    timestamp: now
-  })
+  // Broadcast prices to subscribers (only if there are any)
+  if (priceSubscribers.size > 0) {
+    io.to('prices').emit('priceStream', {
+      prices: Object.fromEntries(priceCache),
+      updated: updatedPrices,
+      timestamp: now
+    })
+  }
 }
 
-console.log('Price streaming initialized - MetaApi WebSocket')
+console.log('Price streaming initialized - MetaApi + Binance')
 
 // Initialize MetaApi connection on startup
 initMetaApiConnection()
 
-// Start price streaming interval (1 second for REST fallback)
-setInterval(streamPrices, 1000)
+// Fetch prices immediately on startup (don't wait for first interval)
+setTimeout(async () => {
+  console.log('[Prices] Fetching initial prices...')
+  await streamPrices()
+  console.log('[Prices] Initial prices loaded:', priceCache.size, 'symbols')
+}, 2000)
+
+// Start price streaming interval (500ms for fast updates)
+setInterval(streamPrices, 500)
 
 // Background stop-out check every 5 seconds
 // This ensures trades are closed even if user closes browser
