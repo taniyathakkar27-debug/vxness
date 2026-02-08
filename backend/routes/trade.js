@@ -416,6 +416,169 @@ router.get('/open/:tradingAccountId', async (req, res) => {
   }
 })
 
+// GET /api/trade/netting/:tradingAccountId - Get netted positions summary for an account
+// Netting aggregates all positions by instrument showing net exposure
+router.get('/netting/:tradingAccountId', async (req, res) => {
+  try {
+    const { tradingAccountId } = req.params
+
+    // Get all open trades for this account
+    const openTrades = await Trade.find({ 
+      tradingAccountId, 
+      status: 'OPEN' 
+    })
+
+    // Get current prices for all symbols
+    const symbols = [...new Set(openTrades.map(t => t.symbol))]
+    const currentPrices = {}
+    for (const symbol of symbols) {
+      const price = await metaApiService.fetchPrice(symbol)
+      if (price) {
+        currentPrices[symbol] = price
+      }
+    }
+
+    // Aggregate positions by symbol (netting logic)
+    const nettedPositions = {}
+    
+    openTrades.forEach(trade => {
+      const symbol = trade.symbol
+      
+      if (!nettedPositions[symbol]) {
+        nettedPositions[symbol] = {
+          symbol,
+          segment: trade.segment,
+          contractSize: trade.contractSize || 100000,
+          leverage: trade.leverage,
+          // Long (BUY) positions
+          longQuantity: 0,
+          longAvgPrice: 0,
+          longMargin: 0,
+          longPnl: 0,
+          longTradeCount: 0,
+          // Short (SELL) positions
+          shortQuantity: 0,
+          shortAvgPrice: 0,
+          shortMargin: 0,
+          shortPnl: 0,
+          shortTradeCount: 0,
+          // Net position
+          netQuantity: 0,
+          netDirection: 'FLAT',
+          netPnl: 0,
+          totalMargin: 0,
+          totalTradeCount: 0,
+          trades: []
+        }
+      }
+
+      const pos = nettedPositions[symbol]
+      const priceData = currentPrices[symbol]
+      
+      // Calculate PnL for this trade
+      let tradePnl = 0
+      if (priceData) {
+        const currentPrice = trade.side === 'BUY' ? priceData.bid : priceData.ask
+        if (trade.side === 'BUY') {
+          tradePnl = (currentPrice - trade.openPrice) * trade.quantity * trade.contractSize
+        } else {
+          tradePnl = (trade.openPrice - currentPrice) * trade.quantity * trade.contractSize
+        }
+        tradePnl = tradePnl - (trade.commission || 0) - (trade.swap || 0)
+      }
+
+      // Add to long or short totals
+      if (trade.side === 'BUY') {
+        // Weighted average price calculation
+        const totalLongValue = (pos.longAvgPrice * pos.longQuantity) + (trade.openPrice * trade.quantity)
+        pos.longQuantity += trade.quantity
+        pos.longAvgPrice = pos.longQuantity > 0 ? totalLongValue / pos.longQuantity : 0
+        pos.longMargin += trade.marginUsed || 0
+        pos.longPnl += tradePnl
+        pos.longTradeCount++
+      } else {
+        // Weighted average price calculation
+        const totalShortValue = (pos.shortAvgPrice * pos.shortQuantity) + (trade.openPrice * trade.quantity)
+        pos.shortQuantity += trade.quantity
+        pos.shortAvgPrice = pos.shortQuantity > 0 ? totalShortValue / pos.shortQuantity : 0
+        pos.shortMargin += trade.marginUsed || 0
+        pos.shortPnl += tradePnl
+        pos.shortTradeCount++
+      }
+
+      // Store individual trade reference
+      pos.trades.push({
+        tradeId: trade.tradeId,
+        side: trade.side,
+        quantity: trade.quantity,
+        openPrice: trade.openPrice,
+        pnl: Math.round(tradePnl * 100) / 100
+      })
+    })
+
+    // Calculate net positions and totals
+    let totalNetPnl = 0
+    let totalMargin = 0
+    let totalLongQuantity = 0
+    let totalShortQuantity = 0
+    let totalTradeCount = 0
+
+    const nettedArray = Object.values(nettedPositions).map(pos => {
+      // Net quantity = Long - Short
+      pos.netQuantity = Math.round((pos.longQuantity - pos.shortQuantity) * 100) / 100
+      pos.netDirection = pos.netQuantity > 0 ? 'LONG' : pos.netQuantity < 0 ? 'SHORT' : 'FLAT'
+      pos.netPnl = Math.round((pos.longPnl + pos.shortPnl) * 100) / 100
+      pos.totalMargin = Math.round((pos.longMargin + pos.shortMargin) * 100) / 100
+      pos.totalTradeCount = pos.longTradeCount + pos.shortTradeCount
+      
+      // Round values
+      pos.longQuantity = Math.round(pos.longQuantity * 100) / 100
+      pos.shortQuantity = Math.round(pos.shortQuantity * 100) / 100
+      pos.longAvgPrice = Math.round(pos.longAvgPrice * 100000) / 100000
+      pos.shortAvgPrice = Math.round(pos.shortAvgPrice * 100000) / 100000
+      pos.longPnl = Math.round(pos.longPnl * 100) / 100
+      pos.shortPnl = Math.round(pos.shortPnl * 100) / 100
+
+      // Add current price
+      pos.currentBid = currentPrices[pos.symbol]?.bid || 0
+      pos.currentAsk = currentPrices[pos.symbol]?.ask || 0
+
+      // Accumulate totals
+      totalNetPnl += pos.netPnl
+      totalMargin += pos.totalMargin
+      totalLongQuantity += pos.longQuantity
+      totalShortQuantity += pos.shortQuantity
+      totalTradeCount += pos.totalTradeCount
+
+      return pos
+    })
+
+    // Sort by absolute net PnL (largest exposure first)
+    nettedArray.sort((a, b) => Math.abs(b.netPnl) - Math.abs(a.netPnl))
+
+    res.json({
+      success: true,
+      netting: {
+        positions: nettedArray,
+        summary: {
+          totalInstruments: nettedArray.length,
+          totalTrades: totalTradeCount,
+          totalLongQuantity: Math.round(totalLongQuantity * 100) / 100,
+          totalShortQuantity: Math.round(totalShortQuantity * 100) / 100,
+          totalNetPnl: Math.round(totalNetPnl * 100) / 100,
+          totalMargin: Math.round(totalMargin * 100) / 100
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Error calculating netting:', error)
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    })
+  }
+})
+
 // GET /api/trade/pending/:tradingAccountId - Get all pending orders for an account
 router.get('/pending/:tradingAccountId', async (req, res) => {
   try {

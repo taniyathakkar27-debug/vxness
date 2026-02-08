@@ -71,6 +71,7 @@ const TradingPage = () => {
   const [openTrades, setOpenTrades] = useState([])
   const [pendingOrders, setPendingOrders] = useState([])
   const [tradeHistory, setTradeHistory] = useState([])
+  const [nettingData, setNettingData] = useState({ positions: [], summary: {} })
   const [isExecutingTrade, setIsExecutingTrade] = useState(false)
   const [tradeError, setTradeError] = useState('')
   const [tradeSuccess, setTradeSuccess] = useState('')
@@ -143,11 +144,13 @@ const TradingPage = () => {
       fetchOpenTrades()
       fetchPendingOrders()
       fetchTradeHistory()
+      fetchNettingData()
       fetchAccountSummary()
       
       // Refresh account data every 5 seconds to keep balance in sync
       const accountInterval = setInterval(() => {
         fetchOpenTrades()
+        fetchNettingData()
         fetchAccountSummary()
       }, 5000)
       
@@ -525,6 +528,19 @@ const TradingPage = () => {
       }
     } catch (error) {
       console.error('Error fetching trade history:', error)
+    }
+  }
+
+  // Fetch netting data (aggregated positions by instrument)
+  const fetchNettingData = async () => {
+    try {
+      const res = await fetch(`${API_URL}/trade/netting/${accountId}`)
+      const data = await res.json()
+      if (data.success) {
+        setNettingData(data.netting || { positions: [], summary: {} })
+      }
+    } catch (error) {
+      console.error('Error fetching netting data:', error)
     }
   }
 
@@ -1450,6 +1466,7 @@ const TradingPage = () => {
               <div className="flex gap-2 sm:gap-6">
                 {[
                   { name: 'Positions', count: openTrades.length },
+                  { name: 'Netting', count: nettingData.positions?.length || 0 },
                   { name: 'Pending', count: pendingOrders.length },
                   { name: 'History', count: tradeHistory.length },
                   { name: 'Cancelled', count: 0 }
@@ -1587,6 +1604,89 @@ const TradingPage = () => {
                   )}
                 </tbody>
               </table>
+              )}
+
+              {activePositionTab === 'Netting' && (
+              <div className="p-2">
+                {/* Netting Summary */}
+                {nettingData.summary && (
+                  <div className={`mb-3 p-2 rounded ${isDarkMode ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
+                    <div className="flex flex-wrap gap-4 text-xs">
+                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                        Instruments: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>{nettingData.summary.totalInstruments || 0}</span>
+                      </span>
+                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                        Total Trades: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>{nettingData.summary.totalTrades || 0}</span>
+                      </span>
+                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                        Long: <span className="text-blue-400">{nettingData.summary.totalLongQuantity || 0} lots</span>
+                      </span>
+                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                        Short: <span className="text-red-400">{nettingData.summary.totalShortQuantity || 0} lots</span>
+                      </span>
+                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                        Net P/L: <span className={nettingData.summary.totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                          ${nettingData.summary.totalNetPnl?.toFixed(2) || '0.00'}
+                        </span>
+                      </span>
+                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                        Margin: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>${nettingData.summary.totalMargin?.toFixed(2) || '0.00'}</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Netting Table */}
+                <table className="w-full text-sm">
+                  <thead className={`text-gray-500 border-b sticky top-0 ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
+                    <tr>
+                      <th className="text-left py-2 px-2 font-normal">Symbol</th>
+                      <th className="text-left py-2 px-2 font-normal">Net Dir</th>
+                      <th className="text-left py-2 px-2 font-normal">Net Qty</th>
+                      <th className="text-left py-2 px-2 font-normal">Long</th>
+                      <th className="text-left py-2 px-2 font-normal">Short</th>
+                      <th className="text-left py-2 px-2 font-normal">Bid</th>
+                      <th className="text-left py-2 px-2 font-normal">Ask</th>
+                      <th className="text-left py-2 px-2 font-normal">Net P/L</th>
+                      <th className="text-left py-2 px-2 font-normal">Trades</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(!nettingData.positions || nettingData.positions.length === 0) ? (
+                      <tr>
+                        <td colSpan="9" className="text-center py-8 text-gray-500">No netted positions</td>
+                      </tr>
+                    ) : (
+                      nettingData.positions.map(pos => {
+                        const formatPrice = (price) => {
+                          if (!price) return '-'
+                          if (pos.symbol.includes('JPY')) return price.toFixed(3)
+                          if (['BTCUSD', 'ETHUSD', 'XAUUSD'].includes(pos.symbol)) return price.toFixed(2)
+                          return price.toFixed(5)
+                        }
+                        
+                        return (
+                          <tr key={pos.symbol} className={`border-t ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                            <td className={`py-2 px-2 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{pos.symbol}</td>
+                            <td className={`py-2 px-2 text-xs font-bold ${pos.netDirection === 'LONG' ? 'text-blue-400' : pos.netDirection === 'SHORT' ? 'text-red-400' : 'text-gray-400'}`}>
+                              {pos.netDirection}
+                            </td>
+                            <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{Math.abs(pos.netQuantity)}</td>
+                            <td className="py-2 px-2 text-xs text-blue-400">{pos.longQuantity > 0 ? `${pos.longQuantity} (${pos.longTradeCount})` : '-'}</td>
+                            <td className="py-2 px-2 text-xs text-red-400">{pos.shortQuantity > 0 ? `${pos.shortQuantity} (${pos.shortTradeCount})` : '-'}</td>
+                            <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(pos.currentBid)}</td>
+                            <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(pos.currentAsk)}</td>
+                            <td className={`py-2 px-2 text-xs font-medium ${pos.netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              ${pos.netPnl?.toFixed(2)}
+                            </td>
+                            <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{pos.totalTradeCount}</td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
               )}
 
               {activePositionTab === 'History' && (
