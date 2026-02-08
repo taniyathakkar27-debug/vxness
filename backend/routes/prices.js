@@ -1,245 +1,49 @@
 import dotenv from 'dotenv'
 dotenv.config()
 import express from 'express'
+import metaApiService, { SUPPORTED_SYMBOLS, META_API_SYMBOL_MAP, CRYPTO_SYMBOLS, FALLBACK_PRICES } from '../services/metaApiService.js'
 
 const router = express.Router()
 
-// AllTick API credentials - loaded from .env file
-const ALLTICK_API_TOKEN = process.env.ALLTICK_API_TOKEN || '1b2b3ad1b5c8c28b9d956652ecb4111d-c-app'
-
-// AllTick API endpoints
-const ALLTICK_FOREX_API = 'https://quote.alltick.co/quote-b-api/depth-tick'
-const ALLTICK_STOCK_API = 'https://quote.alltick.co/quote-stock-b-api/depth-tick'
-
-// Symbol mapping for AllTick API - ~120 symbols
-// Based on official AllTick documentation
-const ALLTICK_SYMBOL_MAP = {
-  // ========== FOREX MAJORS (7) ==========
-  'EURUSD': 'EURUSD', 'GBPUSD': 'GBPUSD', 'USDJPY': 'USDJPY', 'USDCHF': 'USDCHF',
-  'AUDUSD': 'AUDUSD', 'NZDUSD': 'NZDUSD', 'USDCAD': 'USDCAD',
-  
-  // ========== FOREX CROSSES (21) ==========
-  'EURGBP': 'EURGBP', 'EURJPY': 'EURJPY', 'GBPJPY': 'GBPJPY', 'EURCHF': 'EURCHF',
-  'EURAUD': 'EURAUD', 'EURCAD': 'EURCAD', 'GBPAUD': 'GBPAUD', 'GBPCAD': 'GBPCAD',
-  'AUDCAD': 'AUDCAD', 'AUDJPY': 'AUDJPY', 'CADJPY': 'CADJPY', 'CHFJPY': 'CHFJPY',
-  'NZDJPY': 'NZDJPY', 'AUDNZD': 'AUDNZD', 'CADCHF': 'CADCHF', 'GBPCHF': 'GBPCHF',
-  'GBPNZD': 'GBPNZD', 'EURNZD': 'EURNZD', 'NZDCAD': 'NZDCAD', 'NZDCHF': 'NZDCHF',
-  'AUDCHF': 'AUDCHF',
-  
-  // ========== FOREX EXOTICS (36) ==========
-  'USDSGD': 'USDSGD', 'EURSGD': 'EURSGD', 'GBPSGD': 'GBPSGD', 'AUDSGD': 'AUDSGD',
-  'SGDJPY': 'SGDJPY', 'USDHKD': 'USDHKD', 'USDZAR': 'USDZAR', 'EURZAR': 'EURZAR',
-  'GBPZAR': 'GBPZAR', 'ZARJPY': 'ZARJPY', 'USDTRY': 'USDTRY', 'EURTRY': 'EURTRY',
-  'TRYJPY': 'TRYJPY', 'USDMXN': 'USDMXN', 'EURMXN': 'EURMXN', 'MXNJPY': 'MXNJPY',
-  'USDPLN': 'USDPLN', 'EURPLN': 'EURPLN', 'GBPPLN': 'GBPPLN', 'USDSEK': 'USDSEK',
-  'EURSEK': 'EURSEK', 'GBPSEK': 'GBPSEK', 'SEKJPY': 'SEKJPY', 'USDNOK': 'USDNOK',
-  'EURNOK': 'EURNOK', 'GBPNOK': 'GBPNOK', 'NOKJPY': 'NOKJPY', 'USDDKK': 'USDDKK',
-  'EURDKK': 'EURDKK', 'DKKJPY': 'DKKJPY', 'USDCNH': 'USDCNH', 'CNHJPY': 'CNHJPY',
-  'USDHUF': 'USDHUF', 'EURHUF': 'EURHUF', 'USDCZK': 'USDCZK', 'EURCZK': 'EURCZK',
-  
-  // ========== METALS (4) ==========
-  'XAUUSD': 'GOLD', 'XAGUSD': 'Silver', 'XPTUSD': 'Platinum', 'XPDUSD': 'Palladium',
-  
-  // ========== COMMODITIES (6) ==========
-  'USOIL': 'USOIL', 'UKOIL': 'UKOIL', 'NGAS': 'NGAS', 'COPPER': 'COPPER',
-  'ALUMINUM': 'Aluminum', 'NICKEL': 'Nickel',
-  
-  // ========== CRYPTO (126 coins) ==========
-  'BTCUSD': 'BTCUSDT', 'ETHUSD': 'ETHUSDT', 'BNBUSD': 'BNBUSDT', 'SOLUSD': 'SOLUSDT',
-  'XRPUSD': 'XRPUSDT', 'ADAUSD': 'ADAUSDT', 'DOGEUSD': 'DOGEUSDT', 'TRXUSD': 'TRXUSDT',
-  'LINKUSD': 'LINKUSDT', 'MATICUSD': 'MATICUSDT', 'DOTUSD': 'DOTUSDT',
-  'SHIBUSD': 'SHIBUSDT', 'LTCUSD': 'LTCUSDT', 'BCHUSD': 'BCHUSDT', 'AVAXUSD': 'AVAXUSDT',
-  'XLMUSD': 'XLMUSDT', 'UNIUSD': 'UNIUSDT', 'ATOMUSD': 'ATOMUSDT', 'ETCUSD': 'ETCUSDT',
-  'FILUSD': 'FILUSDT', 'ICPUSD': 'ICPUSDT', 'VETUSD': 'VETUSDT',
-  'NEARUSD': 'NEARUSDT', 'GRTUSD': 'GRTUSDT', 'AAVEUSD': 'AAVEUSDT', 'MKRUSD': 'MKRUSDT',
-  'ALGOUSD': 'ALGOUSDT', 'FTMUSD': 'FTMUSDT', 'SANDUSD': 'SANDUSDT', 'MANAUSD': 'MANAUSDT',
-  'AXSUSD': 'AXSUSDT', 'THETAUSD': 'THETAUSDT', 'XMRUSD': 'XMRUSDT', 'FLOWUSD': 'FLOWUSDT',
-  'SNXUSD': 'SNXUSDT', 'EOSUSD': 'EOSUSDT', 'CHZUSD': 'CHZUSDT', 'ENJUSD': 'ENJUSDT',
-  'ZILUSD': 'ZILUSDT', 'BATUSD': 'BATUSDT', 'CRVUSD': 'CRVUSDT', 'COMPUSD': 'COMPUSDT',
-  'SUSHIUSD': 'SUSHIUSDT', 'ZRXUSD': 'ZRXUSDT', 'LRCUSD': 'LRCUSDT', 'ANKRUSD': 'ANKRUSDT',
-  'GALAUSD': 'GALAUSDT', 'APEUSD': 'APEUSDT', 'WAVESUSD': 'WAVESUSDT', 'ZECUSD': 'ZECUSDT',
-  // More crypto
-  'PEPEUSD': 'PEPEUSDT', 'ARBUSD': 'ARBUSDT', 'OPUSD': 'OPUSDT', 'SUIUSD': 'SUIUSDT',
-  'APTUSD': 'APTUSDT', 'INJUSD': 'INJUSDT', 'LDOUSD': 'LDOUSDT', 'IMXUSD': 'IMXUSDT',
-  'RUNEUSD': 'RUNEUSDT', 'KAVAUSD': 'KAVAUSDT', 'KSMUSD': 'KSMUSDT', 'NEOUSD': 'NEOUSDT',
-  'QNTUSD': 'QNTUSDT', 'FETUSD': 'FETUSDT', 'RNDRUSD': 'RNDRUSDT', 'OCEANUSD': 'OCEANUSDT',
-  'WLDUSD': 'WLDUSDT', 'SEIUSD': 'SEIUSDT', 'TIAUSD': 'TIAUSDT', 'BLURUSD': 'BLURUSDT',
-  'ROSEUSD': 'ROSEUSDT', 'MINAUSD': 'MINAUSDT', 'GMXUSD': 'GMXUSDT', 'DYDXUSD': 'DYDXUSDT',
-  'STXUSD': 'STXUSDT', 'CFXUSD': 'CFXUSDT', 'ACHUSD': 'ACHUSDT', 'DASHUSD': 'DASHUSDT',
-  'XTZUSD': 'XTZUSDT', 'IOTUSD': 'IOTAUSDT', 'CELOUSD': 'CELOUSDT', 'ONEUSD': 'ONEUSDT',
-  'HOTUSD': 'HOTUSDT', 'SKLUSD': 'SKLUSDT', 'STORJUSD': 'STORJUSDT', 'YFIUSD': 'YFIUSDT',
-  'UMAUSD': 'UMAUSDT', 'BANDUSD': 'BANDUSDT', 'RVNUSD': 'RVNUSDT', 'OXTUSD': 'OXTUSDT',
-  'NKNUSD': 'NKNUSDT', 'WOOUSD': 'WOOUSDT', 'AABORUSD': 'AGIXUSDT', 'JASMYUSD': 'JASMYUSDT',
-  'MASKUSD': 'MASKUSDT', 'DENTUSD': 'DENTUSDT', 'CELRUSD': 'CELRUSDT', 'COTIUSD': 'COTIUSDT',
-  'CTSIUSD': 'CTSIUSDT', 'IOTXUSD': 'IOTXUSDT', 'KLAYUSD': 'KLAYUSDT', 'OGNUSD': 'OGNUSDT',
-  'RLCUSD': 'RLCUSDT', 'STMXUSD': 'STMXUSDT', 'SUNUSD': 'SUNUSDT', 'SXPUSD': 'SXPUSDT',
-  'WINUSD': 'WINUSDT', 'AKROUSD': 'AKROUSDT', 'AUDIOUSD': 'AUDIOUSDT', 'BELUSD': 'BELUSDT',
-  'BONKUSD': 'BONKUSDT', 'FLOKIUSD': 'FLOKIUSDT', 'JTUSD': 'JTOUSDT', 'ORDIUSD': 'ORDIUSDT',
-  'PENDUSD': 'PENDLEUSDT', 'RADUSD': 'RADUSDT', 'RDNTUSD': 'RDNTUSDT', 'RPLUSD': 'RPLUSDT',
-  'SSVUSD': 'SSVUSDT', 'TUSDUSD': 'TUSDT', 'WAXUSD': 'WAXPUSDT', 'XECUSD': 'XECUSDT',
-  'ZENUSD': 'ZENUSDT', '1INCHUSD': '1INCHUSDT', 'HBARUSD': 'HBARUSDT',
-  'TONUSD': 'TONUSDT', 'EGLDUSDUSD': 'EGLDUSDT'
-}
+// Use MetaApi symbol map
+const SYMBOL_MAP = META_API_SYMBOL_MAP
 
 // Popular instruments per category (shown by default - 15 max)
 const POPULAR_INSTRUMENTS = {
   Forex: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD', 'EURGBP', 'EURJPY', 'GBPJPY', 'EURCHF', 'EURAUD', 'AUDCAD', 'AUDJPY', 'CADJPY'],
   Metals: ['XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD'],
-  Commodities: ['USOIL', 'UKOIL', 'NGAS', 'COPPER', 'ALUMINUM', 'NICKEL'],
+  Commodities: ['USOIL', 'UKOIL', 'NGAS', 'COPPER'],
   Crypto: ['BTCUSD', 'ETHUSD', 'BNBUSD', 'SOLUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'DOTUSD', 'MATICUSD', 'LTCUSD', 'AVAXUSD', 'LINKUSD', 'SHIBUSD', 'UNIUSD', 'ATOMUSD']
 }
 
-// Reverse mapping for AllTick to internal symbols
-const ALLTICK_REVERSE_MAP = Object.fromEntries(
-  Object.entries(ALLTICK_SYMBOL_MAP).map(([k, v]) => [v, k])
-)
-
-// Crypto symbols
-const CRYPTO_SYMBOLS = Object.keys(ALLTICK_SYMBOL_MAP).filter(s => s.endsWith('USD') && ALLTICK_SYMBOL_MAP[s].endsWith('USDT'))
-
-// All supported symbols
-const ALLTICK_SYMBOLS = Object.keys(ALLTICK_SYMBOL_MAP)
-
-// Fallback static prices for Forex/Metals when API fails
-const FALLBACK_PRICES = {
-  // Forex Majors (approximate market prices)
-  'EURUSD': { bid: 1.0850, ask: 1.0852 },
-  'GBPUSD': { bid: 1.2650, ask: 1.2652 },
-  'USDJPY': { bid: 149.50, ask: 149.52 },
-  'USDCHF': { bid: 0.8820, ask: 0.8822 },
-  'AUDUSD': { bid: 0.6550, ask: 0.6552 },
-  'NZDUSD': { bid: 0.6150, ask: 0.6152 },
-  'USDCAD': { bid: 1.3550, ask: 1.3552 },
-  'EURGBP': { bid: 0.8580, ask: 0.8582 },
-  'EURJPY': { bid: 162.20, ask: 162.22 },
-  'GBPJPY': { bid: 189.10, ask: 189.12 },
-  'EURCHF': { bid: 0.9570, ask: 0.9572 },
-  'EURAUD': { bid: 1.6560, ask: 1.6562 },
-  'AUDCAD': { bid: 0.8880, ask: 0.8882 },
-  'AUDJPY': { bid: 97.90, ask: 97.92 },
-  'CADJPY': { bid: 110.30, ask: 110.32 },
-  // Metals
-  'XAUUSD': { bid: 2870.00, ask: 2870.50 },
-  'XAGUSD': { bid: 32.10, ask: 32.12 },
-  'XPTUSD': { bid: 1020.00, ask: 1021.00 },
-  'XPDUSD': { bid: 980.00, ask: 981.00 },
-}
-
-// Fetch price from AllTick API with fallback
-async function getAllTickPrice(symbol) {
+// Fetch price from MetaApi with fallback
+async function getMetaApiPrice(symbol) {
   try {
-    const alltickCode = ALLTICK_SYMBOL_MAP[symbol]
-    if (!alltickCode) {
-      console.error(`No AllTick mapping for symbol: ${symbol}`)
+    if (!SYMBOL_MAP[symbol]) {
+      console.error(`No MetaApi mapping for symbol: ${symbol}`)
       return FALLBACK_PRICES[symbol] || null
     }
 
-    const query = {
-      trace: `price-${Date.now()}`,
-      data: {
-        symbol_list: [{ code: alltickCode }]
-      }
-    }
-    
-    const encodedQuery = encodeURIComponent(JSON.stringify(query))
-    const url = `${ALLTICK_FOREX_API}?token=${ALLTICK_API_TOKEN}&query=${encodedQuery}`
-    
-    const response = await fetch(url, { timeout: 5000 })
-    if (!response.ok) {
-      console.error(`AllTick error for ${symbol}: ${response.status}`)
-      return FALLBACK_PRICES[symbol] || null
-    }
-    
-    const data = await response.json()
-    if (data.ret !== 200 || !data.data?.tick_list?.[0]) {
-      console.error(`AllTick invalid response for ${symbol}:`, data.msg || 'No data')
-      return FALLBACK_PRICES[symbol] || null
-    }
-    
-    const tick = data.data.tick_list[0]
-    const bid = tick.bids?.[0]?.price ? parseFloat(tick.bids[0].price) : null
-    const ask = tick.asks?.[0]?.price ? parseFloat(tick.asks[0].price) : null
-    
-    if (bid && ask) {
-      return { bid, ask }
-    } else if (bid) {
-      return { bid, ask: bid }
-    }
-    return FALLBACK_PRICES[symbol] || null
+    const price = await metaApiService.fetchPrice(symbol)
+    return price || FALLBACK_PRICES[symbol] || null
   } catch (e) {
-    console.error(`AllTick error for ${symbol}:`, e.message)
+    console.error(`MetaApi error for ${symbol}:`, e.message)
     return FALLBACK_PRICES[symbol] || null
   }
 }
 
-// Fetch multiple prices from AllTick API - split into chunks to avoid rate limits
-async function getAllTickBatchPrices(symbols) {
-  const prices = {}
-  const CHUNK_SIZE = 10 // AllTick free tier may limit batch size
-  
+// Fetch multiple prices from MetaApi
+async function getMetaApiBatchPrices(symbols) {
   try {
-    // Filter to only symbols we have mappings for
-    const validSymbols = symbols.filter(s => ALLTICK_SYMBOL_MAP[s])
-    
-    // First, add fallback prices for all requested symbols
-    for (const symbol of validSymbols) {
-      if (FALLBACK_PRICES[symbol]) {
-        prices[symbol] = FALLBACK_PRICES[symbol]
-      }
-    }
-    
-    // Split into chunks
-    for (let i = 0; i < validSymbols.length; i += CHUNK_SIZE) {
-      const chunk = validSymbols.slice(i, i + CHUNK_SIZE)
-      const symbolList = chunk.map(s => ({ code: ALLTICK_SYMBOL_MAP[s] }))
-      
-      const query = {
-        trace: `batch-${Date.now()}-${i}`,
-        data: { symbol_list: symbolList }
-      }
-      
-      const encodedQuery = encodeURIComponent(JSON.stringify(query))
-      const url = `${ALLTICK_FOREX_API}?token=${ALLTICK_API_TOKEN}&query=${encodedQuery}`
-      
-      try {
-        const response = await fetch(url, { timeout: 5000 })
-        if (!response.ok) {
-          console.error(`AllTick batch error chunk ${i}: ${response.status}`)
-          continue
-        }
-        
-        const data = await response.json()
-        if (data.ret !== 200 || !data.data?.tick_list) {
-          console.error(`AllTick batch invalid response chunk ${i}:`, data.msg || data.ret)
-          continue
-        }
-        
-        for (const tick of data.data.tick_list) {
-          const internalSymbol = ALLTICK_REVERSE_MAP[tick.code]
-          if (!internalSymbol) continue
-          
-          const bid = tick.bids?.[0]?.price ? parseFloat(tick.bids[0].price) : null
-          const ask = tick.asks?.[0]?.price ? parseFloat(tick.asks[0].price) : null
-          
-          if (bid && ask) {
-            prices[internalSymbol] = { bid, ask }
-          } else if (bid) {
-            prices[internalSymbol] = { bid, ask: bid }
-          }
-        }
-      } catch (chunkError) {
-        console.error(`AllTick chunk ${i} error:`, chunkError.message)
-      }
-      
-      // Small delay between chunks to avoid rate limiting
-      if (i + CHUNK_SIZE < validSymbols.length) {
-        await new Promise(r => setTimeout(r, 100))
-      }
-    }
-    
-    return prices
+    const validSymbols = symbols.filter(s => SYMBOL_MAP[s])
+    return await metaApiService.fetchBatchPrices(validSymbols)
   } catch (e) {
-    console.error(`AllTick batch error:`, e.message)
+    console.error(`MetaApi batch error:`, e.message)
+    // Return fallback prices
+    const prices = {}
+    symbols.forEach(s => {
+      if (FALLBACK_PRICES[s]) prices[s] = FALLBACK_PRICES[s]
+    })
     return prices
   }
 }
@@ -251,10 +55,10 @@ function categorizeSymbol(symbol) {
   if (s.includes('XAU') || s.includes('XAG') || s.includes('XPT') || s.includes('XPD')) {
     return 'Metals'
   }
-  if (s.includes('OIL') || s.includes('BRENT') || s.includes('WTI') || s === 'NGAS' || s === 'COPPER' || s === 'ALUMINUM' || s === 'NICKEL') {
+  if (s.includes('OIL') || s.includes('BRENT') || s.includes('WTI') || s === 'NGAS' || s === 'COPPER') {
     return 'Commodities'
   }
-  if (CRYPTO_SYMBOLS.includes(symbol)) {
+  if (metaApiService.isCrypto(symbol)) {
     return 'Crypto'
   }
   return 'Forex'
@@ -302,9 +106,9 @@ function getDefaultInstruments() {
 // GET /api/prices/instruments - Get all available instruments (MUST be before /:symbol)
 router.get('/instruments', async (req, res) => {
   try {
-    console.log('Returning AllTick supported instruments')
+    console.log('Returning MetaApi supported instruments')
     
-    const instruments = ALLTICK_SYMBOLS.map(symbol => {
+    const instruments = SUPPORTED_SYMBOLS.map(symbol => {
       const category = categorizeSymbol(symbol)
       const isPopular = POPULAR_INSTRUMENTS[category]?.includes(symbol) || false
       return {
@@ -320,7 +124,7 @@ router.get('/instruments', async (req, res) => {
       }
     })
     
-    console.log('Returning', instruments.length, 'AllTick instruments')
+    console.log('Returning', instruments.length, 'MetaApi instruments')
     res.json({ success: true, instruments })
   } catch (error) {
     console.error('Error fetching instruments:', error)
@@ -396,13 +200,13 @@ function getDigits(symbol) {
   if (symbol.includes('JPY')) return 3
   if (symbol === 'XAUUSD') return 2
   if (symbol === 'XAGUSD') return 3
-  if (CRYPTO_SYMBOLS.includes(symbol)) return 2
+  if (metaApiService.isCrypto(symbol)) return 2
   return 5
 }
 
 // Helper to get contract size
 function getContractSize(symbol) {
-  if (CRYPTO_SYMBOLS.includes(symbol)) return 1
+  if (metaApiService.isCrypto(symbol)) return 1
   if (symbol === 'XAUUSD' || symbol === 'XAGUSD') return 100
   return 100000
 }
@@ -413,12 +217,12 @@ router.get('/:symbol', async (req, res) => {
     const { symbol } = req.params
     
     // Check if symbol is supported
-    if (!ALLTICK_SYMBOL_MAP[symbol]) {
+    if (!SYMBOL_MAP[symbol]) {
       return res.status(404).json({ success: false, message: `Symbol ${symbol} not supported` })
     }
     
-    // Use AllTick API for all symbols
-    const price = await getAllTickPrice(symbol)
+    // Use MetaApi for all symbols
+    const price = await getMetaApiPrice(symbol)
     
     if (price) {
       res.json({ success: true, price })
@@ -435,7 +239,7 @@ router.get('/:symbol', async (req, res) => {
 const priceCache = new Map()
 const CACHE_TTL = 2000 // 2 second cache for real-time updates
 
-// POST /api/prices/batch - Get multiple symbol prices using AllTick API
+// POST /api/prices/batch - Get multiple symbol prices using MetaApi
 router.post('/batch', async (req, res) => {
   try {
     const { symbols } = req.body
@@ -452,14 +256,14 @@ router.post('/batch', async (req, res) => {
       const cached = priceCache.get(symbol)
       if (cached && (now - cached.time) < CACHE_TTL) {
         prices[symbol] = cached.price
-      } else if (ALLTICK_SYMBOL_MAP[symbol]) {
+      } else if (SYMBOL_MAP[symbol]) {
         missingSymbols.push(symbol)
       }
     }
     
-    // Fetch missing prices from AllTick API in batch
+    // Fetch missing prices from MetaApi in batch
     if (missingSymbols.length > 0) {
-      const batchPrices = await getAllTickBatchPrices(missingSymbols)
+      const batchPrices = await getMetaApiBatchPrices(missingSymbols)
       for (const [symbol, price] of Object.entries(batchPrices)) {
         prices[symbol] = price
         priceCache.set(symbol, { price, time: now })

@@ -32,7 +32,6 @@ import {
 
 import metaApiService from '../services/metaApi'
 
-import binanceApiService from '../services/binanceApi'
 
 import priceStreamService from '../services/priceStream'
 
@@ -702,21 +701,8 @@ const AdminTradeManagement = () => {
 
     try {
 
-      const cryptoSymbols = ['BTCUSD', 'ETHUSD', 'BTCUSDT', 'ETHUSDT']
-
-      let priceData = null
-
-      if (cryptoSymbols.includes(trade.symbol)) {
-
-        const prices = await binanceApiService.getAllPrices([trade.symbol])
-
-        priceData = prices[trade.symbol]
-
-      } else {
-
-        priceData = await metaApiService.getSymbolPrice(trade.symbol)
-
-      }
+      // Use MetaApi for all symbols
+      const priceData = await metaApiService.getSymbolPrice(trade.symbol)
 
       if (priceData) {
 

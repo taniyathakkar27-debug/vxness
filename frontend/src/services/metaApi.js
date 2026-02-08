@@ -1,7 +1,7 @@
-// Price Service - uses backend API (AllTick powered)
+// Price Service - uses backend API (MetaApi powered)
 import { API_URL } from '../config/api'
 
-console.log('Price service initialized - using backend API')
+console.log('Price service initialized - using MetaApi backend')
 
 class PriceService {
   constructor() {
@@ -16,7 +16,7 @@ class PriceService {
 
   async getSymbols() {
     try {
-      // Fetch instruments from backend API (AllTick powered)
+      // Fetch instruments from backend API (MetaApi powered)
       const response = await fetch(`${API_URL}/prices/instruments`)
       if (!response.ok) throw new Error('Failed to fetch instruments')
       const data = await response.json()
@@ -92,8 +92,8 @@ class PriceService {
   }
 
   connect(symbolsToSubscribe = []) {
-    // WebSocket is handled by backend socket.io - this is a no-op for compatibility
-    console.log('Price service connect called - prices fetched via backend API')
+    // WebSocket is handled by backend socket.io with MetaApi
+    console.log('Price service connect called - prices streamed via MetaApi backend')
     this.isConnected = true
   }
 

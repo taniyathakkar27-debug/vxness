@@ -35,6 +35,7 @@ import { fileURLToPath } from 'url'
 import copyTradingEngine from './services/copyTradingEngine.js'
 import tradeEngine from './services/tradeEngine.js'
 import propTradingEngine from './services/propTradingEngine.js'
+import metaApiService from './services/metaApiService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -59,64 +60,65 @@ const priceSubscribers = new Set()
 // Price cache for real-time streaming
 const priceCache = new Map()
 
-// Use Binance for ALL crypto (faster updates than AllTick for crypto)
-const BINANCE_CRYPTO_SYMBOLS = {
-  'BTCUSD': 'BTCUSDT', 'ETHUSD': 'ETHUSDT', 'BNBUSD': 'BNBUSDT', 'SOLUSD': 'SOLUSDT',
-  'XRPUSD': 'XRPUSDT', 'ADAUSD': 'ADAUSDT', 'DOGEUSD': 'DOGEUSDT', 'TRXUSD': 'TRXUSDT',
-  'LINKUSD': 'LINKUSDT', 'MATICUSD': 'MATICUSDT', 'DOTUSD': 'DOTUSDT',
-  'SHIBUSD': 'SHIBUSDT', 'LTCUSD': 'LTCUSDT', 'BCHUSD': 'BCHUSDT', 'AVAXUSD': 'AVAXUSDT',
-  'XLMUSD': 'XLMUSDT', 'UNIUSD': 'UNIUSDT', 'ATOMUSD': 'ATOMUSDT', 'ETCUSD': 'ETCUSDT',
-  'FILUSD': 'FILUSDT', 'ICPUSD': 'ICPUSDT', 'VETUSD': 'VETUSDT',
-  'NEARUSD': 'NEARUSDT', 'GRTUSD': 'GRTUSDT', 'AAVEUSD': 'AAVEUSDT', 'MKRUSD': 'MKRUSDT',
-  'ALGOUSD': 'ALGOUSDT', 'FTMUSD': 'FTMUSDT', 'SANDUSD': 'SANDUSDT', 'MANAUSD': 'MANAUSDT',
-  'AXSUSD': 'AXSUSDT', 'THETAUSD': 'THETAUSDT', 'FLOWUSD': 'FLOWUSDT',
-  'SNXUSD': 'SNXUSDT', 'EOSUSD': 'EOSUSDT', 'CHZUSD': 'CHZUSDT', 'ENJUSD': 'ENJUSDT',
-  'ZILUSD': 'ZILUSDT', 'BATUSD': 'BATUSDT', 'CRVUSD': 'CRVUSDT', 'COMPUSD': 'COMPUSDT',
-  'SUSHIUSD': 'SUSHIUSDT', 'ZRXUSD': 'ZRXUSDT', 'LRCUSD': 'LRCUSDT', 'ANKRUSD': 'ANKRUSDT',
-  'GALAUSD': 'GALAUSDT', 'APEUSD': 'APEUSDT', 'WAVESUSD': 'WAVESUSDT', 'ZECUSD': 'ZECUSDT',
-  'PEPEUSD': 'PEPEUSDT', 'ARBUSD': 'ARBUSDT', 'OPUSD': 'OPUSDT', 'SUIUSD': 'SUIUSDT',
-  'APTUSD': 'APTUSDT', 'INJUSD': 'INJUSDT', 'LDOUSD': 'LDOUSDT', 'IMXUSD': 'IMXUSDT',
-  'RUNEUSD': 'RUNEUSDT', 'KAVAUSD': 'KAVAUSDT', 'KSMUSD': 'KSMUSDT', 'NEOUSD': 'NEOUSDT',
-  'QNTUSD': 'QNTUSDT', 'FETUSD': 'FETUSDT', 'RNDRUSD': 'RNDRUSDT', 'OCEANUSD': 'OCEANUSDT',
-  'WLDUSD': 'WLDUSDT', 'SEIUSD': 'SEIUSDT', 'TIAUSD': 'TIAUSDT', 'BLURUSD': 'BLURUSDT',
-  'ROSEUSD': 'ROSEUSDT', 'MINAUSD': 'MINAUSDT', 'GMXUSD': 'GMXUSDT', 'DYDXUSD': 'DYDXUSDT',
-  'STXUSD': 'STXUSDT', 'CFXUSD': 'CFXUSDT', 'ACHUSD': 'ACHUSDT', 'DASHUSD': 'DASHUSDT',
-  'XTZUSD': 'XTZUSDT', 'CELOUSD': 'CELOUSDT', 'ONEUSD': 'ONEUSDT',
-  'HOTUSD': 'HOTUSDT', 'SKLUSD': 'SKLUSDT', 'STORJUSD': 'STORJUSDT', 'YFIUSD': 'YFIUSDT',
-  'UMAUSD': 'UMAUSDT', 'BANDUSD': 'BANDUSDT', 'RVNUSD': 'RVNUSDT', 'OXTUSD': 'OXTUSDT',
-  'NKNUSD': 'NKNUSDT', 'WOOUSD': 'WOOUSDT', 'JASMYUSD': 'JASMYUSDT',
-  'MASKUSD': 'MASKUSDT', 'DENTUSD': 'DENTUSDT', 'CELRUSD': 'CELRUSDT', 'COTIUSD': 'COTIUSDT',
-  'IOTXUSD': 'IOTXUSDT', 'KLAYUSD': 'KLAYUSDT', 'OGNUSD': 'OGNUSDT',
-  'RLCUSD': 'RLCUSDT', 'STMXUSD': 'STMXUSDT', 'SUNUSD': 'SUNUSDT', 'SXPUSD': 'SXPUSDT',
-  'AUDIOUSD': 'AUDIOUSDT', 'BONKUSD': 'BONKUSDT', 'FLOKIUSD': 'FLOKIUSDT', 'ORDIUSD': 'ORDIUSDT',
-  '1INCHUSD': '1INCHUSDT', 'HBARUSD': 'HBARUSDT', 'TONUSD': 'TONUSDT'
+// Initialize MetaApi WebSocket connection
+let metaApiConnected = false
+
+async function initMetaApiConnection() {
+  try {
+    console.log('[MetaApi] Initializing WebSocket connection...')
+    metaApiConnected = await metaApiService.connect()
+    
+    if (metaApiConnected) {
+      console.log('[MetaApi] WebSocket connected successfully')
+      
+      // Subscribe to price updates from MetaApi
+      metaApiService.subscribe((symbol, price) => {
+        priceCache.set(symbol, price)
+        
+        // Broadcast to Socket.IO subscribers if any
+        if (priceSubscribers.size > 0) {
+          io.to('prices').emit('priceStream', {
+            prices: Object.fromEntries(priceCache),
+            updated: { [symbol]: price },
+            timestamp: Date.now()
+          })
+        }
+      })
+      
+      // Subscribe to all supported symbols
+      const symbols = metaApiService.getSymbols()
+      metaApiService.subscribeToSymbols(symbols)
+    } else {
+      console.log('[MetaApi] WebSocket connection failed, using REST API fallback')
+    }
+  } catch (error) {
+    console.error('[MetaApi] Connection error:', error.message)
+  }
 }
 
-// Background price streaming - Binance only for crypto
+// Background price streaming via MetaApi REST API (fallback when WebSocket not available)
 async function streamPrices() {
   if (priceSubscribers.size === 0) return
   
   const now = Date.now()
   const updatedPrices = {}
   
-  // Binance - fast refresh for crypto (every call)
-  try {
-    const response = await fetch('https://api.binance.com/api/v3/ticker/bookTicker')
-    if (response.ok) {
-      const tickers = await response.json()
-      const tickerMap = {}
-      tickers.forEach(t => { tickerMap[t.symbol] = t })
+  // If MetaApi WebSocket is connected, prices are already streaming
+  // Otherwise, fetch via REST API
+  if (!metaApiConnected) {
+    try {
+      // Fetch prices for popular symbols via MetaApi REST
+      const popularSymbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD', 'ETHUSD']
+      const prices = await metaApiService.fetchBatchPrices(popularSymbols)
       
-      Object.keys(BINANCE_CRYPTO_SYMBOLS).forEach(symbol => {
-        const ticker = tickerMap[BINANCE_CRYPTO_SYMBOLS[symbol]]
-        if (ticker) {
-          const price = { bid: parseFloat(ticker.bidPrice), ask: parseFloat(ticker.askPrice), time: now }
-          priceCache.set(symbol, price)
-          updatedPrices[symbol] = price
-        }
+      Object.entries(prices).forEach(([symbol, price]) => {
+        priceCache.set(symbol, { ...price, time: now })
+        updatedPrices[symbol] = price
       })
+    } catch (e) {
+      console.error('[MetaApi] REST fetch error:', e.message)
     }
-  } catch (e) {}
+  }
   
   // Broadcast prices to subscribers
   io.to('prices').emit('priceStream', {
@@ -126,10 +128,13 @@ async function streamPrices() {
   })
 }
 
-console.log('Price streaming initialized - Binance crypto only')
+console.log('Price streaming initialized - MetaApi WebSocket')
 
-// Start price streaming interval (500ms for Binance crypto)
-setInterval(streamPrices, 500)
+// Initialize MetaApi connection on startup
+initMetaApiConnection()
+
+// Start price streaming interval (1 second for REST fallback)
+setInterval(streamPrices, 1000)
 
 // Background stop-out check every 5 seconds
 // This ensures trades are closed even if user closes browser
