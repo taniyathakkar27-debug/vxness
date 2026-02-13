@@ -10,20 +10,11 @@ import ibEngine from '../services/ibEngineNew.js'
 import MasterTrader from '../models/MasterTrader.js'
 import metaApiService from '../services/metaApiService.js'
 
-// Fetch fresh price from MetaApi
-async function getFreshPrice(symbol) {
-  try {
-    const price = await metaApiService.fetchPrice(symbol)
-    if (price) {
-      console.log(`[getFreshPrice] MetaApi price for ${symbol}: bid=${price.bid}, ask=${price.ask}`)
-      return price
-    }
-    console.log(`[getFreshPrice] No data for ${symbol}`)
-    return null
-  } catch (e) {
-    console.log(`[getFreshPrice] Error for ${symbol}:`, e.message)
-    return null
-  }
+// Get price from cache (populated by background streamPrices in server.js)
+// Avoids direct REST calls which cause MetaAPI rate limiting
+function getFreshPrice(symbol) {
+  const price = metaApiService.getPrice(symbol)
+  return price || null
 }
 
 const router = express.Router()
@@ -428,11 +419,11 @@ router.get('/netting/:tradingAccountId', async (req, res) => {
       status: 'OPEN' 
     })
 
-    // Get current prices for all symbols
+    // Get current prices from cache (populated by background streamPrices)
     const symbols = [...new Set(openTrades.map(t => t.symbol))]
     const currentPrices = {}
     for (const symbol of symbols) {
-      const price = await metaApiService.fetchPrice(symbol)
+      const price = metaApiService.getPrice(symbol)
       if (price) {
         currentPrices[symbol] = price
       }
@@ -846,8 +837,6 @@ router.get('/debug-open', async (req, res) => {
 router.post('/check-sltp', async (req, res) => {
   try {
     const { prices } = req.body
-    console.log(`[SL/TP Check] Endpoint called`)
-
     if (!prices || typeof prices !== 'object') {
       return res.status(400).json({ 
         success: false, 
@@ -872,17 +861,10 @@ router.post('/check-sltp', async (req, res) => {
     // Fetch fresh prices for symbols with SL/TP trades
     const freshPrices = { ...prices }
     for (const symbol of symbolsNeedingFreshPrices) {
-      const freshPrice = await getFreshPrice(symbol)
+      const freshPrice = getFreshPrice(symbol)
       if (freshPrice) {
         freshPrices[symbol] = freshPrice
-        console.log(`[SL/TP Check] Fresh price for ${symbol}: bid=${freshPrice.bid}, ask=${freshPrice.ask}`)
       }
-    }
-
-    // Debug: Log prices
-    const xauPrice = freshPrices['XAUUSD']
-    if (xauPrice) {
-      console.log(`[SL/TP Check] XAUUSD bid=${xauPrice.bid}, ask=${xauPrice.ask}`)
     }
 
     // Check SL/TP for all open challenge trades

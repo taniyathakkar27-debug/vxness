@@ -1,4 +1,4 @@
-import WebSocket from 'ws'
+import MetaApi, { SynchronizationListener } from 'metaapi.cloud-sdk/esm-node'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -6,10 +6,6 @@ dotenv.config()
 // MetaApi Configuration
 const META_API_TOKEN = process.env.META_API_TOKEN
 const META_API_ACCOUNT_ID = process.env.META_API_ACCOUNT_ID
-
-// MetaApi WebSocket endpoints
-const META_API_WS_URL = `wss://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/ws`
-const META_API_REST_URL = 'https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai'
 
 // Symbol mapping for MetaApi (MT5 format)
 const META_API_SYMBOL_MAP = {
@@ -206,208 +202,170 @@ const FALLBACK_PRICES = {
   'HBARUSD': { bid: 0.28, ask: 0.281 }
 }
 
-class MetaApiService {
-  constructor() {
-    this.ws = null
-    this.isConnected = false
-    this.prices = new Map()
-    this.subscribers = new Set()
-    this.reconnectAttempts = 0
-    this.maxReconnectAttempts = 10
-    this.reconnectDelay = 1000
-    this.pingInterval = null
-    this.subscribedSymbols = new Set()
-    this.authToken = null
+// Price listener that extends SynchronizationListener from MetaAPI SDK
+class PriceListener extends SynchronizationListener {
+  constructor(service) {
+    super()
+    this.service = service
   }
 
-  async getAuthToken() {
-    if (!META_API_TOKEN) {
-      console.error('[MetaApi] No META_API_TOKEN configured')
-      return null
-    }
-    return META_API_TOKEN
-  }
-
-  async connect() {
-    if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-      return true
-    }
-
-    const token = await this.getAuthToken()
-    if (!token) {
-      console.error('[MetaApi] Cannot connect without auth token')
-      return false
-    }
-
-    return new Promise((resolve) => {
-      try {
-        // MetaApi WebSocket connection with auth
-        const wsUrl = `${META_API_WS_URL}?auth-token=${token}`
-        this.ws = new WebSocket(wsUrl)
-
-        this.ws.on('open', () => {
-          console.log('[MetaApi] WebSocket connected')
-          this.isConnected = true
-          this.reconnectAttempts = 0
-          
-          // Start ping interval to keep connection alive
-          this.pingInterval = setInterval(() => {
-            if (this.ws?.readyState === WebSocket.OPEN) {
-              this.ws.ping()
-            }
-          }, 30000)
-
-          // Subscribe to account if configured
-          if (META_API_ACCOUNT_ID) {
-            this.subscribeToAccount(META_API_ACCOUNT_ID)
-          }
-
-          resolve(true)
-        })
-
-        this.ws.on('message', (data) => {
-          try {
-            const message = JSON.parse(data.toString())
-            this.handleMessage(message)
-          } catch (e) {
-            console.error('[MetaApi] Error parsing message:', e.message)
-          }
-        })
-
-        this.ws.on('error', (error) => {
-          console.error('[MetaApi] WebSocket error:', error.message)
-        })
-
-        this.ws.on('close', () => {
-          console.log('[MetaApi] WebSocket disconnected')
-          this.isConnected = false
-          
-          if (this.pingInterval) {
-            clearInterval(this.pingInterval)
-            this.pingInterval = null
-          }
-
-          // Attempt reconnection
-          if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++
-            const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
-            console.log(`[MetaApi] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`)
-            setTimeout(() => this.connect(), delay)
-          }
-        })
-
-        // Timeout for connection
-        setTimeout(() => {
-          if (!this.isConnected) {
-            console.log('[MetaApi] Connection timeout')
-            resolve(false)
-          }
-        }, 10000)
-
-      } catch (error) {
-        console.error('[MetaApi] Connection error:', error.message)
-        resolve(false)
+  // Called by SDK on every price tick
+  async onSymbolPriceUpdated(instanceIndex, price) {
+    const symbol = META_API_REVERSE_MAP[price.symbol] || price.symbol
+    if (price.bid && price.ask) {
+      const priceData = {
+        bid: price.bid,
+        ask: price.ask,
+        time: Date.now()
       }
-    })
-  }
+      this.service.prices.set(symbol, priceData)
+      this.service.tickCount++
 
-  subscribeToAccount(accountId) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
-
-    // Subscribe to account synchronization
-    this.ws.send(JSON.stringify({
-      type: 'subscribe',
-      accountId: accountId,
-      subscriptions: ['quotes']
-    }))
-
-    console.log(`[MetaApi] Subscribed to account ${accountId}`)
-  }
-
-  subscribeToSymbols(symbols) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
-
-    const newSymbols = symbols.filter(s => !this.subscribedSymbols.has(s))
-    if (newSymbols.length === 0) return
-
-    // Subscribe to market data for symbols
-    newSymbols.forEach(symbol => {
-      const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
-      this.ws.send(JSON.stringify({
-        type: 'subscribeToMarketData',
-        accountId: META_API_ACCOUNT_ID,
-        symbol: metaSymbol,
-        subscriptions: ['quotes']
-      }))
-      this.subscribedSymbols.add(symbol)
-    })
-
-    console.log(`[MetaApi] Subscribed to ${newSymbols.length} symbols`)
-  }
-
-  handleMessage(message) {
-    // Handle different message types from MetaApi
-    switch (message.type) {
-      case 'quote':
-      case 'tick':
-        this.handleQuote(message)
-        break
-      case 'prices':
-        this.handlePrices(message)
-        break
-      case 'synchronization':
-        console.log('[MetaApi] Synchronization:', message.synchronizationId)
-        break
-      case 'authenticated':
-        console.log('[MetaApi] Authenticated successfully')
-        break
-      case 'error':
-        console.error('[MetaApi] Error:', message.error)
-        break
-    }
-  }
-
-  handleQuote(data) {
-    const symbol = META_API_REVERSE_MAP[data.symbol] || data.symbol
-    const price = {
-      bid: parseFloat(data.bid),
-      ask: parseFloat(data.ask),
-      time: data.time || Date.now()
-    }
-    
-    this.prices.set(symbol, price)
-    
-    // Notify subscribers
-    this.subscribers.forEach(callback => {
-      try {
-        callback(symbol, price)
-      } catch (e) {
-        console.error('[MetaApi] Subscriber error:', e.message)
-      }
-    })
-  }
-
-  handlePrices(data) {
-    if (data.prices && Array.isArray(data.prices)) {
-      data.prices.forEach(p => {
-        const symbol = META_API_REVERSE_MAP[p.symbol] || p.symbol
-        const price = {
-          bid: parseFloat(p.bid),
-          ask: parseFloat(p.ask),
-          time: p.time || Date.now()
+      // Notify subscribers (server.js broadcasts to frontend)
+      this.service.subscribers.forEach(callback => {
+        try {
+          callback(symbol, priceData)
+        } catch (e) {
+          console.error('[MetaApi] Subscriber error:', e.message)
         }
-        this.prices.set(symbol, price)
       })
     }
   }
 
-  subscribe(callback) {
-    this.subscribers.add(callback)
-    return () => this.subscribers.delete(callback)
+  async onConnected(instanceIndex, replicas) {
+    console.log('[MetaApi] SDK connected to broker, instance:', instanceIndex)
   }
 
+  async onDisconnected(instanceIndex) {
+    console.log('[MetaApi] SDK disconnected from broker, instance:', instanceIndex)
+  }
+
+  async onBrokerConnectionStatusChanged(instanceIndex, connected) {
+    console.log('[MetaApi] Broker connection status:', connected ? 'CONNECTED' : 'DISCONNECTED')
+  }
+}
+
+class MetaApiService {
+  constructor() {
+    this.api = null
+    this.account = null
+    this.connection = null
+    this.isConnected = false
+    this.prices = new Map()
+    this.subscribers = new Set()
+    this.subscribedSymbols = new Set()
+    this.tickCount = 0
+    this.priceListener = null
+  }
+
+  async connect() {
+    if (this.isConnected && this.connection) {
+      return true
+    }
+
+    if (!META_API_TOKEN || !META_API_ACCOUNT_ID) {
+      console.error('[MetaApi] No META_API_TOKEN or META_API_ACCOUNT_ID configured')
+      return false
+    }
+
+    try {
+      console.log('[MetaApi] Initializing SDK...')
+      
+      // Create MetaApi instance
+      this.api = new MetaApi(META_API_TOKEN)
+      
+      // Get the trading account
+      console.log('[MetaApi] Getting account:', META_API_ACCOUNT_ID)
+      this.account = await this.api.metatraderAccountApi.getAccount(META_API_ACCOUNT_ID)
+      
+      // Wait for account to be deployed and connected
+      console.log('[MetaApi] Account state:', this.account.state, '| Connection:', this.account.connectionStatus)
+      
+      if (this.account.state !== 'DEPLOYED') {
+        console.log('[MetaApi] Waiting for account to deploy...')
+        await this.account.waitDeployed()
+      }
+
+      // Get streaming connection
+      console.log('[MetaApi] Creating streaming connection...')
+      this.connection = this.account.getStreamingConnection()
+      
+      // Add price listener BEFORE connecting
+      this.priceListener = new PriceListener(this)
+      this.connection.addSynchronizationListener(this.priceListener)
+      
+      // Connect
+      await this.connection.connect()
+      console.log('[MetaApi] Streaming connection opened, waiting for sync...')
+      
+      // Wait for synchronization (with timeout)
+      await this.connection.waitSynchronized({ timeoutInSeconds: 60 })
+      
+      this.isConnected = true
+      console.log('[MetaApi] Synchronized! Ready for live prices.')
+      console.log('[MetaApi] Broker connected:', this.connection.terminalState.connected)
+      console.log('[MetaApi] Connected to broker:', this.connection.terminalState.connectedToBroker)
+      
+      return true
+    } catch (error) {
+      console.error('[MetaApi] Connection error:', error.message)
+      this.isConnected = false
+      return false
+    }
+  }
+
+  async subscribeToSymbols(symbols) {
+    if (!this.connection || !this.isConnected) {
+      console.log('[MetaApi] Cannot subscribe - not connected')
+      return
+    }
+
+    const newSymbols = symbols.filter(s => !this.subscribedSymbols.has(s))
+    if (newSymbols.length === 0) return
+
+    let subscribed = 0
+    for (const symbol of newSymbols) {
+      try {
+        const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
+        await this.connection.subscribeToMarketData(metaSymbol, [{ type: 'quotes' }])
+        this.subscribedSymbols.add(symbol)
+        subscribed++
+      } catch (e) {
+        // Symbol may not be available on this broker
+        if (!e.message?.includes('TooManyRequests')) {
+          // Silent for unavailable symbols
+        } else {
+          console.error('[MetaApi] Rate limited while subscribing, pausing...')
+          await new Promise(r => setTimeout(r, 5000))
+        }
+      }
+    }
+
+    console.log(`[MetaApi] Subscribed to ${subscribed}/${newSymbols.length} symbols via SDK streaming`)
+  }
+
+  // Read latest price from SDK's terminal state (instant, no API call)
   getPrice(symbol) {
-    return this.prices.get(symbol) || FALLBACK_PRICES[symbol] || null
+    // First check our live price cache (updated by PriceListener)
+    const cached = this.prices.get(symbol)
+    if (cached) return cached
+
+    // Try reading from SDK terminal state directly
+    if (this.connection?.terminalState) {
+      const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
+      const sdkPrice = this.connection.terminalState.price(metaSymbol)
+      if (sdkPrice && sdkPrice.bid && sdkPrice.ask) {
+        const priceData = {
+          bid: sdkPrice.bid,
+          ask: sdkPrice.ask,
+          time: Date.now()
+        }
+        this.prices.set(symbol, priceData)
+        return priceData
+      }
+    }
+
+    return FALLBACK_PRICES[symbol] || null
   }
 
   getAllPrices() {
@@ -418,153 +376,83 @@ class MetaApiService {
     return prices
   }
 
-  async fetchPrice(symbol) {
-    // Try to get from cache first
-    const cached = this.prices.get(symbol)
-    if (cached && (Date.now() - cached.time) < 5000) {
-      return cached
-    }
-
-    // If not connected or no cached price, try REST API
-    if (!META_API_TOKEN || !META_API_ACCOUNT_ID) {
-      return FALLBACK_PRICES[symbol] || null
-    }
-
-    try {
-      const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
-      const response = await fetch(
-        `${META_API_REST_URL}/users/current/accounts/${META_API_ACCOUNT_ID}/symbols/${metaSymbol}/current-price`,
-        {
-          headers: {
-            'auth-token': META_API_TOKEN
-          }
-        }
-      )
-
-      if (!response.ok) {
-        console.error(`[MetaApi] REST error for ${symbol}: ${response.status}`)
-        return FALLBACK_PRICES[symbol] || null
-      }
-
-      const data = await response.json()
-      const price = {
-        bid: parseFloat(data.bid),
-        ask: parseFloat(data.ask),
-        time: Date.now()
-      }
-
-      this.prices.set(symbol, price)
-      return price
-    } catch (error) {
-      console.error(`[MetaApi] Error fetching ${symbol}:`, error.message)
-      return FALLBACK_PRICES[symbol] || null
-    }
+  subscribe(callback) {
+    this.subscribers.add(callback)
+    return () => this.subscribers.delete(callback)
   }
 
+  // Fetch crypto prices from Binance (MetaAPI doesn't cover crypto well)
+  async fetchCryptoPrices(cryptoSymbols) {
+    const prices = {}
+    if (cryptoSymbols.length === 0) return prices
+
+    try {
+      const binanceResponse = await fetch('https://api.binance.com/api/v3/ticker/bookTicker')
+      if (binanceResponse.ok) {
+        const tickers = await binanceResponse.json()
+        const tickerMap = {}
+        tickers.forEach(t => { tickerMap[t.symbol] = t })
+        
+        cryptoSymbols.forEach(symbol => {
+          const binanceSymbol = symbol.replace('USD', 'USDT')
+          const ticker = tickerMap[binanceSymbol]
+          if (ticker) {
+            const price = {
+              bid: parseFloat(ticker.bidPrice),
+              ask: parseFloat(ticker.askPrice),
+              time: Date.now()
+            }
+            prices[symbol] = price
+            this.prices.set(symbol, price)
+          }
+        })
+      }
+    } catch (e) {
+      console.error('[MetaApi] Binance fetch error:', e.message)
+    }
+    return prices
+  }
+
+  // Fetch all prices for a list of symbols (used by streamPrices in server.js)
   async fetchBatchPrices(symbols) {
     const prices = {}
     const now = Date.now()
-    
-    // First, add any cached prices (if fresh enough - 5 seconds)
-    symbols.forEach(symbol => {
-      const cached = this.prices.get(symbol)
-      if (cached && (now - (cached.time || 0)) < 5000) {
-        prices[symbol] = cached
+
+    // Separate crypto and non-crypto
+    const cryptoSymbols = symbols.filter(s => this.isCrypto(s))
+    const forexSymbols = symbols.filter(s => !this.isCrypto(s))
+
+    // Fetch crypto from Binance
+    if (cryptoSymbols.length > 0) {
+      const cryptoPrices = await this.fetchCryptoPrices(cryptoSymbols)
+      Object.assign(prices, cryptoPrices)
+    }
+
+    // For forex/metals: read from SDK terminal state (no API calls!)
+    forexSymbols.forEach(symbol => {
+      const price = this.getPrice(symbol)
+      if (price) {
+        prices[symbol] = price
       }
     })
-
-    // Separate crypto and non-crypto symbols
-    const missingSymbols = symbols.filter(s => !prices[s])
-    const cryptoSymbols = missingSymbols.filter(s => this.isCrypto(s))
-    const forexSymbols = missingSymbols.filter(s => !this.isCrypto(s))
-
-    // Fetch crypto prices from Binance (free, no auth, fast)
-    if (cryptoSymbols.length > 0) {
-      try {
-        const binanceResponse = await fetch('https://api.binance.com/api/v3/ticker/bookTicker')
-        if (binanceResponse.ok) {
-          const tickers = await binanceResponse.json()
-          const tickerMap = {}
-          tickers.forEach(t => { tickerMap[t.symbol] = t })
-          
-          cryptoSymbols.forEach(symbol => {
-            // Convert our symbol to Binance format (e.g., BTCUSD -> BTCUSDT)
-            const binanceSymbol = symbol.replace('USD', 'USDT')
-            const ticker = tickerMap[binanceSymbol]
-            if (ticker) {
-              const price = {
-                bid: parseFloat(ticker.bidPrice),
-                ask: parseFloat(ticker.askPrice),
-                time: now
-              }
-              prices[symbol] = price
-              this.prices.set(symbol, price)
-            }
-          })
-        }
-      } catch (e) {
-        console.error('[MetaApi] Binance fetch error:', e.message)
-      }
-    }
-
-    // Fetch forex/metals prices from MetaApi REST API (or use fallback)
-    for (const symbol of forexSymbols) {
-      // Try MetaApi REST if configured
-      if (META_API_TOKEN && META_API_ACCOUNT_ID) {
-        try {
-          const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
-          const response = await fetch(
-            `${META_API_REST_URL}/users/current/accounts/${META_API_ACCOUNT_ID}/symbols/${metaSymbol}/current-price`,
-            {
-              headers: { 'auth-token': META_API_TOKEN },
-              timeout: 3000
-            }
-          )
-          
-          if (response.ok) {
-            const data = await response.json()
-            if (data.bid && data.ask) {
-              const price = {
-                bid: parseFloat(data.bid),
-                ask: parseFloat(data.ask),
-                time: now
-              }
-              prices[symbol] = price
-              this.prices.set(symbol, price)
-              continue
-            }
-          }
-        } catch (e) {
-          // Silent fail, use fallback
-        }
-      }
-      
-      // Use fallback prices if MetaApi fails
-      if (FALLBACK_PRICES[symbol]) {
-        prices[symbol] = { ...FALLBACK_PRICES[symbol], time: now }
-        this.prices.set(symbol, prices[symbol])
-      }
-    }
 
     // Fill remaining missing with fallback
     symbols.forEach(symbol => {
       if (!prices[symbol] && FALLBACK_PRICES[symbol]) {
-        prices[symbol] = { ...FALLBACK_PRICES[symbol], time: now }
+        prices[symbol] = { ...FALLBACK_PRICES[symbol], time: now, fallback: true }
       }
     })
 
     return prices
   }
 
-  disconnect() {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval)
-      this.pingInterval = null
-    }
-
-    if (this.ws) {
-      this.ws.close()
-      this.ws = null
+  async disconnect() {
+    if (this.connection) {
+      if (this.priceListener) {
+        this.connection.removeSynchronizationListener(this.priceListener)
+      }
+      await this.connection.close()
+      this.connection = null
     }
 
     this.isConnected = false

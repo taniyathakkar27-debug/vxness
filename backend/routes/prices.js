@@ -221,8 +221,8 @@ router.get('/:symbol', async (req, res) => {
       return res.status(404).json({ success: false, message: `Symbol ${symbol} not supported` })
     }
     
-    // Use MetaApi for all symbols
-    const price = await getMetaApiPrice(symbol)
+    // Use cached price from metaApiService (populated by background streamPrices)
+    const price = metaApiService.getPrice(symbol)
     
     if (price) {
       res.json({ success: true, price })
@@ -235,11 +235,7 @@ router.get('/:symbol', async (req, res) => {
   }
 })
 
-// Global price cache
-const priceCache = new Map()
-const CACHE_TTL = 2000 // 2 second cache for real-time updates
-
-// POST /api/prices/batch - Get multiple symbol prices using MetaApi
+// POST /api/prices/batch - Get multiple symbol prices from cache
 router.post('/batch', async (req, res) => {
   try {
     const { symbols } = req.body
@@ -247,26 +243,12 @@ router.post('/batch', async (req, res) => {
       return res.status(400).json({ success: false, message: 'symbols array required' })
     }
     
+    // Get all prices from metaApiService cache (populated by background streamPrices)
     const prices = {}
-    const now = Date.now()
-    
-    // Get prices from cache first
-    const missingSymbols = []
     for (const symbol of symbols) {
-      const cached = priceCache.get(symbol)
-      if (cached && (now - cached.time) < CACHE_TTL) {
-        prices[symbol] = cached.price
-      } else if (SYMBOL_MAP[symbol]) {
-        missingSymbols.push(symbol)
-      }
-    }
-    
-    // Fetch missing prices from MetaApi in batch
-    if (missingSymbols.length > 0) {
-      const batchPrices = await getMetaApiBatchPrices(missingSymbols)
-      for (const [symbol, price] of Object.entries(batchPrices)) {
+      const price = metaApiService.getPrice(symbol)
+      if (price) {
         prices[symbol] = price
-        priceCache.set(symbol, { price, time: now })
       }
     }
     

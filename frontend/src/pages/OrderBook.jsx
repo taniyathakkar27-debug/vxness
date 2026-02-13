@@ -50,6 +50,9 @@ const OrderBook = () => {
   const [pendingOrders, setPendingOrders] = useState([])
   const [livePrices, setLivePrices] = useState({})
   const [historyFilter, setHistoryFilter] = useState('all') // all, today, week, month, year
+  const [historySubTab, setHistorySubTab] = useState('all') // all, trades, transactions
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 20
 
@@ -234,7 +237,17 @@ const OrderBook = () => {
 
   const getFilteredHistory = () => {
     const now = new Date()
-    return closedTrades.filter(trade => {
+    let filtered = closedTrades
+
+    // Sub-tab filter: trades only show actual trades, transactions show commissions/swaps
+    if (historySubTab === 'trades') {
+      filtered = filtered.filter(t => t.status === 'CLOSED' || t.status === 'STOPPED_OUT' || t.closePrice)
+    } else if (historySubTab === 'transactions') {
+      filtered = filtered.filter(t => t.commission || t.swap)
+    }
+
+    // Time period filter
+    filtered = filtered.filter(trade => {
       if (historyFilter === 'all') return true
       const tradeDate = new Date(trade.closedAt)
       if (historyFilter === 'today') {
@@ -254,6 +267,20 @@ const OrderBook = () => {
       }
       return true
     })
+
+    // Custom date range filter
+    if (dateFrom) {
+      const from = new Date(dateFrom)
+      from.setHours(0, 0, 0, 0)
+      filtered = filtered.filter(t => new Date(t.closedAt) >= from)
+    }
+    if (dateTo) {
+      const to = new Date(dateTo)
+      to.setHours(23, 59, 59, 999)
+      filtered = filtered.filter(t => new Date(t.closedAt) <= to)
+    }
+
+    return filtered
   }
 
   const getPaginatedHistory = () => {
@@ -520,7 +547,7 @@ const OrderBook = () => {
                 <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
               </button>
               <button
-                onClick={() => downloadCSV(activeTab === 'positions' ? openTrades : closedTrades, activeTab)}
+                onClick={() => downloadCSV(activeTab === 'positions' ? openTrades : getFilteredHistory(), activeTab)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm ${isDarkMode ? 'bg-dark-700 hover:bg-dark-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'}`}
               >
                 <Download size={14} /> Download CSV
@@ -599,30 +626,77 @@ const OrderBook = () => {
                 {/* History Tab */}
                 {activeTab === 'history' && (
                   <>
-                    {/* Date Filter Buttons */}
-                    <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-800">
-                      {[
-                        { key: 'all', label: 'All' },
-                        { key: 'today', label: 'Today' },
-                        { key: 'week', label: 'This Week' },
-                        { key: 'month', label: 'This Month' },
-                        { key: 'year', label: 'This Year' }
-                      ].map(filter => (
-                        <button
-                          key={filter.key}
-                          onClick={() => { setHistoryFilter(filter.key); setCurrentPage(1) }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            historyFilter === filter.key 
-                              ? 'bg-accent-green text-black' 
-                              : 'bg-dark-700 text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          {filter.label}
-                        </button>
-                      ))}
-                      <span className="ml-auto text-gray-500 text-xs">
-                        {getFilteredHistory().length} trades | P&L: <span className={getHistoryTotalPnl() >= 0 ? 'text-green-500' : 'text-red-500'}>${getHistoryTotalPnl().toFixed(2)}</span>
-                      </span>
+                    {/* History Filter Bar */}
+                    <div className={`p-3 border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+                      {/* Row 1: Sub-tabs (All/Trades/Transactions) + Time filters + Date range + Summary */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Sub-tabs */}
+                        {[
+                          { key: 'all', label: 'All' },
+                          { key: 'trades', label: 'Trades' },
+                          { key: 'transactions', label: 'Transactions' }
+                        ].map(tab => (
+                          <button
+                            key={tab.key}
+                            onClick={() => { setHistorySubTab(tab.key); setCurrentPage(1) }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              historySubTab === tab.key 
+                                ? 'bg-accent-green text-black' 
+                                : isDarkMode ? 'bg-dark-700 text-gray-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900'
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+
+                        {/* Separator */}
+                        <div className={`w-px h-5 mx-1 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`} />
+
+                        {/* Time period filters */}
+                        {[
+                          { key: 'all', label: 'All' },
+                          { key: 'today', label: 'Today' },
+                          { key: 'week', label: 'This Week' },
+                          { key: 'month', label: 'This Month' },
+                          { key: 'year', label: 'This Year' }
+                        ].map(filter => (
+                          <button
+                            key={filter.key}
+                            onClick={() => { setHistoryFilter(filter.key); setCurrentPage(1) }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              historyFilter === filter.key 
+                                ? 'bg-accent-green text-black' 
+                                : isDarkMode ? 'bg-dark-700 text-gray-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900'
+                            }`}
+                          >
+                            {filter.label}
+                          </button>
+                        ))}
+
+                        {/* Date range picker */}
+                        <div className="flex items-center gap-1.5 ml-1">
+                          <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1) }}
+                            placeholder="dd/mm/yyyy"
+                            className={`px-2 py-1.5 rounded-lg text-xs border ${isDarkMode ? 'bg-dark-700 border-gray-700 text-gray-300' : 'bg-gray-50 border-gray-300 text-gray-700'}`}
+                          />
+                          <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>to</span>
+                          <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1) }}
+                            placeholder="dd/mm/yyyy"
+                            className={`px-2 py-1.5 rounded-lg text-xs border ${isDarkMode ? 'bg-dark-700 border-gray-700 text-gray-300' : 'bg-gray-50 border-gray-300 text-gray-700'}`}
+                          />
+                        </div>
+
+                        {/* Items count + P&L */}
+                        <span className={`ml-auto text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                          {getFilteredHistory().length} Items | P&L: <span className={`font-medium ${getHistoryTotalPnl() >= 0 ? 'text-green-500' : 'text-red-500'}`}>${getHistoryTotalPnl().toFixed(2)}</span>
+                        </span>
+                      </div>
                     </div>
 
                     {getFilteredHistory().length === 0 ? (
