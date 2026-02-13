@@ -5,7 +5,7 @@ import metaApiService, { SUPPORTED_SYMBOLS, META_API_SYMBOL_MAP, CRYPTO_SYMBOLS,
 
 const router = express.Router()
 
-// Use MetaApi symbol map
+
 const SYMBOL_MAP = META_API_SYMBOL_MAP
 
 // Popular instruments per category (shown by default - 15 max)
