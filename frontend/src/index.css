@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  /* Theme CSS Variables - Green Theme (matching logo) */
+  /* Theme CSS Variables - Green Theme ( logo) */
   --theme-primary: #00D26A;
   --theme-primaryHover: #00B85C;
   --theme-secondary: #00D26A;
