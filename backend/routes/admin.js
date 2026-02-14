@@ -104,7 +104,7 @@ router.put('/users/:id/password', async (req, res) => {
 // POST /api/admin/users/:id/deduct - Deduct funds from user wallet
 router.post('/users/:id/deduct', async (req, res) => {
   try {
-    const { amount, reason } = req.body
+    const { amount, reason, transactionDate } = req.body
     if (!amount || amount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid amount' })
     }
@@ -128,6 +128,27 @@ router.post('/users/:id/deduct', async (req, res) => {
     wallet.balance = (wallet.balance || 0) - parseFloat(amount)
     await wallet.save()
     
+    // Create transaction record
+    const txData = {
+      userId: req.params.id,
+      walletId: wallet._id,
+      type: 'Withdrawal',
+      amount: parseFloat(amount),
+      paymentMethod: 'System',
+      description: reason || 'Admin deduction',
+      status: 'Completed',
+      processedAt: new Date()
+    }
+    const transaction = await Transaction.create(txData)
+    
+    // Override createdAt if custom date provided (use raw MongoDB to bypass Mongoose timestamps)
+    if (transactionDate) {
+      await Transaction.collection.updateOne(
+        { _id: transaction._id },
+        { $set: { createdAt: new Date(transactionDate) } }
+      )
+    }
+    
     console.log(`[Admin] Deducted $${amount} from user ${user.email} wallet. New balance: $${wallet.balance}`)
     
     res.json({ 
@@ -144,7 +165,7 @@ router.post('/users/:id/deduct', async (req, res) => {
 // POST /api/admin/users/:id/add-fund - Add funds to user wallet (Admin only)
 router.post('/users/:id/add-fund', async (req, res) => {
   try {
-    const { amount, reason } = req.body
+    const { amount, reason, transactionDate } = req.body
     if (!amount || amount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid amount' })
     }
@@ -165,6 +186,27 @@ router.post('/users/:id/add-fund', async (req, res) => {
     wallet.balance = previousBalance + parseFloat(amount)
     await wallet.save()
     
+    // Create transaction record
+    const txData = {
+      userId: req.params.id,
+      walletId: wallet._id,
+      type: 'Deposit',
+      amount: parseFloat(amount),
+      paymentMethod: 'System',
+      description: reason || 'Admin fund addition',
+      status: 'Completed',
+      processedAt: new Date()
+    }
+    const transaction = await Transaction.create(txData)
+    
+    // Override createdAt if custom date provided (use raw MongoDB to bypass Mongoose timestamps)
+    if (transactionDate) {
+      await Transaction.collection.updateOne(
+        { _id: transaction._id },
+        { $set: { createdAt: new Date(transactionDate) } }
+      )
+    }
+    
     console.log(`[Admin] Added $${amount} to user ${user.email} wallet. Balance: $${previousBalance} -> $${wallet.balance}`)
     
     res.json({ 
@@ -183,7 +225,7 @@ router.post('/users/:id/add-fund', async (req, res) => {
 // POST /api/admin/trading-account/:id/add-fund - Add funds to trading account (Admin only)
 router.post('/trading-account/:id/add-fund', async (req, res) => {
   try {
-    const { amount, reason } = req.body
+    const { amount, reason, transactionDate } = req.body
     if (!amount || amount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid amount' })
     }
@@ -196,6 +238,28 @@ router.post('/trading-account/:id/add-fund', async (req, res) => {
     
     account.balance = (account.balance || 0) + parseFloat(amount)
     await account.save()
+    
+    // Create transaction record
+    const txData = {
+      userId: account.userId,
+      tradingAccountId: account._id,
+      tradingAccountName: account.accountId || account.name || '',
+      type: 'Deposit',
+      amount: parseFloat(amount),
+      paymentMethod: 'System',
+      description: reason || 'Admin fund addition to trading account',
+      status: 'Completed',
+      processedAt: new Date()
+    }
+    const transaction = await Transaction.create(txData)
+    
+    // Override createdAt if custom date provided (use raw MongoDB to bypass Mongoose timestamps)
+    if (transactionDate) {
+      await Transaction.collection.updateOne(
+        { _id: transaction._id },
+        { $set: { createdAt: new Date(transactionDate) } }
+      )
+    }
     
     res.json({ 
       success: true,
@@ -211,7 +275,7 @@ router.post('/trading-account/:id/add-fund', async (req, res) => {
 // POST /api/admin/trading-account/:id/deduct - Deduct funds from trading account (Admin only)
 router.post('/trading-account/:id/deduct', async (req, res) => {
   try {
-    const { amount, reason } = req.body
+    const { amount, reason, transactionDate } = req.body
     if (!amount || amount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid amount' })
     }
@@ -228,6 +292,28 @@ router.post('/trading-account/:id/deduct', async (req, res) => {
     
     account.balance = (account.balance || 0) - parseFloat(amount)
     await account.save()
+    
+    // Create transaction record
+    const txData = {
+      userId: account.userId,
+      tradingAccountId: account._id,
+      tradingAccountName: account.accountId || account.name || '',
+      type: 'Withdrawal',
+      amount: parseFloat(amount),
+      paymentMethod: 'System',
+      description: reason || 'Admin deduction from trading account',
+      status: 'Completed',
+      processedAt: new Date()
+    }
+    const transaction = await Transaction.create(txData)
+    
+    // Override createdAt if custom date provided (use raw MongoDB to bypass Mongoose timestamps)
+    if (transactionDate) {
+      await Transaction.collection.updateOne(
+        { _id: transaction._id },
+        { $set: { createdAt: new Date(transactionDate) } }
+      )
+    }
     
     res.json({ 
       success: true,
@@ -331,7 +417,7 @@ router.delete('/users/:id', async (req, res) => {
 // POST /api/admin/trading-account/:id/add-credit - Add credit/bonus to trading account
 router.post('/trading-account/:id/add-credit', async (req, res) => {
   try {
-    const { amount, reason, adminId } = req.body
+    const { amount, reason, adminId, transactionDate } = req.body
     if (!amount || amount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid amount' })
     }
@@ -345,6 +431,28 @@ router.post('/trading-account/:id/add-credit', async (req, res) => {
     const previousCredit = account.credit || 0
     account.credit = previousCredit + parseFloat(amount)
     await account.save()
+    
+    // Create transaction record for credit
+    const txData = {
+      userId: account.userId,
+      tradingAccountId: account._id,
+      tradingAccountName: account.accountId || account.name || '',
+      type: 'Demo_Credit',
+      amount: parseFloat(amount),
+      paymentMethod: 'System',
+      description: reason || 'Admin credit/bonus',
+      status: 'Completed',
+      processedAt: new Date()
+    }
+    const transaction = await Transaction.create(txData)
+    
+    // Override createdAt if custom date provided (use raw MongoDB to bypass Mongoose timestamps)
+    if (transactionDate) {
+      await Transaction.collection.updateOne(
+        { _id: transaction._id },
+        { $set: { createdAt: new Date(transactionDate) } }
+      )
+    }
     
     // Log the credit addition (optional - don't fail if logging fails)
     if (adminId) {
@@ -606,6 +714,58 @@ router.put('/password-reset-requests/:id/process', async (req, res) => {
   } catch (error) {
     console.error('Error processing password reset:', error)
     res.status(500).json({ success: false, message: 'Error processing request', error: error.message })
+  }
+})
+
+// POST /api/admin/create-user - Admin creates a user with optional custom registration date
+router.post('/create-user', async (req, res) => {
+  try {
+    const { firstName, email, phone, countryCode, password, createdAt } = req.body
+
+    if (!firstName || !email || !password) {
+      return res.status(400).json({ success: false, message: 'First name, email, and password are required' })
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' })
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email })
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'User already exists with this email' })
+    }
+
+    // Build user data
+    const userData = {
+      firstName,
+      email,
+      phone: phone || '',
+      countryCode: countryCode || '+1',
+      password
+    }
+
+    // Set custom registration date if provided
+    if (createdAt) {
+      userData.createdAt = new Date(createdAt)
+    }
+
+    const user = await User.create(userData)
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        email: user.email,
+        phone: user.phone,
+        createdAt: user.createdAt
+      }
+    })
+  } catch (error) {
+    console.error('Error creating user:', error)
+    res.status(500).json({ success: false, message: 'Error creating user', error: error.message })
   }
 })
 

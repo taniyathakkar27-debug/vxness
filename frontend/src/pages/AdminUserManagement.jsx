@@ -52,6 +52,7 @@ const AdminUserManagement = () => {
   const [deductReason, setDeductReason] = useState('')
   const [addFundAmount, setAddFundAmount] = useState('')
   const [addFundReason, setAddFundReason] = useState('')
+  const [addFundDate, setAddFundDate] = useState('')
   const [blockReason, setBlockReason] = useState('')
   const [creditAmount, setCreditAmount] = useState('')
   const [creditReason, setCreditReason] = useState('')
@@ -60,6 +61,18 @@ const AdminUserManagement = () => {
   const [accountFundAmount, setAccountFundAmount] = useState('')
   const [accountFundReason, setAccountFundReason] = useState('')
   const [userWalletBalance, setUserWalletBalance] = useState(0)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    firstName: '',
+    email: '',
+    phone: '',
+    countryCode: '+1',
+    password: '',
+    confirmPassword: '',
+    createdAt: ''
+  })
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createMessage, setCreateMessage] = useState({ type: '', text: '' })
   
   const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}')
 
@@ -181,6 +194,7 @@ const AdminUserManagement = () => {
     setDeductReason('')
     setAddFundAmount('')
     setAddFundReason('')
+    setAddFundDate('')
     setBlockReason('')
     setCreditAmount('')
     setCreditReason('')
@@ -245,7 +259,8 @@ const AdminUserManagement = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           amount: parseFloat(deductAmount),
-          reason: deductReason || 'Admin deduction'
+          reason: deductReason || 'Admin deduction',
+          transactionDate: addFundDate || undefined
         })
       })
       
@@ -280,7 +295,8 @@ const AdminUserManagement = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           amount: parseFloat(addFundAmount),
-          reason: addFundReason || 'Admin fund addition'
+          reason: addFundReason || 'Admin fund addition',
+          transactionDate: addFundDate || undefined
         })
       })
       
@@ -402,7 +418,8 @@ const AdminUserManagement = () => {
         body: JSON.stringify({ 
           amount: parseFloat(creditAmount),
           reason: creditReason || 'Admin credit/bonus',
-          adminId: adminUser._id
+          adminId: adminUser._id,
+          transactionDate: addFundDate || undefined
         })
       })
       
@@ -443,7 +460,8 @@ const AdminUserManagement = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           amount: parseFloat(accountFundAmount),
-          reason: accountFundReason || 'Admin fund addition'
+          reason: accountFundReason || 'Admin fund addition',
+          transactionDate: addFundDate || undefined
         })
       })
       
@@ -483,7 +501,8 @@ const AdminUserManagement = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           amount: parseFloat(accountFundAmount),
-          reason: accountFundReason || 'Admin deduction'
+          reason: accountFundReason || 'Admin deduction',
+          transactionDate: addFundDate || undefined
         })
       })
       
@@ -502,6 +521,46 @@ const AdminUserManagement = () => {
       setMessage({ type: 'error', text: 'Error deducting funds from account' })
     }
     setActionLoading(false)
+  }
+
+  const handleCreateUser = async () => {
+    const { firstName, email, password, confirmPassword, phone, countryCode, createdAt } = createForm
+
+    if (!firstName || !email || !password) {
+      setCreateMessage({ type: 'error', text: 'First name, email, and password are required' })
+      return
+    }
+    if (password.length < 6) {
+      setCreateMessage({ type: 'error', text: 'Password must be at least 6 characters' })
+      return
+    }
+    if (password !== confirmPassword) {
+      setCreateMessage({ type: 'error', text: 'Passwords do not match' })
+      return
+    }
+
+    setCreateLoading(true)
+    setCreateMessage({ type: '', text: '' })
+    try {
+      const response = await fetch(`${API_URL}/admin/create-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, email, phone, countryCode, password, createdAt: createdAt || undefined })
+      })
+      const data = await response.json()
+      if (data.success) {
+        toast.success('User created successfully')
+        setShowCreateModal(false)
+        setCreateForm({ firstName: '', email: '', phone: '', countryCode: '+1', password: '', confirmPassword: '', createdAt: '' })
+        setCreateMessage({ type: '', text: '' })
+        fetchUsers()
+      } else {
+        setCreateMessage({ type: 'error', text: data.message || 'Failed to create user' })
+      }
+    } catch (error) {
+      setCreateMessage({ type: 'error', text: 'Error creating user' })
+    }
+    setCreateLoading(false)
   }
 
   const handleLoginAsUser = async () => {
@@ -837,6 +896,19 @@ const AdminUserManagement = () => {
                     className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
                   />
                 </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-1 block">
+                    <Calendar size={14} className="inline mr-1" />
+                    Transaction Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={addFundDate}
+                    onChange={(e) => setAddFundDate(e.target.value)}
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">Leave empty to use current date & time</p>
+                </div>
                 <div className="flex gap-2 pt-2">
                   <button 
                     onClick={() => setModalType('view')}
@@ -887,6 +959,19 @@ const AdminUserManagement = () => {
                     placeholder="Enter reason for adding funds"
                     className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500"
                   />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-1 block">
+                    <Calendar size={14} className="inline mr-1" />
+                    Transaction Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={addFundDate}
+                    onChange={(e) => setAddFundDate(e.target.value)}
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">Leave empty to use current date & time</p>
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button 
@@ -1045,6 +1130,19 @@ const AdminUserManagement = () => {
                     className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                   />
                 </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-1 block">
+                    <Calendar size={14} className="inline mr-1" />
+                    Transaction Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={addFundDate}
+                    onChange={(e) => setAddFundDate(e.target.value)}
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">Leave empty to use current date & time</p>
+                </div>
                 <div className="flex gap-2 pt-2">
                   <button 
                     onClick={() => setModalType('view')}
@@ -1129,6 +1227,19 @@ const AdminUserManagement = () => {
                     className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500"
                   />
                 </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-1 block">
+                    <Calendar size={14} className="inline mr-1" />
+                    Transaction Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={addFundDate}
+                    onChange={(e) => setAddFundDate(e.target.value)}
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">Leave empty to use current date & time</p>
+                </div>
                 <div className="flex gap-2 pt-2">
                   <button 
                     onClick={() => setModalType('view')}
@@ -1179,6 +1290,19 @@ const AdminUserManagement = () => {
                     placeholder="Enter reason"
                     className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
                   />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-1 block">
+                    <Calendar size={14} className="inline mr-1" />
+                    Transaction Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={addFundDate}
+                    onChange={(e) => setAddFundDate(e.target.value)}
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">Leave empty to use current date & time</p>
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button 
@@ -1232,9 +1356,22 @@ const AdminUserManagement = () => {
                     className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500"
                   />
                 </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-1 block">
+                    <Calendar size={14} className="inline mr-1" />
+                    Transaction Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={addFundDate}
+                    onChange={(e) => setAddFundDate(e.target.value)}
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">Leave empty to use current date & time</p>
+                </div>
                 <div className="flex gap-2 pt-2">
                   <button 
-                    onClick={() => { setAccountFundAmount(''); setAccountFundReason(''); setModalType('view'); }}
+                    onClick={() => { setAccountFundAmount(''); setAccountFundReason(''); setAddFundDate(''); setModalType('view'); }}
                     className="flex-1 py-3 bg-dark-700 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors"
                   >
                     Back
@@ -1284,9 +1421,22 @@ const AdminUserManagement = () => {
                     className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
                   />
                 </div>
+                <div>
+                  <label className="text-gray-400 text-sm mb-1 block">
+                    <Calendar size={14} className="inline mr-1" />
+                    Transaction Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={addFundDate}
+                    onChange={(e) => setAddFundDate(e.target.value)}
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">Leave empty to use current date & time</p>
+                </div>
                 <div className="flex gap-2 pt-2">
                   <button 
-                    onClick={() => { setAccountFundAmount(''); setAccountFundReason(''); setModalType('view'); }}
+                    onClick={() => { setAccountFundAmount(''); setAccountFundReason(''); setAddFundDate(''); setModalType('view'); }}
                     className="flex-1 py-3 bg-dark-700 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors"
                   >
                     Back
@@ -1475,6 +1625,13 @@ const AdminUserManagement = () => {
             >
               <RefreshCw size={18} className={`text-gray-400 ${loading ? 'animate-spin' : ''}`} />
               <span className="sm:hidden text-gray-400 text-sm">Refresh</span>
+            </button>
+            <button 
+              onClick={() => { setShowCreateModal(true); setCreateMessage({ type: '', text: '' }); setCreateForm({ firstName: '', email: '', phone: '', countryCode: '+1', password: '', confirmPassword: '', createdAt: '' }) }}
+              className="flex items-center gap-2 px-4 py-2 bg-accent-green text-black rounded-lg hover:bg-green-600 transition-colors font-medium text-sm"
+            >
+              <Plus size={18} />
+              <span>Create User</span>
             </button>
           </div>
         </div>
@@ -1702,6 +1859,139 @@ const AdminUserManagement = () => {
 
       {/* Modal */}
       {renderModal()}
+
+      {/* Create User Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-dark-800 rounded-2xl w-full max-w-md border border-gray-700 overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-accent-green/20 rounded-full flex items-center justify-center">
+                  <Plus size={20} className="text-accent-green" />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">Create New User</h3>
+                  <p className="text-gray-500 text-sm">Add a user with custom registration date</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowCreateModal(false)}
+                className="p-2 hover:bg-dark-700 rounded-lg transition-colors"
+              >
+                <X size={18} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {createMessage.text && (
+                <div className={`p-3 rounded-lg flex items-center gap-2 ${
+                  createMessage.type === 'success' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'
+                }`}>
+                  {createMessage.type === 'success' ? <Check size={18} /> : <AlertTriangle size={18} />}
+                  <span className="text-sm">{createMessage.text}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="text-gray-400 text-sm mb-1 block">First Name *</label>
+                <input
+                  type="text"
+                  value={createForm.firstName}
+                  onChange={(e) => setCreateForm({ ...createForm, firstName: e.target.value })}
+                  placeholder="Enter first name"
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-green"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-sm mb-1 block">Email *</label>
+                <input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  placeholder="Enter email address"
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-green"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-gray-400 text-sm mb-1 block">Code</label>
+                  <input
+                    type="text"
+                    value={createForm.countryCode}
+                    onChange={(e) => setCreateForm({ ...createForm, countryCode: e.target.value })}
+                    placeholder="+1"
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-green"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-gray-400 text-sm mb-1 block">Phone</label>
+                  <input
+                    type="text"
+                    value={createForm.phone}
+                    onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                    placeholder="Enter phone number"
+                    className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-green"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-sm mb-1 block">Password *</label>
+                <input
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                  placeholder="Min 6 characters"
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-green"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-sm mb-1 block">Confirm Password *</label>
+                <input
+                  type="password"
+                  value={createForm.confirmPassword}
+                  onChange={(e) => setCreateForm({ ...createForm, confirmPassword: e.target.value })}
+                  placeholder="Confirm password"
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-green"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-sm mb-1 block">
+                  <Calendar size={14} className="inline mr-1" />
+                  Registration Date (Optional)
+                </label>
+                <input
+                  type="date"
+                  value={createForm.createdAt}
+                  onChange={(e) => setCreateForm({ ...createForm, createdAt: e.target.value })}
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-green"
+                />
+                <p className="text-gray-500 text-xs mt-1">Leave empty to use current date & time</p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button 
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 py-3 bg-dark-700 text-gray-400 rounded-lg hover:bg-dark-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleCreateUser}
+                  disabled={createLoading}
+                  className="flex-1 py-3 bg-accent-green text-black rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 font-medium"
+                >
+                  {createLoading ? 'Creating...' : 'Create User'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }
