@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import User from '../models/User.js'
 import Transaction from '../models/Transaction.js'
 import Trade from '../models/Trade.js'
+import CreditRequest from '../models/CreditRequest.js'
 import { sendTemplateEmail } from '../services/emailService.js'
 import EmailSettings from '../models/EmailSettings.js'
 
@@ -766,6 +767,106 @@ router.post('/create-user', async (req, res) => {
   } catch (error) {
     console.error('Error creating user:', error)
     res.status(500).json({ success: false, message: 'Error creating user', error: error.message })
+  }
+})
+
+// ==================== CREDIT DEPOSIT REQUESTS (ADMIN) ====================
+
+// GET /api/admin/credit-requests - Get all credit requests
+router.get('/credit-requests', async (req, res) => {
+  try {
+    const requests = await CreditRequest.find()
+      .populate('userId', 'firstName email phone')
+      .populate('tradingAccountId', 'accountId balance credit')
+      .sort({ createdAt: -1 })
+    
+    res.json({ success: true, requests })
+  } catch (error) {
+    console.error('Error fetching credit requests:', error)
+    res.status(500).json({ success: false, message: 'Error fetching credit requests', error: error.message })
+  }
+})
+
+// PUT /api/admin/credit-requests/:id/approve - Approve a credit request
+router.put('/credit-requests/:id/approve', async (req, res) => {
+  try {
+    const { adminId } = req.body
+    const creditRequest = await CreditRequest.findById(req.params.id)
+    if (!creditRequest) {
+      return res.status(404).json({ success: false, message: 'Credit request not found' })
+    }
+    if (creditRequest.status !== 'Pending') {
+      return res.status(400).json({ success: false, message: 'Request has already been processed' })
+    }
+
+    const TradingAccount = (await import('../models/TradingAccount.js')).default
+    const account = await TradingAccount.findById(creditRequest.tradingAccountId)
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Trading account not found' })
+    }
+
+    // Add credit to the trading account
+    const previousCredit = account.credit || 0
+    account.credit = previousCredit + creditRequest.amount
+    await account.save()
+
+    // Create transaction record
+    const txData = {
+      userId: creditRequest.userId,
+      tradingAccountId: account._id,
+      tradingAccountName: account.accountId || '',
+      type: 'Demo_Credit',
+      amount: creditRequest.amount,
+      paymentMethod: 'System',
+      description: `Credit request approved: ${creditRequest.reason || 'User credit deposit request'}`,
+      status: 'Completed',
+      processedAt: new Date()
+    }
+    await Transaction.create(txData)
+
+    // Update request status
+    creditRequest.status = 'Approved'
+    creditRequest.processedBy = adminId || null
+    creditRequest.processedAt = new Date()
+    await creditRequest.save()
+
+    res.json({
+      success: true,
+      message: 'Credit request approved and credit added to account',
+      previousCredit,
+      newCredit: account.credit
+    })
+  } catch (error) {
+    console.error('Error approving credit request:', error)
+    res.status(500).json({ success: false, message: 'Error approving credit request', error: error.message })
+  }
+})
+
+// PUT /api/admin/credit-requests/:id/reject - Reject a credit request
+router.put('/credit-requests/:id/reject', async (req, res) => {
+  try {
+    const { adminId, adminNote } = req.body
+    const creditRequest = await CreditRequest.findById(req.params.id)
+    if (!creditRequest) {
+      return res.status(404).json({ success: false, message: 'Credit request not found' })
+    }
+    if (creditRequest.status !== 'Pending') {
+      return res.status(400).json({ success: false, message: 'Request has already been processed' })
+    }
+
+    creditRequest.status = 'Rejected'
+    creditRequest.adminNote = adminNote || ''
+    creditRequest.processedBy = adminId || null
+    creditRequest.processedAt = new Date()
+    await creditRequest.save()
+
+    res.json({
+      success: true,
+      message: 'Credit request rejected'
+    })
+  } catch (error) {
+    console.error('Error rejecting credit request:', error)
+    res.status(500).json({ success: false, message: 'Error rejecting credit request', error: error.message })
   }
 })
 

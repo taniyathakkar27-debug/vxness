@@ -46,6 +46,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
     { name: 'User Management', icon: Users, path: '/admin/users' },
     { name: 'Trade Management', icon: TrendingUp, path: '/admin/trades' },
     { name: 'Fund Management', icon: Wallet, path: '/admin/funds' },
+    { name: 'Credit Requests', icon: Gift, path: '/admin/credit-requests' },
     { name: 'Bank Settings', icon: Building2, path: '/admin/bank-settings' },
     { name: 'IB Management', icon: UserCog, path: '/admin/ib-management' },
     { name: 'Forex Charges', icon: DollarSign, path: '/admin/forex-charges' },

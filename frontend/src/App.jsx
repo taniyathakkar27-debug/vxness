@@ -41,6 +41,7 @@ import BrandedLogin from './pages/BrandedLogin'
 import BrandedSignup from './pages/BrandedSignup'
 import AdminEmailTemplates from './pages/AdminEmailTemplates'
 import AdminBonusManagement from './pages/AdminBonusManagement'
+import AdminCreditRequests from './pages/AdminCreditRequests'
 import AdminTechnicalAnalysis from './pages/AdminTechnicalAnalysis'
 import LandingPage from './pages/LandingPage'
 import InvestorLogin from './pages/InvestorLogin'
@@ -93,6 +94,7 @@ function App() {
         <Route path="/admin/theme" element={<AdminThemeSettings />} />
         <Route path="/admin/email-templates" element={<AdminEmailTemplates />} />
         <Route path="/admin/bonus-management" element={<AdminBonusManagement />} />
+        <Route path="/admin/credit-requests" element={<AdminCreditRequests />} />
         <Route path="/admin/technical-analysis" element={<AdminTechnicalAnalysis />} />
         <Route path="/admin/investor-access" element={<AdminInvestorAccess />} />
         <Route path="/admin/margin-alerts" element={<AdminMarginAlerts />} />

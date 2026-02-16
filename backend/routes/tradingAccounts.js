@@ -3,6 +3,7 @@ import TradingAccount from '../models/TradingAccount.js'
 import AccountType from '../models/AccountType.js'
 import Wallet from '../models/Wallet.js'
 import Transaction from '../models/Transaction.js'
+import CreditRequest from '../models/CreditRequest.js'
 
 const router = express.Router()
 
@@ -671,6 +672,65 @@ router.post('/investor-login', async (req, res) => {
     })
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error logging in', error: error.message })
+  }
+})
+
+// ==================== CREDIT DEPOSIT REQUESTS ====================
+
+// POST /api/trading-accounts/credit-request - User submits a credit deposit request
+router.post('/credit-request', async (req, res) => {
+  try {
+    const { userId, tradingAccountId, amount, reason } = req.body
+    
+    if (!userId || !tradingAccountId || !amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'User ID, trading account, and valid amount are required' })
+    }
+
+    const account = await TradingAccount.findById(tradingAccountId)
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Trading account not found' })
+    }
+
+    // Check for existing pending request for same account
+    const existingPending = await CreditRequest.findOne({
+      userId,
+      tradingAccountId,
+      status: 'Pending'
+    })
+    if (existingPending) {
+      return res.status(400).json({ success: false, message: 'You already have a pending credit request for this account' })
+    }
+
+    const creditRequest = await CreditRequest.create({
+      userId,
+      tradingAccountId,
+      tradingAccountName: account.accountId || '',
+      amount: parseFloat(amount),
+      reason: reason || ''
+    })
+
+    res.status(201).json({
+      success: true,
+      message: 'Credit deposit request submitted successfully',
+      creditRequest
+    })
+  } catch (error) {
+    console.error('Error creating credit request:', error)
+    res.status(500).json({ success: false, message: 'Error submitting credit request', error: error.message })
+  }
+})
+
+// GET /api/trading-accounts/credit-requests/:userId - Get user's credit requests
+router.get('/credit-requests/:userId', async (req, res) => {
+  try {
+    const requests = await CreditRequest.find({ userId: req.params.userId })
+      .populate('tradingAccountId', 'accountId balance credit')
+      .sort({ createdAt: -1 })
+    
+    res.json({ success: true, requests })
+  } catch (error) {
+    console.error('Error fetching credit requests:', error)
+    res.status(500).json({ success: false, message: 'Error fetching credit requests', error: error.message })
   }
 })
 

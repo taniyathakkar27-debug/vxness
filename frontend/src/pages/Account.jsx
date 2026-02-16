@@ -29,7 +29,11 @@ import {
   ArrowLeft,
   Home,
   Sun,
-  Moon
+  Moon,
+  Gift,
+  Clock,
+  CheckCircle,
+  XCircle
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { API_URL } from '../config/api'
@@ -78,6 +82,11 @@ const Account = () => {
   const [success, setSuccess] = useState('')
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [createAccountTab, setCreateAccountTab] = useState('live')
+  const [showCreditRequestModal, setShowCreditRequestModal] = useState(false)
+  const [creditRequestAmount, setCreditRequestAmount] = useState('')
+  const [creditRequestReason, setCreditRequestReason] = useState('')
+  const [creditRequests, setCreditRequests] = useState([])
+  const [creditRequestLoading, setCreditRequestLoading] = useState(false)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768)
@@ -121,6 +130,7 @@ const Account = () => {
       fetchUserAccounts()
       fetchWalletBalance()
       fetchChallengeAccounts()
+      fetchCreditRequests()
     } else {
       setLoading(false)
     }
@@ -570,6 +580,61 @@ const Account = () => {
     }
   }
 
+  // Credit Request Functions
+  const fetchCreditRequests = async () => {
+    try {
+      const res = await fetch(`${API_URL}/trading-accounts/credit-requests/${user._id}`)
+      const data = await res.json()
+      if (data.success) {
+        setCreditRequests(data.requests || [])
+      }
+    } catch (error) {
+      console.error('Error fetching credit requests:', error)
+    }
+  }
+
+  const handleSubmitCreditRequest = async () => {
+    if (!creditRequestAmount || parseFloat(creditRequestAmount) <= 0) {
+      setError('Please enter a valid amount')
+      return
+    }
+    if (!selectedAccount) {
+      setError('No account selected')
+      return
+    }
+
+    setCreditRequestLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`${API_URL}/trading-accounts/credit-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user._id,
+          tradingAccountId: selectedAccount._id,
+          amount: parseFloat(creditRequestAmount),
+          reason: creditRequestReason || ''
+        })
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        toast.success('Credit deposit request submitted successfully!')
+        setCreditRequestAmount('')
+        setCreditRequestReason('')
+        setShowCreditRequestModal(false)
+        setSelectedAccount(null)
+        fetchCreditRequests()
+      } else {
+        setError(data.message || 'Failed to submit request')
+      }
+    } catch (error) {
+      console.error('Error submitting credit request:', error)
+      setError('Error submitting credit request')
+    }
+    setCreditRequestLoading(false)
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
@@ -989,6 +1054,12 @@ const Account = () => {
                           className={`flex-1 flex items-center justify-center gap-1 ${isMobile ? 'py-2 text-xs' : 'py-3'} text-blue-400 hover:text-blue-300 transition-colors border-l ${isDarkMode ? 'hover:bg-dark-700 border-gray-800' : 'hover:bg-gray-100 border-gray-200'}`}
                         >
                           <Copy size={isMobile ? 12 : 16} /> Transfer
+                        </button>
+                        <button
+                          onClick={() => { setSelectedAccount(account); setShowCreditRequestModal(true); setError(''); }}
+                          className={`flex-1 flex items-center justify-center gap-1 ${isMobile ? 'py-2 text-xs' : 'py-3'} text-purple-400 hover:text-purple-300 transition-colors border-l ${isDarkMode ? 'hover:bg-dark-700 border-gray-800' : 'hover:bg-gray-100 border-gray-200'}`}
+                        >
+                          <Gift size={isMobile ? 12 : 16} /> Credit
                         </button>
                       </>
                     )}
@@ -1759,6 +1830,134 @@ const Account = () => {
                 Delete Forever
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Credit Deposit Request Modal */}
+      {showCreditRequestModal && selectedAccount && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl p-6 w-full max-w-md border ${isDarkMode ? 'bg-dark-800 border-gray-700' : 'bg-white border-gray-300'}`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Gift size={20} className="text-purple-400" />
+                <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Request Credit Deposit</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowCreditRequestModal(false)
+                  setCreditRequestAmount('')
+                  setCreditRequestReason('')
+                  setSelectedAccount(null)
+                  setError('')
+                }}
+                className={isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="bg-purple-500/10 border border-purple-500/30 p-3 rounded-lg mb-4">
+              <p className="text-purple-400 text-sm">
+                Credit adds to your equity for trading but cannot be withdrawn. Submit a request and the admin will review it.
+              </p>
+            </div>
+
+            <div className={`p-3 rounded-lg mb-4 ${isDarkMode ? 'bg-dark-700' : 'bg-gray-100'}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-500/20 rounded flex items-center justify-center">
+                  <TrendingUp size={16} className="text-blue-500" />
+                </div>
+                <div>
+                  <p className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{selectedAccount.accountId}</p>
+                  <p className="text-gray-500 text-xs">{selectedAccount.accountTypeId?.name || 'STANDARD'}</p>
+                </div>
+              </div>
+              <div className="flex justify-between text-sm mt-3 pt-3 border-t border-gray-600">
+                <span className="text-gray-400">Current Credit:</span>
+                <span className="text-purple-400 font-medium">${(selectedAccount.credit || 0).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Credit Amount ($)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={creditRequestAmount}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/,/g, '.')
+                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                    setCreditRequestAmount(val)
+                  }
+                }}
+                placeholder="Enter credit amount"
+                className={`w-full border rounded-lg px-4 py-3 placeholder-gray-500 focus:outline-none focus:border-purple-500 ${isDarkMode ? 'bg-dark-700 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Reason (Optional)</label>
+              <input
+                type="text"
+                value={creditRequestReason}
+                onChange={(e) => setCreditRequestReason(e.target.value)}
+                placeholder="e.g., Trading bonus, Promotion"
+                className={`w-full border rounded-lg px-4 py-3 placeholder-gray-500 focus:outline-none focus:border-purple-500 ${isDarkMode ? 'bg-dark-700 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
+              />
+            </div>
+
+            {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowCreditRequestModal(false)
+                  setCreditRequestAmount('')
+                  setCreditRequestReason('')
+                  setSelectedAccount(null)
+                  setError('')
+                }}
+                className={`flex-1 py-3 rounded-lg transition-colors ${isDarkMode ? 'bg-dark-700 text-white hover:bg-dark-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitCreditRequest}
+                disabled={creditRequestLoading}
+                className="flex-1 py-3 bg-purple-500 text-white font-medium rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50"
+              >
+                {creditRequestLoading ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+
+            {/* Recent Credit Requests */}
+            {creditRequests.filter(r => r.tradingAccountId?._id === selectedAccount._id || r.tradingAccountId === selectedAccount._id).length > 0 && (
+              <div className="mt-5 pt-4 border-t border-gray-700">
+                <h4 className={`text-sm font-medium mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Your Recent Requests</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {creditRequests
+                    .filter(r => r.tradingAccountId?._id === selectedAccount._id || r.tradingAccountId === selectedAccount._id)
+                    .slice(0, 5)
+                    .map(req => (
+                      <div key={req._id} className={`flex items-center justify-between p-2 rounded-lg text-sm ${isDarkMode ? 'bg-dark-700' : 'bg-gray-100'}`}>
+                        <div className="flex items-center gap-2">
+                          {req.status === 'Pending' && <Clock size={14} className="text-yellow-400" />}
+                          {req.status === 'Approved' && <CheckCircle size={14} className="text-green-400" />}
+                          {req.status === 'Rejected' && <XCircle size={14} className="text-red-400" />}
+                          <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>${req.amount.toLocaleString()}</span>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          req.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                          req.status === 'Approved' ? 'bg-green-500/20 text-green-400' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
+                          {req.status}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
