@@ -1,4 +1,5 @@
 import express from 'express'
+import mongoose from 'mongoose'
 import Wallet from '../models/Wallet.js'
 import Transaction from '../models/Transaction.js'
 import TradingAccount from '../models/TradingAccount.js'
@@ -579,6 +580,76 @@ router.put('/transaction/:id/reject', async (req, res) => {
     res.json({ message: 'Transaction rejected', transaction })
   } catch (error) {
     res.status(500).json({ message: 'Error rejecting transaction', error: error.message })
+  }
+})
+
+// DELETE /api/wallet/transaction/:id - Delete a transaction (admin only)
+router.delete('/transaction/:id', async (req, res) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id)
+    
+    if (!transaction) {
+      return res.status(404).json({ message: 'Transaction not found' })
+    }
+
+    // If transaction was approved, we need to reverse the balance changes
+    if (transaction.status === 'Approved' || transaction.status === 'Completed') {
+      const wallet = await Wallet.findById(transaction.walletId)
+      if (wallet) {
+        if (transaction.type === 'Deposit') {
+          // Reverse deposit - subtract from balance
+          wallet.balance -= (transaction.totalAmount || transaction.amount)
+        } else if (transaction.type === 'Withdrawal') {
+          // Reverse withdrawal - add back to balance
+          wallet.balance += transaction.amount
+        }
+        await wallet.save()
+      }
+    } else if (transaction.status === 'Pending') {
+      // If pending, just update pending amounts
+      const wallet = await Wallet.findById(transaction.walletId)
+      if (wallet) {
+        if (transaction.type === 'Deposit') {
+          wallet.pendingDeposits -= transaction.amount
+        } else if (transaction.type === 'Withdrawal') {
+          wallet.balance += transaction.amount
+          wallet.pendingWithdrawals -= transaction.amount
+        }
+        await wallet.save()
+      }
+    }
+
+    await Transaction.findByIdAndDelete(req.params.id)
+    
+    res.json({ message: 'Transaction deleted successfully' })
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting transaction', error: error.message })
+  }
+})
+
+// PUT /api/wallet/transaction/:id/date - Update transaction date
+router.put('/transaction/:id/date', async (req, res) => {
+  try {
+    const { date } = req.body
+    
+    if (!date) {
+      return res.status(400).json({ message: 'Date is required' })
+    }
+
+    // Use direct MongoDB updateOne to bypass Mongoose timestamps protection
+    const result = await Transaction.collection.updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      { $set: { createdAt: new Date(date) } }
+    )
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Transaction not found' })
+    }
+    
+    const transaction = await Transaction.findById(req.params.id)
+    res.json({ message: 'Transaction date updated', transaction })
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating transaction date', error: error.message })
   }
 })
 
