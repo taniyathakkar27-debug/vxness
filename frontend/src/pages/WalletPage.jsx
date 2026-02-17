@@ -34,9 +34,6 @@ import {
   Sun,
   Moon,
   Gift,
-  Pencil,
-  Trash2,
-  Calendar
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { API_URL } from '../config/api'
@@ -72,10 +69,6 @@ const WalletPage = () => {
   const [bonusInfo, setBonusInfo] = useState(null)
   const [calculatingBonus, setCalculatingBonus] = useState(false)
   const fileInputRef = useRef(null)
-  const [showEditDateModal, setShowEditDateModal] = useState(false)
-  const [editingTransaction, setEditingTransaction] = useState(null)
-  const [editDate, setEditDate] = useState('')
-  const [editTime, setEditTime] = useState('')
 
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
@@ -129,68 +122,6 @@ const WalletPage = () => {
     a.href = url
     a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
-  }
-
-  // Delete transaction
-  const handleDeleteTransaction = async (txId) => {
-    if (!window.confirm('Are you sure you want to delete this transaction? This action cannot be undone.')) {
-      return
-    }
-    
-    try {
-      const res = await fetch(`${API_URL}/wallet/transaction/${txId}`, {
-        method: 'DELETE'
-      })
-      const data = await res.json()
-      
-      if (res.ok) {
-        toast.success('Transaction deleted successfully')
-        fetchTransactions()
-        fetchWallet()
-      } else {
-        toast.error(data.message || 'Failed to delete transaction')
-      }
-    } catch (error) {
-      toast.error('Error deleting transaction')
-    }
-  }
-
-  // Open edit date modal
-  const openEditDateModal = (tx) => {
-    setEditingTransaction(tx)
-    const date = new Date(tx.createdAt)
-    setEditDate(date.toISOString().split('T')[0])
-    setEditTime(date.toTimeString().slice(0, 5))
-    setShowEditDateModal(true)
-  }
-
-  // Save edited date
-  const handleSaveDate = async () => {
-    if (!editDate || !editTime) {
-      toast.error('Please select date and time')
-      return
-    }
-    
-    try {
-      const newDate = new Date(`${editDate}T${editTime}:00`)
-      const res = await fetch(`${API_URL}/wallet/transaction/${editingTransaction._id}/date`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: newDate.toISOString() })
-      })
-      const data = await res.json()
-      
-      if (res.ok) {
-        toast.success('Date updated successfully')
-        setShowEditDateModal(false)
-        setEditingTransaction(null)
-        fetchTransactions()
-      } else {
-        toast.error(data.message || 'Failed to update date')
-      }
-    } catch (error) {
-      toast.error('Error updating date')
-    }
   }
 
   useEffect(() => {
@@ -683,7 +614,6 @@ const WalletPage = () => {
                       <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Method</th>
                       <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Status</th>
                       <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Date</th>
-                      <th className="text-right text-gray-500 text-sm font-medium py-3 px-4">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -763,24 +693,6 @@ const WalletPage = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4 text-gray-400 text-sm">{formatDate(tx.createdAt)}</td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => openEditDateModal(tx)}
-                              className="p-1.5 rounded-lg hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-colors"
-                              title="Edit Date"
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTransaction(tx._id)}
-                              className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1148,85 +1060,6 @@ const WalletPage = () => {
                 className="flex-1 bg-accent-green text-black font-medium py-3 rounded-lg hover:bg-accent-green/90 transition-colors"
               >
                 Submit Withdrawal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Date Modal */}
-      {showEditDateModal && editingTransaction && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className={`rounded-xl p-6 w-full max-w-md border ${isDarkMode ? 'bg-dark-800 border-gray-700' : 'bg-white border-gray-300'}`}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className={`font-semibold text-lg flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                <Calendar size={20} className="text-blue-400" />
-                Edit Transaction Date
-              </h3>
-              <button 
-                onClick={() => {
-                  setShowEditDateModal(false)
-                  setEditingTransaction(null)
-                }}
-                className={isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={editDate}
-                  onChange={(e) => setEditDate(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isDarkMode 
-                      ? 'bg-dark-700 border-gray-600 text-white [&::-webkit-calendar-picker-indicator]:invert' 
-                      : 'bg-gray-50 border-gray-300 text-gray-900'
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Time
-                </label>
-                <input
-                  type="time"
-                  value={editTime}
-                  onChange={(e) => setEditTime(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isDarkMode 
-                      ? 'bg-dark-700 border-gray-600 text-white [&::-webkit-calendar-picker-indicator]:invert' 
-                      : 'bg-gray-50 border-gray-300 text-gray-900'
-                  }`}
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowEditDateModal(false)
-                  setEditingTransaction(null)
-                }}
-                className={`flex-1 py-3 rounded-lg transition-colors ${
-                  isDarkMode 
-                    ? 'bg-dark-700 text-white hover:bg-dark-600' 
-                    : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveDate}
-                className="flex-1 bg-blue-500 text-white font-medium py-3 rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                Save
               </button>
             </div>
           </div>
