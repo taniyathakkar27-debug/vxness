@@ -1134,9 +1134,9 @@ const AdminTradeManagement = () => {
 
                     <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Open Price</th>
 
-                    <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Date</th>
+                    <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Opened</th>
 
-                    <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Time</th>
+                    <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Closed</th>
 
                     <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">P&L</th>
 
@@ -1184,27 +1184,23 @@ const AdminTradeManagement = () => {
 
                       <td className="py-4 px-4 text-gray-400 text-sm">
 
-                        {(trade.openedAt || trade.createdAt) ? new Date(trade.openedAt || trade.createdAt).toLocaleDateString('en-IN', { 
-
-                          day: '2-digit', 
-
-                          month: 'short', 
-
-                          year: 'numeric'
-
-                        }) : '-'}
+                        {(trade.openedAt || trade.createdAt) ? (
+                          <>
+                            <div>{new Date(trade.openedAt || trade.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            <div className="text-xs">{new Date(trade.openedAt || trade.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </>
+                        ) : '-'}
 
                       </td>
 
                       <td className="py-4 px-4 text-gray-400 text-sm">
 
-                        {(trade.openedAt || trade.createdAt) ? new Date(trade.openedAt || trade.createdAt).toLocaleTimeString('en-IN', { 
-
-                          hour: '2-digit', 
-
-                          minute: '2-digit'
-
-                        }) : '-'}
+                        {trade.status === 'CLOSED' && trade.closedAt ? (
+                          <>
+                            <div>{new Date(trade.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            <div className="text-xs">{new Date(trade.closedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </>
+                        ) : '-'}
 
                       </td>
 

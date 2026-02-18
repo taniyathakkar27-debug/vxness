@@ -308,6 +308,10 @@ router.put('/edit/:tradeId', async (req, res) => {
 
     
 
+    // Store old PnL for balance adjustment
+    const oldPnl = trade.realizedPnl || 0
+    const wasAlreadyClosed = trade.status === 'CLOSED'
+
     // If close price is set, update P&L and potentially close the trade
 
     if (closePrice !== undefined && closePrice !== null && closePrice !== '') {
@@ -338,8 +342,15 @@ router.put('/edit/:tradeId', async (req, res) => {
 
       
 
-      // If trade was open, close it and update account balance
+      // Get account for balance update
+      let account = null
+      if (trade.accountType === 'ChallengeAccount' || trade.isChallengeAccount) {
+        account = await ChallengeAccount.findById(trade.tradingAccountId)
+      } else {
+        account = await TradingAccount.findById(trade.tradingAccountId)
+      }
 
+      // If trade was open, close it and add full PnL
       if (trade.status === 'OPEN') {
 
         trade.status = 'CLOSED'
@@ -348,39 +359,22 @@ router.put('/edit/:tradeId', async (req, res) => {
 
         trade.closedAt = new Date()
 
-        
-
-        // Update account balance with P&L - handle both account types
-
-        let account = null
-
-        if (trade.accountType === 'ChallengeAccount' || trade.isChallengeAccount) {
-
-          account = await ChallengeAccount.findById(trade.tradingAccountId)
-
-        } else {
-
-          account = await TradingAccount.findById(trade.tradingAccountId)
-
-        }
-
         if (account) {
-
           account.balance += trade.realizedPnl
-
           if (account.balance < 0) account.balance = 0
-
           await account.save()
-
         }
 
+      } else if (wasAlreadyClosed && account) {
+        // Trade was already closed - adjust balance by difference
+        account.balance = account.balance - oldPnl + trade.realizedPnl
+        if (account.balance < 0) account.balance = 0
+        await account.save()
       }
 
     } else if (realizedPnl !== undefined && realizedPnl !== null) {
 
       // Just update P&L without closing
-
-      const oldPnl = trade.realizedPnl || 0
 
       trade.realizedPnl = realizedPnl
 
