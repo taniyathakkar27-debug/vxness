@@ -99,7 +99,9 @@ const AdminTradeManagement = () => {
 
     realizedPnl: 0,
 
-    openedAt: ''
+    openedAt: '',
+
+    closedAt: ''
 
   })
 
@@ -539,7 +541,9 @@ const AdminTradeManagement = () => {
 
           realizedPnl: editForm.realizedPnl ? parseFloat(editForm.realizedPnl) : null,
 
-          openedAt: editForm.openedAt ? new Date(editForm.openedAt).toISOString() : null
+          openedAt: editForm.openedAt ? new Date(editForm.openedAt).toISOString() : null,
+
+          closedAt: editForm.closedAt ? new Date(editForm.closedAt).toISOString() : null
 
         })
 
@@ -667,6 +671,18 @@ const AdminTradeManagement = () => {
 
     const openTimeFormatted = `${year}-${month}-${day}T${hours}:${minutes}`
 
+    // Format closedAt if exists
+    let closedAtFormatted = ''
+    if (trade.closedAt) {
+      const closedDateObj = new Date(trade.closedAt)
+      const cYear = closedDateObj.getFullYear()
+      const cMonth = String(closedDateObj.getMonth() + 1).padStart(2, '0')
+      const cDay = String(closedDateObj.getDate()).padStart(2, '0')
+      const cHours = String(closedDateObj.getHours()).padStart(2, '0')
+      const cMinutes = String(closedDateObj.getMinutes()).padStart(2, '0')
+      closedAtFormatted = `${cYear}-${cMonth}-${cDay}T${cHours}:${cMinutes}`
+    }
+
     setEditForm({
 
       openPrice: trade.openPrice || 0,
@@ -681,7 +697,9 @@ const AdminTradeManagement = () => {
 
       realizedPnl: trade.realizedPnl || 0,
 
-      openedAt: openTimeFormatted
+      openedAt: openTimeFormatted,
+
+      closedAt: closedAtFormatted
 
     })
 
@@ -1960,6 +1978,17 @@ const AdminTradeManagement = () => {
 
                   </div>
 
+                </div>
+
+                {/* Close Date & Time */}
+                <div className="mt-4">
+                  <label className="block text-gray-400 text-sm mb-1">Close Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={editForm.closedAt}
+                    onChange={(e) => setEditForm({ ...editForm, closedAt: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-lg text-white"
+                  />
                 </div>
 
                 {/* Calculate Button - moved below for better UX */}

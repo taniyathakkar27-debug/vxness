@@ -260,7 +260,7 @@ router.put('/edit/:tradeId', async (req, res) => {
 
     const { tradeId } = req.params
 
-    const { openPrice, closePrice, quantity, stopLoss, takeProfit, realizedPnl, openedAt } = req.body
+    const { openPrice, closePrice, quantity, stopLoss, takeProfit, realizedPnl, openedAt, closedAt } = req.body
 
 
 
@@ -305,6 +305,8 @@ router.put('/edit/:tradeId', async (req, res) => {
     if (takeProfit !== undefined) trade.takeProfit = takeProfit
 
     if (openedAt !== undefined && openedAt !== null) trade.openedAt = new Date(openedAt)
+
+    if (closedAt !== undefined && closedAt !== null) trade.closedAt = new Date(closedAt)
 
     
 
