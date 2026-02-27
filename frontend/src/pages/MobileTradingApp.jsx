@@ -28,6 +28,7 @@ const MobileTradingApp = () => {
   const [openTrades, setOpenTrades] = useState([])
   const [pendingOrders, setPendingOrders] = useState([])
   const [tradeHistory, setTradeHistory] = useState([])
+  const [transactions, setTransactions] = useState([])
   const [instruments, setInstruments] = useState([])
   const [livePrices, setLivePrices] = useState({})
   const [loading, setLoading] = useState(true)
@@ -122,6 +123,7 @@ const MobileTradingApp = () => {
       fetchOpenTrades()
       fetchPendingOrders()
       fetchTradeHistory()
+      fetchTransactions()
       fetchAccountSummary()
       const interval = setInterval(() => {
         fetchOpenTrades()
@@ -296,6 +298,18 @@ const MobileTradingApp = () => {
       const data = await res.json()
       if (data.success) setTradeHistory(data.trades || [])
     } catch (e) {}
+  }
+
+  const fetchTransactions = async () => {
+    if (!user) return
+    try {
+      const res = await fetch(`${API_URL}/wallet/transactions/${user._id}`)
+      const data = await res.json()
+      // API returns { transactions } not { success, transactions }
+      setTransactions(data.transactions || [])
+    } catch (e) {
+      console.error('Error fetching transactions:', e)
+    }
   }
 
   const fetchAccountSummary = async () => {
@@ -937,6 +951,7 @@ const MobileTradingApp = () => {
                             </span>
                           </div>
                           <p className="text-gray-500 text-xs">{trade.quantity} lots @ {trade.openPrice?.toFixed(5)}</p>
+                          <p className="text-gray-600 text-[10px]">{trade.openedAt || trade.createdAt ? new Date(trade.openedAt || trade.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -967,6 +982,10 @@ const MobileTradingApp = () => {
                           <div>
                             <p className="text-gray-500">Current Price</p>
                             <p className="text-white">{currentPrice?.toFixed(5) || '-'}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Open Time</p>
+                            <p className="text-white">{trade.openedAt || trade.createdAt ? new Date(trade.openedAt || trade.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
                           </div>
                           <div>
                             <p className="text-gray-500">Volume</p>
@@ -1081,39 +1100,96 @@ const MobileTradingApp = () => {
         )}
 
         {tradeTab === 'history' && (
-          tradeHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <FileText size={48} className="mb-2 opacity-50" />
-              <p>No trade history</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-800">
-              {tradeHistory.map(trade => (
-                <div key={trade._id} className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-medium">{trade.symbol}</span>
-                      <span className={`text-xs ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>
-                        {trade.side}
-                      </span>
-                      {trade.closedBy === 'ADMIN' && (
-                        <span className="text-xs bg-yellow-500/20 text-yellow-500 px-1.5 py-0.5 rounded">
-                          Admin Close
-                        </span>
-                      )}
-                    </div>
-                    <span className={`font-semibold ${trade.realizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {trade.realizedPnl >= 0 ? '+' : ''}${trade.realizedPnl?.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>{trade.quantity} lots</span>
-                    <span>{new Date(trade.closedAt).toLocaleDateString()}</span>
-                  </div>
+          <div className="divide-y divide-gray-800">
+            {/* Transactions Section */}
+            {transactions.length > 0 && (
+              <>
+                <div className="px-4 py-2 bg-dark-800 sticky top-0">
+                  <p className="text-gray-400 text-xs font-medium">Recent Transactions</p>
                 </div>
-              ))}
-            </div>
-          )
+                {transactions.slice(0, 5).map(txn => (
+                  <div key={txn._id} className="p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        txn.type === 'DEPOSIT' ? 'bg-green-500/20' : 
+                        txn.type === 'WITHDRAWAL' ? 'bg-red-500/20' : 'bg-blue-500/20'
+                      }`}>
+                        {txn.type === 'DEPOSIT' ? <ArrowDownCircle size={16} className="text-green-500" /> :
+                         txn.type === 'WITHDRAWAL' ? <ArrowUpCircle size={16} className="text-red-500" /> :
+                         <Wallet size={16} className="text-blue-500" />}
+                      </div>
+                      <div>
+                        <p className="text-white text-sm font-medium">{txn.type}</p>
+                        <p className="text-gray-500 text-xs">{new Date(txn.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-semibold ${txn.type === 'DEPOSIT' || txn.type === 'CREDIT' ? 'text-green-500' : 'text-red-500'}`}>
+                        {txn.type === 'DEPOSIT' || txn.type === 'CREDIT' ? '+' : '-'}${txn.amount?.toFixed(2)}
+                      </p>
+                      <p className={`text-xs ${txn.status === 'APPROVED' ? 'text-green-500' : txn.status === 'PENDING' ? 'text-yellow-500' : 'text-gray-500'}`}>
+                        {txn.status}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {/* Closed Trades Section */}
+            {tradeHistory.length > 0 && (
+              <>
+                <div className="px-4 py-2 bg-dark-800 sticky top-0">
+                  <p className="text-gray-400 text-xs font-medium">Closed Trades</p>
+                </div>
+                {tradeHistory.map(trade => (
+                  <div key={trade._id} className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-medium text-sm">{trade.symbol}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                          trade.side === 'BUY' ? 'bg-blue-500/20 text-blue-500' : 'bg-red-500/20 text-red-500'
+                        }`}>
+                          {trade.side}
+                        </span>
+                        {trade.closedBy && (trade.closedBy === 'SL' || trade.closedBy === 'TP') && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            trade.closedBy === 'SL' ? 'bg-red-500/20 text-red-500' :
+                            'bg-green-500/20 text-green-500'
+                          }`}>
+                            {trade.closedBy}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`font-semibold text-sm ${trade.realizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {trade.realizedPnl >= 0 ? '+' : ''}${trade.realizedPnl?.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <p className="text-gray-600">Open</p>
+                        <p className="text-white">{trade.openPrice?.toFixed(5)}</p>
+                        <p className="text-gray-500 text-[10px]">{trade.openedAt || trade.createdAt ? new Date(trade.openedAt || trade.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Close</p>
+                        <p className="text-white">{trade.closePrice?.toFixed(5)}</p>
+                        <p className="text-gray-500 text-[10px]">{trade.closedAt ? new Date(trade.closedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
+                      </div>
+                    </div>
+                    <p className="text-gray-500 text-xs mt-1">{trade.quantity} lots</p>
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {tradeHistory.length === 0 && transactions.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                <FileText size={48} className="mb-2 opacity-50" />
+                <p>No history</p>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

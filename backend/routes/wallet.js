@@ -653,4 +653,52 @@ router.put('/transaction/:id/date', async (req, res) => {
   }
 })
 
+// PUT /api/wallet/transaction/:id/edit - Edit transaction (admin)
+router.put('/transaction/:id/edit', async (req, res) => {
+  try {
+    const { amount, type, date, paymentMethod } = req.body
+    const transaction = await Transaction.findById(req.params.id)
+    
+    if (!transaction) {
+      return res.status(404).json({ message: 'Transaction not found' })
+    }
+
+    const updateFields = {}
+    
+    if (amount !== undefined && amount !== transaction.amount) {
+      updateFields.amount = parseFloat(amount)
+    }
+    
+    if (type && type !== transaction.type) {
+      updateFields.type = type
+    }
+    
+    if (paymentMethod && paymentMethod !== transaction.paymentMethod) {
+      updateFields.paymentMethod = paymentMethod
+    }
+
+    // Update using Mongoose for regular fields
+    if (Object.keys(updateFields).length > 0) {
+      await Transaction.findByIdAndUpdate(req.params.id, updateFields)
+    }
+
+    // Update date separately using direct MongoDB to bypass timestamps
+    if (date) {
+      await Transaction.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(req.params.id) },
+        { $set: { createdAt: new Date(date) } }
+      )
+    }
+
+    const updatedTransaction = await Transaction.findById(req.params.id).populate('userId', 'firstName lastName email')
+    res.json({ 
+      success: true,
+      message: 'Transaction updated successfully', 
+      transaction: updatedTransaction 
+    })
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating transaction', error: error.message })
+  }
+})
+
 export default router

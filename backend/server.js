@@ -168,7 +168,7 @@ setInterval(async () => {
   }
 }, 5000)
 
-// Background SL/TP check every 2 seconds
+// Background SL/TP check every 1 second
 // This ensures SL/TP triggers even if user closes the app
 setInterval(async () => {
   try {
@@ -194,7 +194,7 @@ setInterval(async () => {
       })
     }
   } catch (error) {
-    // Silent fail - don't spam logs
+    console.error('[SL/TP CHECK] Error:', error.message)
   }
 }, 1000)
 

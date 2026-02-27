@@ -482,6 +482,76 @@ router.put('/edit/:tradeId', async (req, res) => {
 
 
 
+// DELETE /api/admin/trade/delete/:tradeId - Admin delete trade (with balance restoration for open trades)
+router.delete('/delete/:tradeId', async (req, res) => {
+  try {
+    const { tradeId } = req.params
+    const restoreBalance = req.body?.restoreBalance !== false // Default to true
+    
+    console.log(`[Admin Delete Trade] Deleting trade: ${tradeId}, restoreBalance: ${restoreBalance}`)
+
+    const trade = await Trade.findById(tradeId)
+    if (!trade) {
+      console.log(`[Admin Delete Trade] Trade not found: ${tradeId}`)
+      return res.status(404).json({ success: false, message: 'Trade not found' })
+    }
+    
+    console.log(`[Admin Delete Trade] Found trade: ${trade.tradeId}, status: ${trade.status}, marginUsed: ${trade.marginUsed}`)
+
+    // If trade is OPEN and restoreBalance is true, restore margin to account
+    if (trade.status === 'OPEN' && restoreBalance !== false) {
+      // Try TradingAccount first, then ChallengeAccount
+      let account = await TradingAccount.findById(trade.tradingAccountId)
+      if (!account && trade.isChallengeAccount) {
+        account = await ChallengeAccount.findById(trade.tradingAccountId)
+      }
+      if (account) {
+        // Restore margin used
+        account.balance += trade.marginUsed || 0
+        await account.save()
+        console.log(`Restored $${trade.marginUsed} margin to account ${account.accountId}`)
+      }
+    }
+
+    // If trade was CLOSED, optionally reverse the P&L from balance
+    if (trade.status === 'CLOSED' && restoreBalance !== false) {
+      let account = await TradingAccount.findById(trade.tradingAccountId)
+      if (!account && trade.isChallengeAccount) {
+        account = await ChallengeAccount.findById(trade.tradingAccountId)
+      }
+      if (account && trade.realizedPnl) {
+        // Reverse the P&L effect
+        account.balance -= trade.realizedPnl
+        if (account.balance < 0) account.balance = 0
+        await account.save()
+        console.log(`Reversed P&L $${trade.realizedPnl} from account ${account.accountId}`)
+      }
+    }
+
+    // Delete the trade
+    await Trade.findByIdAndDelete(tradeId)
+    
+    console.log(`[Admin Delete Trade] Trade deleted successfully: ${trade.tradeId}`)
+
+    return res.json({ 
+      success: true, 
+      message: 'Trade deleted successfully',
+      deletedTrade: {
+        tradeId: trade.tradeId,
+        symbol: trade.symbol,
+        status: trade.status,
+        marginRestored: trade.status === 'OPEN' ? trade.marginUsed : 0,
+        pnlReversed: trade.status === 'CLOSED' ? trade.realizedPnl : 0
+      }
+    })
+  } catch (error) {
+    console.error('[Admin Delete Trade] Error:', error)
+    return res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+
+
 // POST /api/admin/trade/close/:tradeId - Admin close trade
 
 router.post('/close/:tradeId', async (req, res) => {

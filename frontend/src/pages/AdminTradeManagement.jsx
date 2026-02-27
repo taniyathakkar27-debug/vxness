@@ -57,6 +57,8 @@ const AdminTradeManagement = () => {
 
   const [showCloseModal, setShowCloseModal] = useState(false)
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+
   const [selectedTrade, setSelectedTrade] = useState(null)
 
   const [users, setUsers] = useState([])
@@ -709,6 +711,42 @@ const AdminTradeManagement = () => {
 
 
 
+  const openDeleteModal = (trade) => {
+    setSelectedTrade(trade)
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteTrade = async () => {
+    if (!selectedTrade) return
+    try {
+      const res = await fetch(`${API_URL}/admin/trade/delete/${selectedTrade._id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restoreBalance: true })
+      })
+      const data = await res.json()
+      console.log('Delete trade response:', data)
+      if (data.success) {
+        let message = `Trade ${selectedTrade.tradeId} deleted successfully!`
+        if (data.deletedTrade?.marginRestored > 0) {
+          message += ` Margin $${data.deletedTrade.marginRestored.toFixed(2)} restored.`
+        }
+        if (data.deletedTrade?.pnlReversed) {
+          message += ` P&L $${data.deletedTrade.pnlReversed.toFixed(2)} reversed.`
+        }
+        toast.success(message)
+        setShowDeleteModal(false)
+        fetchTrades()
+      } else {
+        console.error('Delete trade error:', data)
+        toast.error(data.message || 'Failed to delete trade')
+      }
+    } catch (error) {
+      console.error('Delete trade exception:', error)
+      toast.error('Error deleting trade: ' + error.message)
+    }
+  }
+
   const openCloseModal = async (trade) => {
 
     setSelectedTrade(trade)
@@ -1120,6 +1158,18 @@ const AdminTradeManagement = () => {
 
                     )}
 
+                    <button
+
+                      onClick={() => openDeleteModal(trade)}
+
+                      className="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-500 rounded-lg text-sm font-medium flex items-center justify-center gap-1"
+
+                    >
+
+                      <Trash2 size={14} /> Delete
+
+                    </button>
+
                   </div>
 
                 </div>
@@ -1285,6 +1335,20 @@ const AdminTradeManagement = () => {
                             </button>
 
                           )}
+
+                          <button 
+
+                            onClick={() => openDeleteModal(trade)}
+
+                            className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-gray-400 hover:text-red-500" 
+
+                            title="Delete Trade"
+
+                          >
+
+                            <Trash2 size={16} />
+
+                          </button>
 
                         </div>
 
@@ -2213,6 +2277,58 @@ const AdminTradeManagement = () => {
 
         </div>
 
+      )}
+
+      {/* Delete Trade Modal */}
+      {showDeleteModal && selectedTrade && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-2xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Delete Trade</h2>
+              <button onClick={() => setShowDeleteModal(false)} className="text-gray-400 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                <p className="text-red-500 font-medium mb-2">⚠️ Warning: This action cannot be undone!</p>
+                <p className="text-gray-400 text-sm">
+                  Deleting this trade will permanently remove it from the system.
+                  {selectedTrade.status === 'OPEN' && ' The margin will be restored to the user\'s account.'}
+                  {selectedTrade.status === 'CLOSED' && ' The P&L effect will be reversed from the user\'s balance.'}
+                </p>
+              </div>
+
+              <div className="bg-dark-700 rounded-lg p-4">
+                <p className="text-gray-400 text-sm mb-2">Trade Details</p>
+                <p className="text-white font-medium">{selectedTrade.tradeId}</p>
+                <p className="text-white">{selectedTrade.symbol} {selectedTrade.side} {selectedTrade.quantity} lots</p>
+                <p className="text-gray-400">Status: <span className={selectedTrade.status === 'OPEN' ? 'text-green-500' : 'text-gray-500'}>{selectedTrade.status}</span></p>
+                {selectedTrade.status === 'OPEN' && (
+                  <p className="text-gray-400">Margin Used: <span className="text-yellow-500">${selectedTrade.marginUsed?.toFixed(2) || '0.00'}</span></p>
+                )}
+                {selectedTrade.status === 'CLOSED' && (
+                  <p className="text-gray-400">Realized P&L: <span className={selectedTrade.realizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}>${selectedTrade.realizedPnl?.toFixed(2) || '0.00'}</span></p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteTrade}
+                  className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} /> Delete Trade
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </AdminLayout>

@@ -28,7 +28,10 @@ import {
   History,
   Activity,
   Sun,
-  Moon
+  Moon,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  CreditCard
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { API_URL } from '../config/api'
@@ -55,6 +58,7 @@ const OrderBook = () => {
   const [dateTo, setDateTo] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 20
+  const [walletTransactions, setWalletTransactions] = useState([])
 
   // Get user - for investor mode, use investor account's user data
   const investorAccount = isInvestorMode ? JSON.parse(sessionStorage.getItem('investorAccount') || '{}') : null
@@ -199,6 +203,24 @@ const OrderBook = () => {
       setOpenTrades(allOpen)
       setClosedTrades(allClosed.sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt)))
       setPendingOrders(allPending)
+
+      // Fetch wallet transactions (deposits, withdrawals, credits)
+      if (user._id) {
+        try {
+          const txnRes = await fetch(`${API_URL}/wallet/transactions/${user._id}`)
+          const txnData = await txnRes.json()
+          if (txnData.transactions) {
+            // Filter only completed/approved transactions
+            const filteredTxns = txnData.transactions.filter(t => 
+              ['Approved', 'Completed', 'APPROVED', 'COMPLETED'].includes(t.status) &&
+              ['Deposit', 'Withdrawal', 'Credit', 'DEPOSIT', 'WITHDRAWAL', 'CREDIT'].includes(t.type)
+            )
+            setWalletTransactions(filteredTxns)
+          }
+        } catch (err) {
+          console.error('Error fetching wallet transactions:', err)
+        }
+      }
     } catch (error) {
       console.error('Error fetching trades:', error)
     }
@@ -237,13 +259,33 @@ const OrderBook = () => {
 
   const getFilteredHistory = () => {
     const now = new Date()
-    let filtered = closedTrades
+    let filtered = []
 
-    // Sub-tab filter: trades only show actual trades, transactions show commissions/swaps
+    // Sub-tab filter: trades, wallet transactions, or all
     if (historySubTab === 'trades') {
-      filtered = filtered.filter(t => t.status === 'CLOSED' || t.status === 'STOPPED_OUT' || t.closePrice)
-    } else if (historySubTab === 'transactions') {
-      filtered = filtered.filter(t => t.commission || t.swap)
+      filtered = closedTrades.filter(t => t.status === 'CLOSED' || t.status === 'STOPPED_OUT' || t.closePrice)
+    } else if (historySubTab === 'wallet') {
+      // Show deposit, withdrawal, credit transactions
+      filtered = walletTransactions.map(t => ({
+        ...t,
+        isWalletTxn: true,
+        closedAt: t.createdAt,
+        symbol: t.type,
+        side: t.type === 'Deposit' || t.type === 'Credit' ? 'IN' : 'OUT',
+        realizedPnl: t.type === 'Withdrawal' ? -t.amount : t.amount
+      }))
+    } else {
+      // All: combine trades and wallet transactions
+      const trades = closedTrades.filter(t => t.status === 'CLOSED' || t.status === 'STOPPED_OUT' || t.closePrice)
+      const walletTxns = walletTransactions.map(t => ({
+        ...t,
+        isWalletTxn: true,
+        closedAt: t.createdAt,
+        symbol: t.type,
+        side: t.type === 'Deposit' || t.type === 'Credit' ? 'IN' : 'OUT',
+        realizedPnl: t.type === 'Withdrawal' ? -t.amount : t.amount
+      }))
+      filtered = [...trades, ...walletTxns].sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt))
     }
 
     // Time period filter
@@ -572,6 +614,7 @@ const OrderBook = () => {
                     <table className="w-full">
                       <thead>
                         <tr className={`border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                          <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Date/Time</th>
                           <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Account</th>
                           <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Symbol</th>
                           <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Side</th>
@@ -589,6 +632,7 @@ const OrderBook = () => {
                           const currentPrice = livePrices[trade.symbol]?.[trade.side === 'BUY' ? 'bid' : 'ask']
                           return (
                             <tr key={trade._id} className={`border-b ${isDarkMode ? 'border-gray-800 hover:bg-dark-700/50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                              <td className="py-3 px-4 text-gray-400 text-xs">{formatDate(trade.openedAt || trade.createdAt)}</td>
                               <td className="py-3 px-4 text-gray-400 text-sm">{trade.accountName}</td>
                               <td className={`py-3 px-4 font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.symbol}</td>
                               <td className="py-3 px-4">
@@ -634,7 +678,7 @@ const OrderBook = () => {
                         {[
                           { key: 'all', label: 'All' },
                           { key: 'trades', label: 'Trades' },
-                          { key: 'transactions', label: 'Transactions' }
+                          { key: 'wallet', label: 'Transactions' }
                         ].map(tab => (
                           <button
                             key={tab.key}
@@ -709,33 +753,66 @@ const OrderBook = () => {
                         <table className="w-full">
                           <thead>
                             <tr className={`border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Date</th>
+                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Date/Time</th>
+                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Close Date/Time</th>
                               <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Account</th>
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Symbol</th>
+                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Type/Symbol</th>
                               <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Side</th>
                               <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Qty</th>
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open</th>
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Close</th>
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">P&L</th>
+                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Price</th>
+                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Close Price</th>
+                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Amount/P&L</th>
                             </tr>
                           </thead>
                           <tbody>
                             {getPaginatedHistory().map((trade) => (
                               <tr key={trade._id} className={`border-b ${isDarkMode ? 'border-gray-800 hover:bg-dark-700/50' : 'border-gray-200 hover:bg-gray-50'}`}>
-                                <td className="py-3 px-4 text-gray-400 text-xs">{formatDate(trade.closedAt)}</td>
-                                <td className="py-3 px-4 text-gray-400 text-sm">{trade.accountName}</td>
-                                <td className={`py-3 px-4 font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.symbol}</td>
-                                <td className="py-3 px-4">
-                                  <span className={`flex items-center gap-1 ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>
-                                    {trade.side === 'BUY' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                    {trade.side}
-                                  </span>
+                                <td className="py-3 px-4 text-gray-400 text-xs">
+                                  {trade.isWalletTxn ? '-' : formatDate(trade.openedAt || trade.createdAt)}
                                 </td>
-                                <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.quantity}</td>
-                                <td className="py-3 px-4 text-gray-400">{trade.openPrice?.toFixed(5)}</td>
-                                <td className="py-3 px-4 text-gray-400">{trade.closePrice?.toFixed(5)}</td>
+                                <td className="py-3 px-4 text-gray-400 text-xs">
+                                  {formatDate(trade.closedAt || trade.createdAt)}
+                                </td>
+                                <td className="py-3 px-4 text-gray-400 text-sm">
+                                  {trade.isWalletTxn ? 'Wallet' : trade.accountName}
+                                </td>
+                                <td className={`py-3 px-4 font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                  {trade.isWalletTxn ? (
+                                    <span className="flex items-center gap-1">
+                                      {trade.type === 'Deposit' && <ArrowDownCircle size={14} className="text-green-500" />}
+                                      {trade.type === 'Withdrawal' && <ArrowUpCircle size={14} className="text-red-500" />}
+                                      {trade.type === 'Credit' && <CreditCard size={14} className="text-blue-500" />}
+                                      {trade.type}
+                                    </span>
+                                  ) : trade.symbol}
+                                </td>
+                                <td className="py-3 px-4">
+                                  {trade.isWalletTxn ? (
+                                    <span className={`flex items-center gap-1 ${trade.side === 'IN' ? 'text-green-500' : 'text-red-500'}`}>
+                                      {trade.side}
+                                    </span>
+                                  ) : (
+                                    <span className={`flex items-center gap-1 ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>
+                                      {trade.side === 'BUY' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                      {trade.side}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                  {trade.isWalletTxn ? '-' : trade.quantity}
+                                </td>
+                                <td className="py-3 px-4 text-gray-400">
+                                  {trade.isWalletTxn ? '-' : trade.openPrice?.toFixed(5)}
+                                </td>
+                                <td className="py-3 px-4 text-gray-400">
+                                  {trade.isWalletTxn ? '-' : trade.closePrice?.toFixed(5)}
+                                </td>
                                 <td className={`py-3 px-4 font-medium ${(trade.realizedPnl || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                  {(trade.realizedPnl || 0) >= 0 ? '+' : ''}${(trade.realizedPnl || 0).toFixed(2)}
+                                  {trade.isWalletTxn ? (
+                                    <span>{trade.type === 'Withdrawal' ? '-' : '+'}${trade.amount?.toLocaleString()}</span>
+                                  ) : (
+                                    <span>{(trade.realizedPnl || 0) >= 0 ? '+' : ''}${(trade.realizedPnl || 0).toFixed(2)}</span>
+                                  )}
                                 </td>
                               </tr>
                             ))}

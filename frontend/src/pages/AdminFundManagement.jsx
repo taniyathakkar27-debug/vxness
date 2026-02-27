@@ -13,7 +13,8 @@ import {
   X,
   Clock,
   Building2,
-  Smartphone
+  Smartphone,
+  Pencil
 } from 'lucide-react'
 import { API_URL } from '../config/api'
 
@@ -26,6 +27,10 @@ const AdminFundManagement = () => {
   const [selectedTxn, setSelectedTxn] = useState(null)
   const [userDetails, setUserDetails] = useState(null)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editTxn, setEditTxn] = useState(null)
+  const [editForm, setEditForm] = useState({ amount: '', type: '', date: '', paymentMethod: '' })
+  const [editLoading, setEditLoading] = useState(false)
 
   useEffect(() => {
     fetchTransactions()
@@ -141,6 +146,54 @@ const AdminFundManagement = () => {
     setShowDetailsModal(false)
     setSelectedTxn(null)
     setUserDetails(null)
+  }
+
+  const openEditModal = (txn) => {
+    setEditTxn(txn)
+    const txnDate = new Date(txn.createdAt)
+    const localDateTime = new Date(txnDate.getTime() - txnDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    setEditForm({
+      amount: txn.amount || '',
+      type: txn.type || '',
+      date: localDateTime,
+      paymentMethod: txn.paymentMethod || ''
+    })
+    setShowEditModal(true)
+  }
+
+  const closeEditModal = () => {
+    setShowEditModal(false)
+    setEditTxn(null)
+    setEditForm({ amount: '', type: '', date: '', paymentMethod: '' })
+  }
+
+  const handleEditSubmit = async () => {
+    if (!editTxn) return
+    setEditLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/wallet/transaction/${editTxn._id}/edit`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(editForm.amount),
+          type: editForm.type,
+          date: editForm.date,
+          paymentMethod: editForm.paymentMethod
+        })
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success('Transaction updated successfully!')
+        closeEditModal()
+        fetchTransactions()
+      } else {
+        toast.error(data.message || 'Error updating transaction')
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error)
+      toast.error('Error updating transaction')
+    }
+    setEditLoading(false)
   }
 
   return (
@@ -337,8 +390,16 @@ const AdminFundManagement = () => {
                           <button 
                             onClick={() => viewTransactionDetails(txn)}
                             className="p-2 hover:bg-dark-600 rounded-lg transition-colors text-gray-400 hover:text-white"
+                            title="View Details"
                           >
                             <Eye size={16} />
+                          </button>
+                          <button 
+                            onClick={() => openEditModal(txn)}
+                            className="p-2 hover:bg-dark-600 rounded-lg transition-colors text-gray-400 hover:text-blue-500"
+                            title="Edit Transaction"
+                          >
+                            <Pencil size={16} />
                           </button>
                           {isPending(txn.status) && (
                             <>
@@ -547,6 +608,96 @@ const AdminFundManagement = () => {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {showEditModal && editTxn && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Edit Transaction</h2>
+              <button onClick={closeEditModal} className="text-gray-400 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <p className="text-gray-500 text-sm mb-1">Transaction ID</p>
+                <p className="text-white font-mono text-xs">{editTxn.transactionRef || editTxn._id}</p>
+              </div>
+
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Type</label>
+                <select
+                  value={editForm.type}
+                  onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-gray-600"
+                >
+                  <option value="Deposit">Deposit</option>
+                  <option value="Withdrawal">Withdrawal</option>
+                  <option value="Credit">Credit</option>
+                  <option value="Transfer_To_Account">Transfer To Account</option>
+                  <option value="Transfer_From_Account">Transfer From Account</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Amount ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editForm.amount}
+                  onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-600"
+                  placeholder="Enter amount"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Date & Time</label>
+                <input
+                  type="datetime-local"
+                  value={editForm.date}
+                  onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-gray-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Payment Method</label>
+                <input
+                  type="text"
+                  value={editForm.paymentMethod}
+                  onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}
+                  className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-600"
+                  placeholder="e.g., Bank Transfer, UPI, Crypto"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={closeEditModal}
+                  className="flex-1 bg-dark-700 text-white py-3 rounded-lg hover:bg-dark-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditSubmit}
+                  disabled={editLoading}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {editLoading ? (
+                    <RefreshCw size={16} className="animate-spin" />
+                  ) : (
+                    <Pencil size={16} />
+                  )}
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

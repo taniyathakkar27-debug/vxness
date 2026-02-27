@@ -540,14 +540,9 @@ class TradeEngine {
     const openTrades = await Trade.find({ status: 'OPEN', isChallengeAccount: { $ne: true } })
     const triggeredTrades = []
 
-    if (openTrades.length > 0) {
-      console.log(`[Regular SL/TP] Checking ${openTrades.length} open regular trades`)
-    }
-
     for (const trade of openTrades) {
       const prices = currentPrices[trade.symbol]
       if (!prices) {
-        console.log(`[Regular SL/TP] No price data for ${trade.symbol}`)
         continue
       }
 
@@ -556,15 +551,13 @@ class TradeEngine {
       const bid = prices.bid
       const ask = prices.ask || prices.bid // Fallback to bid if ask not available
 
-      // Only log if SL or TP is actually set (not null)
+      // Log all trades with SL/TP set for debugging
       if (sl || tp) {
-        // Minimal logging - only show when close to triggering
         const slTrigger = trade.side === 'BUY' ? (sl && bid <= sl) : (sl && ask >= sl)
         const tpTrigger = trade.side === 'BUY' ? (tp && bid >= tp) : (tp && ask <= tp)
         
-        if (slTrigger || tpTrigger) {
-          console.log(`[Regular SL/TP] Trade ${trade.tradeId}: ${trade.side} ${trade.symbol} | bid=${bid} ask=${ask} | SL=${sl || 'none'} TP=${tp || 'none'}`)
-        }
+        // Always log trades with SL/TP for debugging
+        console.log(`[SL/TP Check] ${trade.tradeId} ${trade.side} ${trade.symbol} | bid=${bid?.toFixed(5)} ask=${ask?.toFixed(5)} | SL=${sl || '-'} TP=${tp || '-'} | SL_trigger=${slTrigger} TP_trigger=${tpTrigger}`)
       }
 
       const trigger = trade.checkSlTp(bid, ask)

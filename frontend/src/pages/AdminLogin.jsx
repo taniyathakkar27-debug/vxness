@@ -24,14 +24,31 @@ const AdminLogin = () => {
     setLoading(true)
     setError('')
     
-    // Simple admin credentials check (in production, use proper backend auth)
-    if (formData.email === 'admin@vxness.com' && formData.password === 'admin123') {
-      localStorage.setItem('adminToken', 'admin-authenticated')
-      localStorage.setItem('adminUser', JSON.stringify({ email: formData.email, role: 'admin' }))
-      toast.success('Admin login successful!')
-      navigate('/admin/dashboard')
-    } else {
-      setError('Invalid admin credentials')
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin-mgmt/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        localStorage.setItem('adminToken', data.token)
+        localStorage.setItem('adminUser', JSON.stringify(data.admin))
+        toast.success('Admin login successful!')
+        navigate('/admin/dashboard')
+      } else {
+        setError(data.message || 'Invalid admin credentials')
+      }
+    } catch (err) {
+      console.error('Login error:', err)
+      setError('Login failed. Please try again.')
     }
     setLoading(false)
   }
