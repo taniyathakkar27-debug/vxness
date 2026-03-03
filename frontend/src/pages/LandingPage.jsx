@@ -117,7 +117,7 @@ const LandingPage = () => {
         </div>
       </nav>
 
-      {/* Hero Section with Video */}
+
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Video Background */}
         <div className="absolute inset-0 z-0 w-full h-full">

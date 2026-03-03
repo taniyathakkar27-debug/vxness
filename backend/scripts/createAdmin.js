@@ -14,7 +14,7 @@ const createAdmin = async () => {
     await mongoose.connect(process.env.MONGODB_URI)
     console.log('Connected to MongoDB')
 
-    // Admin credentials - CHANGE THESE
+    
     const adminData = {
       email: 'admin@vxness.com',
       password: 'Admin@123',

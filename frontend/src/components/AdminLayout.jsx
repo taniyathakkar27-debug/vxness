@@ -75,7 +75,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
     const token = localStorage.getItem('adminToken')
     const investorMode = sessionStorage.getItem('investorMode')
     
-    // Allow access if admin token exists OR investor mode is active
+  
     if (!token && !investorMode) {
       navigate('/admin')
     }
