@@ -1,5 +1,4 @@
 // Script to create a new admin account
-// Run with: node scripts/createAdmin.js
 
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
