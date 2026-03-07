@@ -438,7 +438,7 @@ router.post('/trading-account/:id/add-credit', async (req, res) => {
       userId: account.userId,
       tradingAccountId: account._id,
       tradingAccountName: account.accountId || account.name || '',
-      type: 'Demo_Credit',
+      type: 'Credit',
       amount: parseFloat(amount),
       paymentMethod: 'System',
       description: reason || 'Admin credit/bonus',
@@ -815,7 +815,7 @@ router.put('/credit-requests/:id/approve', async (req, res) => {
       userId: creditRequest.userId,
       tradingAccountId: account._id,
       tradingAccountName: account.accountId || '',
-      type: 'Demo_Credit',
+      type: 'Credit',
       amount: creditRequest.amount,
       paymentMethod: 'System',
       description: `Credit request approved: ${creditRequest.reason || 'User credit deposit request'}`,
@@ -867,6 +867,129 @@ router.put('/credit-requests/:id/reject', async (req, res) => {
   } catch (error) {
     console.error('Error rejecting credit request:', error)
     res.status(500).json({ success: false, message: 'Error rejecting credit request', error: error.message })
+  }
+})
+
+// ==================== CREDIT IN/OUT (ADMIN DIRECT) ====================
+
+// POST /api/admin/credit/add - Admin directly add credit to account
+router.post('/credit/add', async (req, res) => {
+  try {
+    const { tradingAccountId, amount, reason, adminId, creditRequestId } = req.body
+
+    if (!tradingAccountId || !amount) {
+      return res.status(400).json({ success: false, message: 'Account ID and amount are required' })
+    }
+
+    const TradingAccount = (await import('../models/TradingAccount.js')).default
+    const CreditRequest = (await import('../models/CreditRequest.js')).default
+    const account = await TradingAccount.findById(tradingAccountId)
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Trading account not found' })
+    }
+
+    const creditAmount = parseFloat(amount)
+    if (isNaN(creditAmount) || creditAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid amount' })
+    }
+
+    // Add credit to account
+    const previousCredit = account.credit || 0
+    account.credit = previousCredit + creditAmount
+    await account.save()
+
+    // Create transaction record
+    await Transaction.create({
+      userId: account.userId,
+      tradingAccountId: account._id,
+      tradingAccountName: account.accountId || '',
+      type: 'Credit',
+      amount: creditAmount,
+      paymentMethod: 'System',
+      description: reason || 'Admin Credit In',
+      status: 'Completed',
+      processedAt: new Date()
+    })
+
+    // Update CreditRequest with additional credit if creditRequestId provided
+    if (creditRequestId) {
+      await CreditRequest.findByIdAndUpdate(creditRequestId, {
+        $inc: { additionalCreditIn: creditAmount }
+      })
+    }
+
+    res.json({
+      success: true,
+      message: `Credit of $${creditAmount.toFixed(2)} added successfully`,
+      newCredit: account.credit
+    })
+  } catch (error) {
+    console.error('Error adding credit:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// POST /api/admin/credit/remove - Admin directly remove credit from account
+router.post('/credit/remove', async (req, res) => {
+  try {
+    const { tradingAccountId, amount, reason, adminId, creditRequestId } = req.body
+
+    if (!tradingAccountId || !amount) {
+      return res.status(400).json({ success: false, message: 'Account ID and amount are required' })
+    }
+
+    const TradingAccount = (await import('../models/TradingAccount.js')).default
+    const CreditRequest = (await import('../models/CreditRequest.js')).default
+    const account = await TradingAccount.findById(tradingAccountId)
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Trading account not found' })
+    }
+
+    const creditAmount = parseFloat(amount)
+    if (isNaN(creditAmount) || creditAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid amount' })
+    }
+
+    const currentCredit = account.credit || 0
+    if (creditAmount > currentCredit) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Cannot remove $${creditAmount.toFixed(2)}. Account only has $${currentCredit.toFixed(2)} credit.` 
+      })
+    }
+
+    // Remove credit from account
+    account.credit = currentCredit - creditAmount
+    await account.save()
+
+    // Create transaction record
+    await Transaction.create({
+      userId: account.userId,
+      tradingAccountId: account._id,
+      tradingAccountName: account.accountId || '',
+      type: 'Credit_Out',
+      amount: creditAmount,
+      paymentMethod: 'System',
+      description: reason || 'Admin Credit Out',
+      status: 'Completed',
+      processedAt: new Date()
+    })
+
+    // Update CreditRequest with additional credit out if creditRequestId provided
+    if (creditRequestId) {
+      await CreditRequest.findByIdAndUpdate(creditRequestId, {
+        $inc: { additionalCreditOut: creditAmount }
+      })
+    }
+
+    res.json({
+      success: true,
+      message: `Credit of $${creditAmount.toFixed(2)} removed successfully`,
+      newCredit: account.credit
+    })
+  } catch (error) {
+    console.error('Error removing credit:', error)
+    res.status(500).json({ success: false, message: error.message })
   }
 })
 

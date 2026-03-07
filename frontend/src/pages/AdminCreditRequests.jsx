@@ -10,7 +10,9 @@ import {
   XCircle, 
   RefreshCw,
   Search,
-  Filter
+  Filter,
+  Plus,
+  Minus
 } from 'lucide-react'
 import { API_URL } from '../config/api'
 import { useTheme } from '../context/ThemeContext'
@@ -24,12 +26,104 @@ const AdminCreditRequests = () => {
   const [actionLoading, setActionLoading] = useState(null)
   const [rejectNote, setRejectNote] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(null)
+  
+  // Credit In/Out Modal State
+  const [showCreditModal, setShowCreditModal] = useState(false)
+  const [creditType, setCreditType] = useState('in') // 'in' or 'out'
+  const [creditForm, setCreditForm] = useState({ userId: '', accountId: '', amount: '', reason: '' })
+  const [users, setUsers] = useState([])
+  const [userAccounts, setUserAccounts] = useState([])
+  const [creditLoading, setCreditLoading] = useState(false)
 
   const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}')
 
   useEffect(() => {
     fetchCreditRequests()
+    fetchUsers()
   }, [])
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/admin/users`)
+      const data = await res.json()
+      if (data.users) {
+        setUsers(data.users)
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    }
+  }
+
+  const fetchUserAccounts = async (userId) => {
+    try {
+      const res = await fetch(`${API_URL}/trading-accounts/user/${userId}`)
+      const data = await res.json()
+      if (data.success && data.accounts) {
+        setUserAccounts(data.accounts)
+      } else {
+        setUserAccounts([])
+      }
+    } catch (error) {
+      console.error('Error fetching accounts:', error)
+      setUserAccounts([])
+    }
+  }
+
+  const openCreditModal = (type) => {
+    setCreditType(type)
+    setCreditForm({ userId: '', accountId: '', amount: '', reason: '' })
+    setUserAccounts([])
+    setShowCreditModal(true)
+  }
+
+  const handleCreditSubmit = async () => {
+    if (!creditForm.accountId || !creditForm.amount) {
+      toast.error('Please fill all required fields')
+      return
+    }
+
+    const amount = parseFloat(creditForm.amount)
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+
+    setCreditLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/admin/credit/${creditType === 'in' ? 'add' : 'remove'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tradingAccountId: creditForm.accountId,
+          amount: amount,
+          reason: creditForm.reason || (creditType === 'in' ? 'Admin Credit In' : 'Admin Credit Out'),
+          adminId: adminUser._id,
+          creditRequestId: creditForm.creditRequestId || null
+        })
+      })
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        toast.error(errorData.message || `Server error: ${res.status}`)
+        setCreditLoading(false)
+        return
+      }
+      
+      const data = await res.json()
+      if (data.success) {
+        toast.success(`Credit ${creditType === 'in' ? 'added' : 'removed'} successfully! New Credit: $${data.newCredit?.toFixed(2) || '0.00'}`)
+        setShowCreditModal(false)
+        setCreditForm({ userId: '', accountId: '', amount: '', reason: '' })
+        fetchCreditRequests()
+      } else {
+        toast.error(data.message || `Failed to ${creditType === 'in' ? 'add' : 'remove'} credit`)
+      }
+    } catch (error) {
+      console.error('Credit error:', error)
+      toast.error(`Error ${creditType === 'in' ? 'adding' : 'removing'} credit: ${error.message}`)
+    }
+    setCreditLoading(false)
+  }
 
   const fetchCreditRequests = async () => {
     setLoading(true)
@@ -104,6 +198,14 @@ const AdminCreditRequests = () => {
     pending: requests.filter(r => r.status === 'Pending').length,
     approved: requests.filter(r => r.status === 'Approved').length,
     rejected: requests.filter(r => r.status === 'Rejected').length
+  }
+
+  // Open Credit In/Out modal for any user (top-level action)
+  const openNewCreditModal = (type) => {
+    setCreditType(type)
+    setCreditForm({ userId: '', accountId: '', accountName: '', amount: '', reason: '', isNewCredit: true })
+    setUserAccounts([])
+    setShowCreditModal(true)
   }
 
   return (
@@ -188,6 +290,7 @@ const AdminCreditRequests = () => {
                   <th className={`text-left px-4 py-3 text-xs font-medium uppercase ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Status</th>
                   <th className={`text-left px-4 py-3 text-xs font-medium uppercase ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Date</th>
                   <th className={`text-left px-4 py-3 text-xs font-medium uppercase ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Actions</th>
+                  <th className={`text-left px-4 py-3 text-xs font-medium uppercase ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Credit</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,10 +302,26 @@ const AdminCreditRequests = () => {
                     </td>
                     <td className="px-4 py-3">
                       <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{req.tradingAccountName || req.tradingAccountId?.accountId || 'N/A'}</p>
-                      <p className="text-gray-500 text-xs">Credit: ${(req.tradingAccountId?.credit || 0).toFixed(2)}</p>
+                      <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs font-medium">
+                        Credit: ${(req.tradingAccountId?.credit || 0).toFixed(2)}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-purple-400 font-semibold">${req.amount.toLocaleString()}</p>
+                      <div className="flex flex-col gap-1">
+                        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs font-medium">
+                          Request: ${req.amount.toLocaleString()}
+                        </span>
+                        {req.additionalCreditIn > 0 && (
+                          <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs font-medium">
+                            + In: ${req.additionalCreditIn.toLocaleString()}
+                          </span>
+                        )}
+                        {req.additionalCreditOut > 0 && (
+                          <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs font-medium">
+                            - Out: ${req.additionalCreditOut.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{req.reason || '-'}</p>
@@ -251,6 +370,54 @@ const AdminCreditRequests = () => {
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const accId = typeof req.tradingAccountId === 'object' ? req.tradingAccountId?._id : req.tradingAccountId
+                            const userId = typeof req.userId === 'object' ? req.userId?._id : req.userId
+                            setCreditType('in')
+                            setCreditForm({ 
+                              userId: userId || '', 
+                              accountId: accId || '', 
+                              accountName: req.tradingAccountName || req.tradingAccountId?.accountId || '',
+                              amount: '', 
+                              reason: '',
+                              isNewCredit: false,
+                              creditRequestId: req._id
+                            })
+                            setUserAccounts(req.tradingAccountId ? [req.tradingAccountId] : [])
+                            setShowCreditModal(true)
+                          }}
+                          className="px-2 py-1 bg-green-500/20 text-green-500 rounded text-xs font-medium hover:bg-green-500/30 transition-colors flex items-center gap-1"
+                          title="Credit In"
+                        >
+                          <Plus size={12} /> In
+                        </button>
+                        <button
+                          onClick={() => {
+                            const accId = typeof req.tradingAccountId === 'object' ? req.tradingAccountId?._id : req.tradingAccountId
+                            const userId = typeof req.userId === 'object' ? req.userId?._id : req.userId
+                            setCreditType('out')
+                            setCreditForm({ 
+                              userId: userId || '', 
+                              accountId: accId || '', 
+                              accountName: req.tradingAccountName || req.tradingAccountId?.accountId || '',
+                              amount: '', 
+                              reason: '',
+                              isNewCredit: false,
+                              creditRequestId: req._id
+                            })
+                            setUserAccounts(req.tradingAccountId ? [req.tradingAccountId] : [])
+                            setShowCreditModal(true)
+                          }}
+                          className="px-2 py-1 bg-red-500/20 text-red-500 rounded text-xs font-medium hover:bg-red-500/30 transition-colors flex items-center gap-1"
+                          title="Credit Out"
+                        >
+                          <Minus size={12} /> Out
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -287,6 +454,138 @@ const AdminCreditRequests = () => {
                 className="flex-1 py-3 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
               >
                 {actionLoading === showRejectModal ? 'Rejecting...' : 'Reject Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Credit In/Out Modal */}
+      {showCreditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl p-6 w-full max-w-md border ${isDarkMode ? 'bg-dark-800 border-gray-700' : 'bg-white border-gray-300'}`}>
+            <div className="flex items-center gap-3 mb-6">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${creditType === 'in' ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                {creditType === 'in' ? <Plus size={20} className="text-green-500" /> : <Minus size={20} className="text-red-500" />}
+              </div>
+              <div>
+                <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {creditType === 'in' ? 'Credit In' : 'Credit Out'}
+                </h3>
+                <p className="text-gray-500 text-sm">
+                  {creditType === 'in' ? 'Add credit to user account' : 'Remove credit from user account'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Show User/Account dropdowns if opened from top buttons (isNewCredit) */}
+              {creditForm.isNewCredit ? (
+                <>
+                  {/* User Select */}
+                  <div>
+                    <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Select User *</label>
+                    <select
+                      value={creditForm.userId}
+                      onChange={(e) => {
+                        setCreditForm({ ...creditForm, userId: e.target.value, accountId: '' })
+                        if (e.target.value) fetchUserAccounts(e.target.value)
+                      }}
+                      className={`w-full border rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 ${isDarkMode ? 'bg-dark-700 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
+                    >
+                      <option value="">Select a user...</option>
+                      {users.map(u => (
+                        <option key={u._id} value={u._id}>{u.firstName} {u.lastName} - {u.email}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Account Select */}
+                  <div>
+                    <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Select Account *</label>
+                    <select
+                      value={creditForm.accountId}
+                      onChange={(e) => setCreditForm({ ...creditForm, accountId: e.target.value })}
+                      disabled={!creditForm.userId}
+                      className={`w-full border rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 disabled:opacity-50 ${isDarkMode ? 'bg-dark-700 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
+                    >
+                      <option value="">Select an account...</option>
+                      {userAccounts.map(acc => (
+                        <option key={acc._id} value={acc._id}>
+                          {acc.accountId} - Balance: ${acc.balance?.toFixed(2)} | Credit: ${acc.credit?.toFixed(2) || '0.00'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                /* Show Account Info if opened from row buttons */
+                <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-dark-700' : 'bg-gray-100'}`}>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-500 text-sm">Account:</span>
+                    <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {userAccounts[0]?.accountId || creditForm.accountName || '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 text-sm">Current Credit:</span>
+                    <span className="text-purple-400 font-medium">
+                      ${(userAccounts[0]?.credit || 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Amount */}
+              <div>
+                <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Amount ($) *</label>
+                <input
+                  type="number"
+                  value={creditForm.amount}
+                  onChange={(e) => setCreditForm({ ...creditForm, amount: e.target.value })}
+                  placeholder="Enter amount..."
+                  min="0"
+                  step="0.01"
+                  className={`w-full border rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 ${isDarkMode ? 'bg-dark-700 border-gray-700 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                />
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className={`block text-sm mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Reason (Optional)</label>
+                <input
+                  type="text"
+                  value={creditForm.reason}
+                  onChange={(e) => setCreditForm({ ...creditForm, reason: e.target.value })}
+                  placeholder={creditType === 'in' ? 'e.g., Loan, Bonus, Promotion...' : 'e.g., Loan Repayment, Adjustment...'}
+                  className={`w-full border rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 ${isDarkMode ? 'bg-dark-700 border-gray-700 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => { setShowCreditModal(false); setCreditForm({ userId: '', accountId: '', amount: '', reason: '' }); }}
+                className={`flex-1 py-3 rounded-lg transition-colors ${isDarkMode ? 'bg-dark-700 text-white hover:bg-dark-600' : 'bg-gray-200 text-gray-900 hover:bg-gray-300'}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreditSubmit}
+                disabled={creditLoading}
+                className={`flex-1 py-3 font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  creditType === 'in' 
+                    ? 'bg-green-500 text-white hover:bg-green-600' 
+                    : 'bg-red-500 text-white hover:bg-red-600'
+                }`}
+              >
+                {creditLoading ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : creditType === 'in' ? (
+                  <><Plus size={16} /> Add Credit</>
+                ) : (
+                  <><Minus size={16} /> Remove Credit</>
+                )}
               </button>
             </div>
           </div>

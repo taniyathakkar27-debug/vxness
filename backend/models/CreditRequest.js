@@ -41,6 +41,14 @@ const creditRequestSchema = new mongoose.Schema({
   processedAt: {
     type: Date,
     default: null
+  },
+  additionalCreditIn: {
+    type: Number,
+    default: 0
+  },
+  additionalCreditOut: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

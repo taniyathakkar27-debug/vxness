@@ -1286,81 +1286,130 @@ const OrderBook = () => {
 
                     <div className={`p-3 border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
 
-                      {/* Row 1: Sub-tabs (All/Trades/Transactions) + Time filters + Date range + Summary */}
+                      {/* Mobile: Simplified filters */}
+                      {isMobile ? (
+                        <div className="space-y-2">
+                          {/* Row 1: Sub-tabs */}
+                          <div className="flex gap-1">
+                            {[
+                              { key: 'all', label: 'All' },
+                              { key: 'trades', label: 'Trades' },
+                              { key: 'transactions', label: 'Trans.' }
+                            ].map(tab => (
+                              <button
+                                key={tab.key}
+                                onClick={() => { setHistorySubTab(tab.key); setCurrentPage(1) }}
+                                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                  historySubTab === tab.key 
+                                    ? 'bg-accent-green text-black' 
+                                    : isDarkMode ? 'bg-dark-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                                }`}
+                              >
+                                {tab.label}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Row 2: Time filters */}
+                          <div className="flex gap-1 overflow-x-auto">
+                            {[
+                              { key: 'all', label: 'All' },
+                              { key: 'today', label: 'Today' },
+                              { key: 'week', label: 'Week' },
+                              { key: 'month', label: 'Month' }
+                            ].map(filter => (
+                              <button
+                                key={filter.key}
+                                onClick={() => { setHistoryFilter(filter.key); setCurrentPage(1) }}
+                                className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
+                                  historyFilter === filter.key 
+                                    ? 'bg-accent-green text-black' 
+                                    : isDarkMode ? 'bg-dark-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+                                }`}
+                              >
+                                {filter.label}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Row 3: Summary */}
+                          <div className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {getFilteredHistory().length} Items | P&L: <span className={`font-medium ${getHistoryTotalPnl() >= 0 ? 'text-green-500' : 'text-red-500'}`}>${getHistoryTotalPnl().toFixed(2)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Desktop: Full filters */
+                        <div className="flex flex-wrap items-center gap-2">
 
-                      <div className="flex flex-wrap items-center gap-2">
+                          {/* Sub-tabs */}
 
-                        {/* Sub-tabs */}
+                          {[
 
-                        {[
+                            { key: 'all', label: 'All' },
 
-                          { key: 'all', label: 'All' },
+                            { key: 'trades', label: 'Trades' },
 
-                          { key: 'trades', label: 'Trades' },
+                            { key: 'transactions', label: 'Transactions' }
 
-                          { key: 'transactions', label: 'Transactions' }
+                          ].map(tab => (
 
-                        ].map(tab => (
+                            <button
 
-                          <button
+                              key={tab.key}
 
-                            key={tab.key}
+                              onClick={() => { setHistorySubTab(tab.key); setCurrentPage(1) }}
 
-                            onClick={() => { setHistorySubTab(tab.key); setCurrentPage(1) }}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
 
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                historySubTab === tab.key 
 
-                              historySubTab === tab.key 
+                                  ? 'bg-accent-green text-black' 
 
-                                ? 'bg-accent-green text-black' 
+                                  : isDarkMode ? 'bg-dark-700 text-gray-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900'
 
-                                : isDarkMode ? 'bg-dark-700 text-gray-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900'
+                              }`}
 
-                            }`}
+                            >
 
-                          >
+                              {tab.label}
 
-                            {tab.label}
+                            </button>
 
-                          </button>
-
-                        ))}
+                          ))}
 
 
 
-                        {/* Separator */}
+                          {/* Separator */}
 
-                        <div className={`w-px h-5 mx-1 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`} />
+                          <div className={`w-px h-5 mx-1 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-300'}`} />
 
 
 
-                        {/* Time period filters */}
+                          {/* Time period filters */}
 
-                        {[
+                          {[
 
-                          { key: 'all', label: 'All' },
+                            { key: 'all', label: 'All' },
 
-                          { key: 'today', label: 'Today' },
+                            { key: 'today', label: 'Today' },
 
-                          { key: 'week', label: 'This Week' },
+                            { key: 'week', label: 'This Week' },
 
-                          { key: 'month', label: 'This Month' },
+                            { key: 'month', label: 'This Month' },
 
-                          { key: 'year', label: 'This Year' }
+                            { key: 'year', label: 'This Year' }
 
-                        ].map(filter => (
+                          ].map(filter => (
 
-                          <button
+                            <button
 
-                            key={filter.key}
+                              key={filter.key}
 
-                            onClick={() => { setHistoryFilter(filter.key); setCurrentPage(1) }}
+                              onClick={() => { setHistoryFilter(filter.key); setCurrentPage(1) }}
 
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
 
-                              historyFilter === filter.key 
+                                historyFilter === filter.key 
 
-                                ? 'bg-accent-green text-black' 
+                                  ? 'bg-accent-green text-black' 
 
                                 : isDarkMode ? 'bg-dark-700 text-gray-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-900'
 
@@ -1412,17 +1461,13 @@ const OrderBook = () => {
 
                         </div>
 
+                          {/* Items count + P&L */}
+                          <span className={`ml-auto text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {getFilteredHistory().length} Items | P&L: <span className={`font-medium ${getHistoryTotalPnl() >= 0 ? 'text-green-500' : 'text-red-500'}`}>${getHistoryTotalPnl().toFixed(2)}</span>
+                          </span>
 
-
-                        {/* Items count + P&L */}
-
-                        <span className={`ml-auto text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-
-                          {getFilteredHistory().length} Items | P&L: <span className={`font-medium ${getHistoryTotalPnl() >= 0 ? 'text-green-500' : 'text-red-500'}`}>${getHistoryTotalPnl().toFixed(2)}</span>
-
-                        </span>
-
-                      </div>
+                        </div>
+                      )}
 
                     </div>
 
@@ -1441,102 +1486,151 @@ const OrderBook = () => {
                     ) : (
 
                       <>
-
-                        <table className="w-full">
-
-                          <thead>
-
-                            <tr className={`border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Type</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Account</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Symbol</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Side</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Qty</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Price</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Time</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Close Price</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Close Time</th>
-
-                              <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">P&L</th>
-
-                            </tr>
-
-                          </thead>
-
-                          <tbody>
-
+                        {/* Mobile Card View */}
+                        {isMobile ? (
+                          <div className="divide-y divide-gray-800">
                             {getPaginatedHistory().map((trade) => (
-
-                              <tr key={trade._id} className={`border-b ${isDarkMode ? 'border-gray-800 hover:bg-dark-700/50' : 'border-gray-200 hover:bg-gray-50'}`}>
-
-                                <td className="py-3 px-4">
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                    trade.type === 'DEPOSIT' ? 'bg-green-500/20 text-green-500' :
-                                    trade.type === 'WITHDRAWAL' ? 'bg-orange-500/20 text-orange-500' :
-                                    trade.type === 'CREDIT' ? 'bg-purple-500/20 text-purple-500' :
-                                    'bg-blue-500/20 text-blue-500'
-                                  }`}>
-                                    {trade.type || 'Trade'}
-                                  </span>
-                                </td>
-
-                                <td className="py-3 px-4 text-gray-400 text-sm">{trade.accountName}</td>
-
-                                <td className={`py-3 px-4 font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.symbol || '-'}</td>
-
-                                <td className="py-3 px-4">
-                                  {trade.side ? (
-                                    <span className={`flex items-center gap-1 ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>
-                                      {trade.side === 'BUY' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                      {trade.side}
+                              <div key={trade._id} className={`p-4 ${isDarkMode ? 'hover:bg-dark-700/50' : 'hover:bg-gray-50'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                      trade.type === 'DEPOSIT' ? 'bg-green-500/20 text-green-500' :
+                                      trade.type === 'WITHDRAWAL' ? 'bg-orange-500/20 text-orange-500' :
+                                      trade.type === 'CREDIT' ? 'bg-purple-500/20 text-purple-500' :
+                                      'bg-blue-500/20 text-blue-500'
+                                    }`}>
+                                      {trade.type || 'Trade'}
                                     </span>
-                                  ) : '-'}
-                                </td>
+                                    <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.symbol || '-'}</span>
+                                    {trade.side && (
+                                      <span className={`flex items-center gap-0.5 text-xs ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>
+                                        {trade.side === 'BUY' ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                                        {trade.side}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className={`font-semibold ${(trade.realizedPnl || trade.amount || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {(trade.realizedPnl || trade.amount || 0) >= 0 ? '+' : ''}${(trade.realizedPnl || trade.amount || 0).toFixed(2)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-gray-500">
+                                  <span>{trade.quantity ? `${trade.quantity} lots` : ''} {trade.accountName ? `• ${trade.accountName}` : ''}</span>
+                                  <span>
+                                    {trade.closedAt 
+                                      ? new Date(trade.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                                      : trade.openedAt || trade.createdAt 
+                                        ? new Date(trade.openedAt || trade.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                                        : '-'
+                                    }
+                                  </span>
+                                </div>
+                                {trade.openPrice && (
+                                  <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                                    <span>Open: {trade.openPrice?.toFixed(5)}</span>
+                                    {trade.closePrice && <span>Close: {trade.closePrice?.toFixed(5)}</span>}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          /* Desktop Table View */
+                          <table className="w-full">
 
-                                <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.quantity || '-'}</td>
+                            <thead>
 
-                                <td className="py-3 px-4 text-gray-400">{trade.openPrice?.toFixed(5) || '-'}</td>
+                              <tr className={`border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
 
-                                <td className="py-3 px-4 text-gray-400 text-xs">
-                                  {trade.openedAt || trade.createdAt ? (
-                                    <>
-                                      <div>{new Date(trade.openedAt || trade.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
-                                      <div>{new Date(trade.openedAt || trade.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
-                                    </>
-                                  ) : '-'}
-                                </td>
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Type</th>
 
-                                <td className="py-3 px-4 text-gray-400">{trade.closePrice?.toFixed(5) || '-'}</td>
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Account</th>
 
-                                <td className="py-3 px-4 text-gray-400 text-xs">
-                                  {trade.closedAt ? (
-                                    <>
-                                      <div>{new Date(trade.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
-                                      <div>{new Date(trade.closedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
-                                    </>
-                                  ) : '-'}
-                                </td>
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Symbol</th>
 
-                                <td className={`py-3 px-4 font-medium ${(trade.realizedPnl || trade.amount || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                  {(trade.realizedPnl || trade.amount || 0) >= 0 ? '+' : ''}${(trade.realizedPnl || trade.amount || 0).toFixed(2)}
-                                </td>
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Side</th>
+
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Qty</th>
+
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Price</th>
+
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Time</th>
+
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Close Price</th>
+
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Close Time</th>
+
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">P&L</th>
 
                               </tr>
 
-                            ))}
+                            </thead>
 
-                          </tbody>
+                            <tbody>
 
-                        </table>
+                              {getPaginatedHistory().map((trade) => (
+
+                                <tr key={trade._id} className={`border-b ${isDarkMode ? 'border-gray-800 hover:bg-dark-700/50' : 'border-gray-200 hover:bg-gray-50'}`}>
+
+                                  <td className="py-3 px-4">
+                                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                      trade.type === 'DEPOSIT' ? 'bg-green-500/20 text-green-500' :
+                                      trade.type === 'WITHDRAWAL' ? 'bg-orange-500/20 text-orange-500' :
+                                      trade.type === 'CREDIT' ? 'bg-purple-500/20 text-purple-500' :
+                                      'bg-blue-500/20 text-blue-500'
+                                    }`}>
+                                      {trade.type || 'Trade'}
+                                    </span>
+                                  </td>
+
+                                  <td className="py-3 px-4 text-gray-400 text-sm">{trade.accountName}</td>
+
+                                  <td className={`py-3 px-4 font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.symbol || '-'}</td>
+
+                                  <td className="py-3 px-4">
+                                    {trade.side ? (
+                                      <span className={`flex items-center gap-1 ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>
+                                        {trade.side === 'BUY' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                        {trade.side}
+                                      </span>
+                                    ) : '-'}
+                                  </td>
+
+                                  <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.quantity || '-'}</td>
+
+                                  <td className="py-3 px-4 text-gray-400">{trade.openPrice?.toFixed(5) || '-'}</td>
+
+                                  <td className="py-3 px-4 text-gray-400 text-xs">
+                                    {trade.openedAt || trade.createdAt ? (
+                                      <>
+                                        <div>{new Date(trade.openedAt || trade.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
+                                        <div>{new Date(trade.openedAt || trade.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                                      </>
+                                    ) : '-'}
+                                  </td>
+
+                                  <td className="py-3 px-4 text-gray-400">{trade.closePrice?.toFixed(5) || '-'}</td>
+
+                                  <td className="py-3 px-4 text-gray-400 text-xs">
+                                    {trade.closedAt ? (
+                                      <>
+                                        <div>{new Date(trade.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
+                                        <div>{new Date(trade.closedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                                      </>
+                                    ) : '-'}
+                                  </td>
+
+                                  <td className={`py-3 px-4 font-medium ${(trade.realizedPnl || trade.amount || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {(trade.realizedPnl || trade.amount || 0) >= 0 ? '+' : ''}${(trade.realizedPnl || trade.amount || 0).toFixed(2)}
+                                  </td>
+
+                                </tr>
+
+                              ))}
+
+                            </tbody>
+
+                          </table>
+                        )}
 
 
 
