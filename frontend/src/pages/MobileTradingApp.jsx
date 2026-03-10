@@ -662,7 +662,7 @@ const MobileTradingApp = () => {
 
 
 
-  const executeOrder = async () => {
+  const executeOrder = async (tradeSide) => {
 
     if (!selectedAccount || !selectedInstrument || isExecuting) return
 
@@ -704,7 +704,7 @@ const MobileTradingApp = () => {
 
     try {
 
-      const side = orderType === 'pending' ? (pendingOrderType.includes('BUY') ? 'BUY' : 'SELL') : orderSide
+      const side = orderType === 'pending' ? (pendingOrderType.includes('BUY') ? 'BUY' : 'SELL') : (tradeSide || orderSide)
 
       const actualOrderType = orderType === 'market' ? 'MARKET' : pendingOrderType
 
@@ -850,7 +850,10 @@ const MobileTradingApp = () => {
 
         fetchOpenTrades()
 
-        fetchTradeHistory()
+        // Small delay to ensure DB has updated before fetching history
+        setTimeout(() => {
+          fetchTradeHistory()
+        }, 500)
 
         fetchAccountSummary()
 
@@ -2188,20 +2191,20 @@ const MobileTradingApp = () => {
 
               {tradeHistory.map(trade => (
 
-                <div key={trade._id} className="p-4">
+                <div key={trade._id} className="p-3 bg-dark-800/50">
 
-                  <div className="flex items-center justify-between mb-1">
+                  {/* Row 1: Type, Symbol, Side, P&L */}
+                  <div className="flex items-center justify-between mb-2">
 
                     <div className="flex items-center gap-2">
 
-                      <span className="text-white font-medium">{trade.symbol}</span>
+                      <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded">Trade</span>
 
-                      <span className={`text-xs ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>
+                      <span className="text-white font-medium text-sm">{trade.symbol}</span>
 
-                        {trade.side}
-
+                      <span className={`flex items-center gap-0.5 text-xs ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>
+                        {trade.side === 'BUY' ? '↗' : '↘'} {trade.side}
                       </span>
-
 
                     </div>
 
@@ -2213,11 +2216,42 @@ const MobileTradingApp = () => {
 
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-gray-500">
+                  {/* Row 2: Account, Qty */}
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
 
-                    <span>{trade.quantity} lots</span>
+                    <span>Account: {trade.tradingAccountId?.accountNumber || trade.accountNumber || '-'}</span>
 
-                    <span>{new Date(trade.closedAt).toLocaleDateString()}</span>
+                    <span>Qty: {trade.quantity} lots</span>
+
+                  </div>
+
+                  {/* Row 3: Open Price & Time */}
+                  <div className="flex items-center justify-between text-xs mb-1">
+
+                    <span className="text-gray-500">Open Price</span>
+
+                    <span className="text-gray-300">{trade.openPrice?.toFixed(5) || '-'}</span>
+
+                    <span className="text-gray-500">Open Time</span>
+
+                    <span className="text-gray-300 text-[10px]">
+                      {trade.openedAt ? new Date(trade.openedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + new Date(trade.openedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    </span>
+
+                  </div>
+
+                  {/* Row 4: Close Price & Time */}
+                  <div className="flex items-center justify-between text-xs">
+
+                    <span className="text-gray-500">Close Price</span>
+
+                    <span className="text-gray-300">{trade.closePrice?.toFixed(5) || '-'}</span>
+
+                    <span className="text-gray-500">Close Time</span>
+
+                    <span className="text-gray-300 text-[10px]">
+                      {trade.closedAt ? new Date(trade.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + new Date(trade.closedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                    </span>
 
                   </div>
 
@@ -2897,7 +2931,7 @@ const MobileTradingApp = () => {
 
                 <button
 
-                  onClick={() => { setOrderSide('SELL'); executeOrder() }}
+                  onClick={() => executeOrder('SELL')}
 
                   disabled={isExecuting}
 
@@ -2917,7 +2951,7 @@ const MobileTradingApp = () => {
 
                 <button
 
-                  onClick={() => { setOrderSide('BUY'); executeOrder() }}
+                  onClick={() => executeOrder('BUY')}
 
                   disabled={isExecuting}
 
@@ -3181,7 +3215,7 @@ const MobileTradingApp = () => {
 
                   <button
 
-                    onClick={() => { setOrderSide('SELL'); executeOrder() }}
+                    onClick={() => executeOrder('SELL')}
 
                     disabled={isExecuting}
 
@@ -3195,7 +3229,7 @@ const MobileTradingApp = () => {
 
                   <button
 
-                    onClick={() => { setOrderSide('BUY'); executeOrder() }}
+                    onClick={() => executeOrder('BUY')}
 
                     disabled={isExecuting}
 

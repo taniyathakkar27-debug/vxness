@@ -601,15 +601,16 @@ router.get('/history/:tradingAccountId', async (req, res) => {
 
     const trades = await Trade.find({ 
       tradingAccountId, 
-      status: 'CLOSED' 
+      status: { $in: ['CLOSED', 'STOPPED_OUT'] }
     })
       .sort({ closedAt: -1 })
       .skip(parseInt(offset))
       .limit(parseInt(limit))
+      .populate('tradingAccountId', 'accountNumber')
 
     const total = await Trade.countDocuments({ 
       tradingAccountId, 
-      status: 'CLOSED' 
+      status: { $in: ['CLOSED', 'STOPPED_OUT'] }
     })
 
     res.json({
