@@ -492,6 +492,45 @@ const OrderBook = () => {
 
   }
 
+  // Calculate summary stats for History tab (like mobile trading app)
+  const getHistorySummary = () => {
+    const filtered = getFilteredHistory()
+    
+    // Total Deposits
+    const totalDeposit = filtered
+      .filter(t => t.type === 'DEPOSIT')
+      .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0)
+    
+    // Total Profit (only from closed trades, not deposits/withdrawals)
+    const totalProfit = filtered
+      .filter(t => t.status === 'CLOSED' || t.closePrice)
+      .reduce((sum, t) => sum + (t.realizedPnl || 0), 0)
+    
+    // Total Swap
+    const totalSwap = filtered
+      .filter(t => t.status === 'CLOSED' || t.closePrice)
+      .reduce((sum, t) => sum + (t.swap || 0), 0)
+    
+    // Total Commission
+    const totalCommission = filtered
+      .filter(t => t.status === 'CLOSED' || t.closePrice)
+      .reduce((sum, t) => sum + (t.commission || 0), 0)
+    
+    // Current Balance (sum of all selected accounts)
+    const selectedAccounts = selectedAccount === 'all' 
+      ? accounts 
+      : accounts.filter(a => a._id === selectedAccount)
+    const totalBalance = selectedAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0)
+    
+    return {
+      deposit: totalDeposit,
+      profit: totalProfit,
+      swap: totalSwap,
+      commission: totalCommission,
+      balance: totalBalance
+    }
+  }
+
 
 
   const getFilteredHistory = () => {
@@ -1177,6 +1216,8 @@ const OrderBook = () => {
 
                           <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Current</th>
 
+                          <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Charges</th>
+
                           <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">P&L</th>
 
                           <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">SL/TP</th>
@@ -1229,6 +1270,8 @@ const OrderBook = () => {
                               </td>
 
                               <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{currentPrice?.toFixed(5) || '-'}</td>
+
+                              <td className="py-3 px-4 text-red-500 text-sm">${(trade.commission || 0).toFixed(2)}</td>
 
                               <td className={`py-3 px-4 font-medium ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
 
@@ -1553,6 +1596,8 @@ const OrderBook = () => {
 
                                 <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Price</th>
 
+                                <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Charges</th>
+
                                 <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Open Time</th>
 
                                 <th className="text-left text-gray-500 text-xs font-medium py-3 px-4">Close Price</th>
@@ -1598,6 +1643,8 @@ const OrderBook = () => {
                                   <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.quantity || '-'}</td>
 
                                   <td className="py-3 px-4 text-gray-400">{trade.openPrice?.toFixed(5) || '-'}</td>
+
+                                  <td className="py-3 px-4 text-red-500 text-sm">${(trade.commission || 0).toFixed(2)}</td>
 
                                   <td className="py-3 px-4 text-gray-400 text-xs">
                                     {trade.openedAt || trade.createdAt ? (
@@ -1684,6 +1731,44 @@ const OrderBook = () => {
 
                       </>
 
+                    )}
+
+                    {/* Summary Section - Like Mobile Trading App */}
+                    {getFilteredHistory().length > 0 && (
+                      <div className={`border-t ${isDarkMode ? 'border-gray-700 bg-dark-800' : 'border-gray-200 bg-gray-50'} p-4`}>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 text-sm">Deposit</span>
+                            <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {getHistorySummary().deposit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 text-sm">Profit</span>
+                            <span className={`font-medium ${getHistorySummary().profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {getHistorySummary().profit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 text-sm">Swap</span>
+                            <span className={`font-medium ${getHistorySummary().swap >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {getHistorySummary().swap.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 text-sm">Commission</span>
+                            <span className={`font-medium text-red-500`}>
+                              -{getHistorySummary().commission.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 text-sm">Balance</span>
+                            <span className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {getHistorySummary().balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     )}
 
                   </>
