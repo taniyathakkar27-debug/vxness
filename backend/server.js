@@ -72,7 +72,7 @@ import tradeEngine from './services/tradeEngine.js'
 
 import propTradingEngine from './services/propTradingEngine.js'
 
-import metaApiService from './services/metaApiService.js'
+import infowayService from './services/infowayService.js'
 
 
 
@@ -122,33 +122,31 @@ const priceCache = new Map()
 
 
 
-// Initialize MetaApi SDK streaming connection
+// Initialize Infoway WebSocket streaming connection
 
-let metaApiConnected = false
+let infowayConnected = false
 
 
 
-async function initMetaApiConnection() {
+async function initInfowayConnection() {
 
   try {
 
-    console.log('[MetaApi] Initializing SDK streaming connection...')
+    console.log('[Infoway] Initializing WebSocket connection...')
 
-    metaApiConnected = await metaApiService.connect()
+    infowayConnected = await infowayService.connect()
 
     
 
-    if (metaApiConnected) {
+    if (infowayConnected) {
 
-      console.log('[MetaApi] SDK connected! Live tick-by-tick streaming active.')
+      console.log('[Infoway] Connected! Live tick-by-tick streaming active.')
 
       
 
-      // Subscribe to tick-by-tick price updates from MetaApi SDK
+      // Subscribe to tick-by-tick price updates from Infoway
 
-      // PriceListener.onSymbolPriceUpdated fires on every tick
-
-      metaApiService.subscribe((symbol, price) => {
+      infowayService.subscribe((symbol, price) => {
 
         priceCache.set(symbol, price)
 
@@ -172,23 +170,15 @@ async function initMetaApiConnection() {
 
       })
 
-      
-
-      // Subscribe to all forex/metals symbols for real-time streaming
-
-      const forexMetalsSymbols = metaApiService.getSymbols().filter(s => !metaApiService.isCrypto(s))
-
-      await metaApiService.subscribeToSymbols(forexMetalsSymbols)
-
     } else {
 
-      console.log('[MetaApi] SDK connection failed. Forex prices will use fallback values.')
+      console.log('[Infoway] Connection failed. Prices will use fallback values.')
 
     }
 
   } catch (error) {
 
-    console.error('[MetaApi] Connection error:', error.message)
+    console.error('[Infoway] Connection error:', error.message)
 
   }
 
@@ -196,45 +186,13 @@ async function initMetaApiConnection() {
 
 
 
-// Background task: fetch crypto prices from Binance + broadcast all prices
+// Background task: sync prices and broadcast to subscribers
 
 async function streamPrices() {
 
-  const now = Date.now()
+  // Sync all Infoway prices into priceCache
 
-  
-
-  try {
-
-    // Fetch crypto prices from Binance (MetaAPI SDK handles forex/metals)
-
-    const cryptoSymbols = metaApiService.getSymbols().filter(s => metaApiService.isCrypto(s))
-
-    const cryptoPrices = await metaApiService.fetchCryptoPrices(cryptoSymbols)
-
-    
-
-    Object.entries(cryptoPrices).forEach(([symbol, price]) => {
-
-      if (price && price.bid) {
-
-        priceCache.set(symbol, price)
-
-      }
-
-    })
-
-  } catch (e) {
-
-    console.error('[Prices] Binance fetch error:', e.message)
-
-  }
-
-  
-
-  // Also sync any MetaAPI SDK prices into priceCache
-
-  const allPrices = metaApiService.getAllPrices()
+  const allPrices = infowayService.getAllPrices()
 
   Object.entries(allPrices).forEach(([symbol, price]) => {
 
@@ -266,13 +224,13 @@ async function streamPrices() {
 
 
 
-console.log('Price streaming initialized - MetaApi SDK + Binance')
+console.log('Price streaming initialized - Infoway WebSocket')
 
 
 
-// Initialize MetaApi SDK connection on startup
+// Initialize Infoway connection on startup
 
-initMetaApiConnection()
+initInfowayConnection()
 
 
 

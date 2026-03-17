@@ -1,12 +1,12 @@
 import dotenv from 'dotenv'
 dotenv.config()
 import express from 'express'
-import metaApiService, { SUPPORTED_SYMBOLS, META_API_SYMBOL_MAP, CRYPTO_SYMBOLS, FALLBACK_PRICES } from '../services/metaApiService.js'
+import infowayService, { SUPPORTED_SYMBOLS, CRYPTO_SYMBOLS, FALLBACK_PRICES } from '../services/infowayService.js'
 
 const router = express.Router()
 
 
-const SYMBOL_MAP = META_API_SYMBOL_MAP
+const SYMBOL_MAP = SUPPORTED_SYMBOLS.reduce((acc, s) => { acc[s] = s; return acc }, {})
 
 // Popular instruments per category (shown by default - 15 max)
 const POPULAR_INSTRUMENTS = {
@@ -16,35 +16,16 @@ const POPULAR_INSTRUMENTS = {
   Crypto: ['BTCUSD', 'ETHUSD', 'BNBUSD', 'SOLUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'DOTUSD', 'MATICUSD', 'LTCUSD', 'AVAXUSD', 'LINKUSD', 'SHIBUSD', 'UNIUSD', 'ATOMUSD']
 }
 
-// Fetch price from MetaApi with fallback
-async function getMetaApiPrice(symbol) {
+// Fetch price from Infoway with fallback
+async function getInfowayPrice(symbol) {
   try {
     if (!SYMBOL_MAP[symbol]) {
-      console.error(`No MetaApi mapping for symbol: ${symbol}`)
       return FALLBACK_PRICES[symbol] || null
     }
-
-    const price = await metaApiService.fetchPrice(symbol)
+    const price = infowayService.getPrice(symbol)
     return price || FALLBACK_PRICES[symbol] || null
   } catch (e) {
-    console.error(`MetaApi error for ${symbol}:`, e.message)
     return FALLBACK_PRICES[symbol] || null
-  }
-}
-
-// Fetch multiple prices from MetaApi
-async function getMetaApiBatchPrices(symbols) {
-  try {
-    const validSymbols = symbols.filter(s => SYMBOL_MAP[s])
-    return await metaApiService.fetchBatchPrices(validSymbols)
-  } catch (e) {
-    console.error(`MetaApi batch error:`, e.message)
-    // Return fallback prices
-    const prices = {}
-    symbols.forEach(s => {
-      if (FALLBACK_PRICES[s]) prices[s] = FALLBACK_PRICES[s]
-    })
-    return prices
   }
 }
 
@@ -58,7 +39,7 @@ function categorizeSymbol(symbol) {
   if (s.includes('OIL') || s.includes('BRENT') || s.includes('WTI') || s === 'NGAS' || s === 'COPPER') {
     return 'Commodities'
   }
-  if (metaApiService.isCrypto(symbol)) {
+  if (infowayService.isCrypto(symbol)) {
     return 'Crypto'
   }
   return 'Forex'
@@ -106,7 +87,7 @@ function getDefaultInstruments() {
 // GET /api/prices/instruments - Get all available instruments (MUST be before /:symbol)
 router.get('/instruments', async (req, res) => {
   try {
-    console.log('Returning MetaApi supported instruments')
+    console.log('Returning Infoway supported instruments')
     
     const instruments = SUPPORTED_SYMBOLS.map(symbol => {
       const category = categorizeSymbol(symbol)
@@ -124,7 +105,7 @@ router.get('/instruments', async (req, res) => {
       }
     })
     
-    console.log('Returning', instruments.length, 'MetaApi instruments')
+    console.log('Returning', instruments.length, 'Infoway instruments')
     res.json({ success: true, instruments })
   } catch (error) {
     console.error('Error fetching instruments:', error)
@@ -200,13 +181,13 @@ function getDigits(symbol) {
   if (symbol.includes('JPY')) return 3
   if (symbol === 'XAUUSD') return 2
   if (symbol === 'XAGUSD') return 3
-  if (metaApiService.isCrypto(symbol)) return 2
+  if (infowayService.isCrypto(symbol)) return 2
   return 5
 }
 
 // Helper to get contract size
 function getContractSize(symbol) {
-  if (metaApiService.isCrypto(symbol)) return 1
+  if (infowayService.isCrypto(symbol)) return 1
   if (symbol === 'XAUUSD' || symbol === 'XAGUSD') return 100
   return 100000
 }
@@ -221,8 +202,8 @@ router.get('/:symbol', async (req, res) => {
       return res.status(404).json({ success: false, message: `Symbol ${symbol} not supported` })
     }
     
-    // Use cached price from metaApiService (populated by background streamPrices)
-    const price = metaApiService.getPrice(symbol)
+    // Use cached price from infowayService
+    const price = infowayService.getPrice(symbol)
     
     if (price) {
       res.json({ success: true, price })
@@ -243,10 +224,10 @@ router.post('/batch', async (req, res) => {
       return res.status(400).json({ success: false, message: 'symbols array required' })
     }
     
-    // Get all prices from metaApiService cache (populated by background streamPrices)
+    // Get all prices from infowayService cache
     const prices = {}
     for (const symbol of symbols) {
-      const price = metaApiService.getPrice(symbol)
+      const price = infowayService.getPrice(symbol)
       if (price) {
         prices[symbol] = price
       }
