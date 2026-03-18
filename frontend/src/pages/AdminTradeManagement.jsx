@@ -2108,15 +2108,6 @@ const AdminTradeManagement = () => {
 
 
 
-                      {trade.closedBy === 'ADMIN' && (
-
-
-
-                        <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-500">Admin Close</span>
-
-
-
-                      )}
 
 
 
@@ -2517,15 +2508,6 @@ const AdminTradeManagement = () => {
 
 
 
-                          {trade.closedBy === 'ADMIN' && (
-
-
-
-                            <span className="text-xs text-yellow-500">Admin Close</span>
-
-
-
-                          )}
 
 
 

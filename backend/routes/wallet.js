@@ -624,11 +624,13 @@ router.get('/transactions/:userId', async (req, res) => {
 
   try {
 
-    const transactions = await Transaction.find({ userId: req.params.userId })
-
+    const transactions = await Transaction.find({ 
+      userId: req.params.userId
+    })
+      .populate('tradingAccountId', 'accountId')
       .sort({ createdAt: -1 })
 
-    res.json({ transactions })
+    res.json({ success: true, transactions })
 
   } catch (error) {
 

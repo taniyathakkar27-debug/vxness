@@ -496,9 +496,14 @@ const OrderBook = () => {
   const getHistorySummary = () => {
     const filtered = getFilteredHistory()
     
-    // Total Deposits
+    // Total Deposits (from transactions - check both cases for type and status)
     const totalDeposit = filtered
-      .filter(t => t.type === 'DEPOSIT')
+      .filter(t => (t.type === 'DEPOSIT' || t.type === 'Deposit') && (t.status === 'APPROVED' || t.status === 'Approved' || t.status === 'Completed'))
+      .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0)
+    
+    // Total Credit
+    const totalCredit = filtered
+      .filter(t => (t.type === 'CREDIT' || t.type === 'Credit') && (t.status === 'APPROVED' || t.status === 'Approved' || t.status === 'Completed'))
       .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0)
     
     // Total Profit (only from closed trades, not deposits/withdrawals)
@@ -524,6 +529,7 @@ const OrderBook = () => {
     
     return {
       deposit: totalDeposit,
+      credit: totalCredit,
       profit: totalProfit,
       swap: totalSwap,
       commission: totalCommission,
@@ -1736,11 +1742,17 @@ const OrderBook = () => {
                     {/* Summary Section - Like Mobile Trading App */}
                     {getFilteredHistory().length > 0 && (
                       <div className={`border-t ${isDarkMode ? 'border-gray-700 bg-dark-800' : 'border-gray-200 bg-gray-50'} p-4`}>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                           <div className="flex justify-between items-center">
                             <span className="text-gray-500 text-sm">Deposit</span>
                             <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                               {getHistorySummary().deposit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 text-sm">Credit</span>
+                            <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {getHistorySummary().credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </div>
                           <div className="flex justify-between items-center">

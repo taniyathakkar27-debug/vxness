@@ -240,7 +240,7 @@ const MobileTradingApp = () => {
 
   useEffect(() => {
 
-    if (selectedAccount) {
+    if (selectedAccount && user) {
 
       fetchOpenTrades()
 
@@ -264,7 +264,7 @@ const MobileTradingApp = () => {
 
     }
 
-  }, [selectedAccount])
+  }, [selectedAccount, user])
 
 
 
@@ -598,16 +598,18 @@ const MobileTradingApp = () => {
     try {
       const res = await fetch(`${API_URL}/wallet/transactions/${user._id}`)
       const data = await res.json()
-      if (data.success) {
-        // Filter transactions for selected account if needed
-        const txns = (data.transactions || []).map(t => ({
-          ...t,
-          isTransaction: true,
-          accountName: t.tradingAccountId?.accountId || '-'
-        }))
-        setTransactions(txns)
-      }
-    } catch (e) {}
+      // Handle both success flag and direct transactions array
+      const txnList = data.transactions || []
+      const txns = txnList.map(t => ({
+        ...t,
+        isTransaction: true,
+        itemType: 'transaction',
+        accountName: t.tradingAccountId?.accountId || '-'
+      }))
+      setTransactions(txns)
+    } catch (e) {
+      console.error('Error fetching transactions:', e)
+    }
   }
 
 
@@ -1727,73 +1729,72 @@ const MobileTradingApp = () => {
 
     <div className="flex flex-col h-full pb-16">
 
-      {/* Account Summary List - Real-time values */}
-
+      {/* Account Summary List - Different data based on tab */}
       <div className="bg-dark-900 border-b border-gray-800">
-
         <div className="divide-y divide-gray-800">
-
-          <div className="flex justify-between px-4 py-2.5">
-
-            <span className="text-gray-400 text-sm">Balance</span>
-
-            <span className="text-white text-sm">{(accountSummary.balance || 0).toFixed(2)}</span>
-
-          </div>
-
-          <div className="flex justify-between px-4 py-2.5">
-
-            <span className="text-gray-400 text-sm">Equity</span>
-
-            <span className={`text-sm ${totalFloatingPnl >= 0 ? 'text-white' : 'text-red-500'}`}>
-
-              {realTimeEquity.toFixed(2)}
-
+          <div className="flex justify-between px-4 py-2">
+            <span className="text-gray-400 text-sm">Deposit</span>
+            <span className="text-white text-sm">
+              {transactions
+                .filter(t => t.type?.toLowerCase() === 'deposit' && (t.status?.toLowerCase() === 'approved' || t.status?.toLowerCase() === 'completed'))
+                .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0)
+                .toFixed(2)}
             </span>
-
           </div>
-
-          <div className="flex justify-between px-4 py-2.5">
-
+          <div className="flex justify-between px-4 py-2">
             <span className="text-gray-400 text-sm">Credit</span>
-
-            <span className="text-white text-sm">{(accountSummary.credit || 0).toFixed(2)}</span>
-
-          </div>
-
-          <div className="flex justify-between px-4 py-2.5">
-
-            <span className="text-gray-400 text-sm">Used Margin</span>
-
-            <span className="text-white text-sm">{totalUsedMargin.toFixed(2)}</span>
-
-          </div>
-
-          <div className="flex justify-between px-4 py-2.5">
-
-            <span className="text-gray-400 text-sm">Free Margin</span>
-
-            <span className={`text-sm ${realTimeFreeMargin >= 0 ? 'text-blue-400' : 'text-red-500'}`}>{realTimeFreeMargin.toFixed(2)}</span>
-
-          </div>
-
-          <div className="flex justify-between px-4 py-2.5">
-
-            <span className="text-gray-400 text-sm">Floating PL</span>
-
-            <span className={`text-sm ${totalFloatingPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-
-              {totalFloatingPnl.toFixed(2)}
-
+            <span className="text-white text-sm">
+              {transactions
+                .filter(t => t.type?.toLowerCase() === 'credit' && (t.status?.toLowerCase() === 'approved' || t.status?.toLowerCase() === 'completed'))
+                .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0)
+                .toFixed(2)}
             </span>
-
           </div>
-
+          <div className="flex justify-between px-4 py-2">
+            <span className="text-gray-400 text-sm">Profit</span>
+            <span className={`text-sm ${
+              (tradeTab === 'positions' || tradeTab === 'pending' 
+                ? totalFloatingPnl 
+                : tradeHistory.reduce((sum, t) => sum + (t.realizedPnl || 0), 0)
+              ) >= 0 ? 'text-green-500' : 'text-red-500'
+            }`}>
+              {(tradeTab === 'positions' || tradeTab === 'pending' 
+                ? totalFloatingPnl 
+                : tradeHistory.reduce((sum, t) => sum + (t.realizedPnl || 0), 0)
+              ).toFixed(2)}
+            </span>
+          </div>
+          <div className="flex justify-between px-4 py-2">
+            <span className="text-gray-400 text-sm">Swap</span>
+            <span className={`text-sm ${
+              (tradeTab === 'positions' || tradeTab === 'pending'
+                ? openTrades.reduce((sum, t) => sum + (t.swap || 0), 0)
+                : tradeHistory.reduce((sum, t) => sum + (t.swap || 0), 0)
+              ) >= 0 ? 'text-white' : 'text-red-500'
+            }`}>
+              {(tradeTab === 'positions' || tradeTab === 'pending'
+                ? openTrades.reduce((sum, t) => sum + (t.swap || 0), 0)
+                : tradeHistory.reduce((sum, t) => sum + (t.swap || 0), 0)
+              ).toFixed(2)}
+            </span>
+          </div>
+          <div className="flex justify-between px-4 py-2">
+            <span className="text-gray-400 text-sm">Commission</span>
+            <span className="text-red-500 text-sm">
+              -{(tradeTab === 'positions' || tradeTab === 'pending'
+                ? openTrades.reduce((sum, t) => sum + (t.commission || 0), 0)
+                : tradeHistory.reduce((sum, t) => sum + (t.commission || 0), 0)
+              ).toFixed(2)}
+            </span>
+          </div>
+          <div className="flex justify-between px-4 py-2">
+            <span className="text-gray-400 text-sm">Balance</span>
+            <span className="text-white text-sm font-medium">
+              {(selectedAccount?.balance || 0).toFixed(2)}
+            </span>
+          </div>
         </div>
-
       </div>
-
-
 
       {/* Tabs - Positions / Pending / History */}
 
@@ -1807,7 +1808,7 @@ const MobileTradingApp = () => {
 
             onClick={() => setTradeTab(tab)}
 
-            className={`flex-1 py-3 text-sm font-medium ${
+            className={`allow-investor flex-1 py-3 text-sm font-medium ${
 
               tradeTab === tab ? 'text-accent-green border-b-2 border-accent-green' : 'text-gray-500'
 
@@ -2199,7 +2200,7 @@ const MobileTradingApp = () => {
                 <button
                   key={tab.key}
                   onClick={() => setHistorySubTab(tab.key)}
-                  className={`flex-1 px-2 py-1.5 rounded text-xs font-medium ${
+                  className={`allow-investor flex-1 px-2 py-1.5 rounded text-xs font-medium ${
                     historySubTab === tab.key 
                       ? 'bg-accent-green text-black' 
                       : 'bg-dark-700 text-gray-400'
@@ -2240,23 +2241,23 @@ const MobileTradingApp = () => {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className={`px-1.5 py-0.5 text-[10px] rounded ${
-                              item.type === 'DEPOSIT' ? 'bg-green-500/20 text-green-400' :
-                              item.type === 'WITHDRAWAL' ? 'bg-red-500/20 text-red-400' :
-                              item.type === 'CREDIT' ? 'bg-purple-500/20 text-purple-400' :
+                              item.type?.toLowerCase() === 'deposit' ? 'bg-green-500/20 text-green-400' :
+                              item.type?.toLowerCase() === 'withdrawal' ? 'bg-red-500/20 text-red-400' :
+                              item.type?.toLowerCase().includes('credit') ? 'bg-purple-500/20 text-purple-400' :
                               'bg-yellow-500/20 text-yellow-400'
                             }`}>
-                              {item.type}
+                              {item.type?.replace(/_/g, ' ')}
                             </span>
-                            <span className="text-white font-medium text-sm">{item.accountName || '-'}</span>
+                            <span className="text-white font-medium text-sm">{item.tradingAccountId?.accountId || item.accountName || '-'}</span>
                           </div>
                           <span className={`font-semibold ${
-                            item.type === 'WITHDRAWAL' ? 'text-red-500' : 'text-green-500'
+                            item.type?.toLowerCase() === 'withdrawal' || item.type?.toLowerCase() === 'credit_out' ? 'text-red-500' : 'text-green-500'
                           }`}>
-                            {item.type === 'WITHDRAWAL' ? '-' : '+'}${Math.abs(item.amount || 0).toFixed(2)}
+                            {item.type?.toLowerCase() === 'withdrawal' || item.type?.toLowerCase() === 'credit_out' ? '-' : '+'}${Math.abs(item.amount || 0).toFixed(2)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-xs text-gray-400">
-                          <span>Status: <span className={item.status === 'APPROVED' || item.status === 'COMPLETED' ? 'text-green-400' : item.status === 'REJECTED' ? 'text-red-400' : 'text-yellow-400'}>{item.status}</span></span>
+                          <span>Status: <span className={item.status?.toLowerCase() === 'approved' || item.status?.toLowerCase() === 'completed' ? 'text-green-400' : item.status?.toLowerCase() === 'rejected' ? 'text-red-400' : 'text-yellow-400'}>{item.status}</span></span>
                           <span>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + new Date(item.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                         </div>
                       </div>
@@ -2289,7 +2290,7 @@ const MobileTradingApp = () => {
                             <span className="text-gray-300">{item.openedAt ? new Date(item.openedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + new Date(item.openedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="grid grid-cols-2 gap-2 text-xs mb-1">
                           <div className="flex justify-between">
                             <span className="text-gray-500">Close Price</span>
                             <span className="text-gray-300">{item.closePrice?.toFixed(5) || '-'}</span>
@@ -2297,6 +2298,16 @@ const MobileTradingApp = () => {
                           <div className="flex justify-between">
                             <span className="text-gray-500">Close Time</span>
                             <span className="text-gray-300">{item.closedAt ? new Date(item.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + new Date(item.closedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Charges</span>
+                            <span className="text-red-500">${((item.commission || 0) + (item.spread || 0)).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Swap</span>
+                            <span className={item.swap >= 0 ? 'text-green-500' : 'text-red-500'}>${(item.swap || 0).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
