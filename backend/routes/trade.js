@@ -207,6 +207,25 @@ router.post('/close', async (req, res) => {
       })
     }
 
+    // Check 3-minute minimum trade duration
+    const tradeOpenTime = new Date(tradeToClose.openedAt || tradeToClose.createdAt)
+    const now = new Date()
+    const timeDiffMs = now - tradeOpenTime
+    const threeMinutesMs = 3 * 60 * 1000 // 180000 ms
+
+    console.log(`[3-MIN CHECK] Trade ${tradeToClose.tradeId}: openedAt=${tradeToClose.openedAt}, createdAt=${tradeToClose.createdAt}, timeDiff=${timeDiffMs}ms, required=${threeMinutesMs}ms`)
+
+    if (timeDiffMs < threeMinutesMs) {
+      const remainingSeconds = Math.ceil((threeMinutesMs - timeDiffMs) / 1000)
+      console.log(`[3-MIN CHECK] BLOCKED! Trade ${tradeToClose.tradeId} - wait ${remainingSeconds} more seconds`)
+      return res.status(400).json({
+        success: false,
+        message: `Trade cannot be closed before 3 minutes. Please wait ${remainingSeconds} seconds.`,
+        code: 'MIN_DURATION_NOT_MET',
+        remainingSeconds
+      })
+    }
+
     // Check if this is a challenge account trade
     const challengeAccount = await ChallengeAccount.findById(tradeToClose.tradingAccountId)
     

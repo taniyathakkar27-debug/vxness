@@ -1015,20 +1015,25 @@ router.post('/close/:tradeId', async (req, res) => {
 
 
       return res.status(400).json({ success: false, message: 'Trade is not open' })
-
-
-
     }
 
+    // Check 3-minute minimum trade duration
+    const tradeOpenTime = new Date(trade.openedAt || trade.createdAt)
+    const now = new Date()
+    const timeDiffMs = now - tradeOpenTime
+    const threeMinutesMs = 3 * 60 * 1000 // 180000 ms
 
-
-
-
-
+    if (timeDiffMs < threeMinutesMs) {
+      const remainingSeconds = Math.ceil((threeMinutesMs - timeDiffMs) / 1000)
+      return res.status(400).json({
+        success: false,
+        message: `Trade cannot be closed before 3 minutes. Please wait ${remainingSeconds} seconds.`,
+        code: 'MIN_DURATION_NOT_MET',
+        remainingSeconds
+      })
+    }
 
     // Use closePrice if provided, otherwise use marketPrice, fallback to openPrice
-
-
 
     const finalClosePrice = closePrice || marketPrice || trade.openPrice
 
@@ -1857,7 +1862,16 @@ router.post('/trades/force-close-all', async (req, res) => {
 
     for (const trade of openTrades) {
 
+      // Check 3-minute minimum trade duration
+      const tradeOpenTime = new Date(trade.openedAt || trade.createdAt)
+      const now = new Date()
+      const timeDiffMs = now - tradeOpenTime
+      const threeMinutesMs = 3 * 60 * 1000 // 180000 ms
 
+      if (timeDiffMs < threeMinutesMs) {
+        // Skip this trade - not yet 3 minutes old
+        continue
+      }
 
       const tradePrice = prices[trade.symbol]
 

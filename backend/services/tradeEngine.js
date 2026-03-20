@@ -672,6 +672,22 @@ class TradeEngine {
 
     if (trade.status !== 'OPEN') throw new Error('Trade is not open')
 
+    // Check 3-minute minimum trade duration (skip for SL/TP/STOP_OUT auto-closes)
+    if (closedBy === 'USER' || closedBy === 'ADMIN') {
+      const tradeOpenTime = new Date(trade.openedAt || trade.createdAt)
+      const now = new Date()
+      const timeDiffMs = now - tradeOpenTime
+      const threeMinutesMs = 3 * 60 * 1000 // 180000 ms
+
+      console.log(`[3-MIN CHECK] Trade ${trade.tradeId}: closedBy=${closedBy}, timeDiff=${timeDiffMs}ms, required=${threeMinutesMs}ms`)
+
+      if (timeDiffMs < threeMinutesMs) {
+        const remainingSeconds = Math.ceil((threeMinutesMs - timeDiffMs) / 1000)
+        console.log(`[3-MIN CHECK] BLOCKED! Trade ${trade.tradeId} - wait ${remainingSeconds} more seconds`)
+        throw new Error(`Trade cannot be closed before 3 minutes. Please wait ${remainingSeconds} seconds.`)
+      }
+    }
+
 
 
     const closePrice = trade.side === 'BUY' ? currentBid : currentAsk
@@ -1092,16 +1108,27 @@ class TradeEngine {
 
     for (const trade of openTrades) {
 
+      // Check 3-minute minimum trade duration before allowing SL/TP close
+      const tradeOpenTime = new Date(trade.openedAt || trade.createdAt)
+      const now = new Date()
+      const timeDiffMs = now - tradeOpenTime
+      const threeMinutesMs = 3 * 60 * 1000 // 180000 ms
+
+      if (timeDiffMs < threeMinutesMs) {
+        // Skip this trade - not yet 3 minutes old
+        continue
+      }
+
       const prices = currentPrices[trade.symbol]
 
       if (!prices) {
 
         // Only log once per minute to reduce spam
         if (!this._lastNoDataLog) this._lastNoDataLog = {}
-        const now = Date.now()
-        if (!this._lastNoDataLog[trade.symbol] || now - this._lastNoDataLog[trade.symbol] > 60000) {
+        const nowMs = Date.now()
+        if (!this._lastNoDataLog[trade.symbol] || nowMs - this._lastNoDataLog[trade.symbol] > 60000) {
           console.log(`[Regular SL/TP] No price data for ${trade.symbol}`)
-          this._lastNoDataLog[trade.symbol] = now
+          this._lastNoDataLog[trade.symbol] = nowMs
         }
 
         continue

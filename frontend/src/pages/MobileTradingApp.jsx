@@ -1764,29 +1764,46 @@ const MobileTradingApp = () => {
               ).toFixed(2)}
             </span>
           </div>
-          <div className="flex justify-between px-4 py-2">
-            <span className="text-gray-400 text-sm">Swap</span>
-            <span className={`text-sm ${
-              (tradeTab === 'positions' || tradeTab === 'pending'
-                ? openTrades.reduce((sum, t) => sum + (t.swap || 0), 0)
-                : tradeHistory.reduce((sum, t) => sum + (t.swap || 0), 0)
-              ) >= 0 ? 'text-white' : 'text-red-500'
-            }`}>
-              {(tradeTab === 'positions' || tradeTab === 'pending'
-                ? openTrades.reduce((sum, t) => sum + (t.swap || 0), 0)
-                : tradeHistory.reduce((sum, t) => sum + (t.swap || 0), 0)
-              ).toFixed(2)}
-            </span>
-          </div>
-          <div className="flex justify-between px-4 py-2">
-            <span className="text-gray-400 text-sm">Commission</span>
-            <span className="text-red-500 text-sm">
-              -{(tradeTab === 'positions' || tradeTab === 'pending'
-                ? openTrades.reduce((sum, t) => sum + (t.commission || 0), 0)
-                : tradeHistory.reduce((sum, t) => sum + (t.commission || 0), 0)
-              ).toFixed(2)}
-            </span>
-          </div>
+          {tradeTab === 'history' && (
+            <>
+              <div className="flex justify-between px-4 py-2">
+                <span className="text-gray-400 text-sm">Swap</span>
+                <span className={`text-sm ${
+                  tradeHistory.reduce((sum, t) => sum + (t.swap || 0), 0) >= 0 ? 'text-white' : 'text-red-500'
+                }`}>
+                  {tradeHistory.reduce((sum, t) => sum + (t.swap || 0), 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between px-4 py-2">
+                <span className="text-gray-400 text-sm">Commission</span>
+                <span className="text-red-500 text-sm">
+                  -{tradeHistory.reduce((sum, t) => sum + (t.commission || 0), 0).toFixed(2)}
+                </span>
+              </div>
+            </>
+          )}
+          {(tradeTab === 'positions' || tradeTab === 'pending') && (
+            <>
+              <div className="flex justify-between px-4 py-2">
+                <span className="text-gray-400 text-sm">Equity</span>
+                <span className={`text-sm ${realTimeEquity >= (selectedAccount?.balance || 0) ? 'text-green-500' : 'text-red-500'}`}>
+                  {realTimeEquity.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between px-4 py-2">
+                <span className="text-gray-400 text-sm">Margin</span>
+                <span className="text-white text-sm">
+                  {totalUsedMargin.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between px-4 py-2">
+                <span className="text-gray-400 text-sm">Free Margin</span>
+                <span className={`text-sm ${realTimeFreeMargin >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {realTimeFreeMargin.toFixed(2)}
+                </span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between px-4 py-2">
             <span className="text-gray-400 text-sm">Balance</span>
             <span className="text-white text-sm font-medium">
