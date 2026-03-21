@@ -9,6 +9,7 @@ import copyTradingEngine from '../services/copyTradingEngine.js'
 import ibEngine from '../services/ibEngineNew.js'
 import MasterTrader from '../models/MasterTrader.js'
 import infowayService from '../services/infowayService.js'
+import { resolveTradeSegment } from '../utils/tradeSegment.js'
 
 // Get price from cache (populated by background streamPrices in server.js)
 function getFreshPrice(symbol) {
@@ -240,7 +241,7 @@ router.post('/close', async (req, res) => {
       const charges = await Charges.getChargesForTrade(
         tradeToClose.userId, 
         tradeToClose.symbol, 
-        tradeToClose.segment, 
+        resolveTradeSegment(tradeToClose.symbol, tradeToClose.segment), 
         null
       )
       

@@ -4,6 +4,8 @@ import TradingAccount from '../models/TradingAccount.js'
 
 import Charges from '../models/Charges.js'
 
+import { resolveTradeSegment } from '../utils/tradeSegment.js'
+
 import TradeSettings from '../models/TradeSettings.js'
 
 import AdminLog from '../models/AdminLog.js'
@@ -474,9 +476,11 @@ class TradeEngine {
 
 
 
-    // Get charges for this trade
+    const resolvedSegment = resolveTradeSegment(symbol, segment)
 
-    const charges = await Charges.getChargesForTrade(userId, symbol, segment, account.accountTypeId?._id)
+    // Get charges for this trade (segment from symbol so production matches Metals/Crypto/Indices rules)
+
+    const charges = await Charges.getChargesForTrade(userId, symbol, resolvedSegment, account.accountTypeId?._id)
 
     
 
@@ -606,7 +610,7 @@ class TradeEngine {
 
       symbol,
 
-      segment,
+      segment: resolvedSegment,
 
       side,
 
@@ -694,6 +698,8 @@ class TradeEngine {
 
     
 
+    const segmentForCharges = resolveTradeSegment(trade.symbol, trade.segment)
+
     // Get charges to check if commission on close is enabled
 
     const charges = await Charges.getChargesForTrade(
@@ -702,7 +708,7 @@ class TradeEngine {
 
       trade.symbol, 
 
-      trade.segment, 
+      segmentForCharges, 
 
       trade.tradingAccountId?.accountTypeId?._id
 
@@ -1354,13 +1360,15 @@ class TradeEngine {
 
     for (const trade of openTrades) {
 
+      const segmentForCharges = resolveTradeSegment(trade.symbol, trade.segment)
+
       const charges = await Charges.getChargesForTrade(
 
         trade.userId,
 
         trade.symbol,
 
-        trade.segment,
+        segmentForCharges,
 
         trade.tradingAccountId?.accountTypeId?._id
 

@@ -5,6 +5,7 @@ import Trade from '../models/Trade.js'
 import User from '../models/User.js'
 import Charges from '../models/Charges.js'
 import { sendTemplateEmail } from '../services/emailService.js'
+import { resolveTradeSegment } from '../utils/tradeSegment.js'
 
 class PropTradingEngine {
   constructor() {
@@ -262,8 +263,10 @@ class PropTradingEngine {
 
     const { symbol, segment, side, orderType, quantity, bid, ask, sl, tp } = tradeParams
 
+    const resolvedSegment = resolveTradeSegment(symbol, segment)
+
     // Get charges for this trade (use default charges for challenge accounts)
-    const charges = await Charges.getChargesForTrade(userId, symbol, segment || 'Forex', null)
+    const charges = await Charges.getChargesForTrade(userId, symbol, resolvedSegment, null)
     
     // Calculate execution price with spread
     const openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
@@ -294,7 +297,7 @@ class PropTradingEngine {
       isChallengeAccount: true,
       tradeId,
       symbol,
-      segment: segment || 'Forex',
+      segment: resolvedSegment,
       side,
       orderType,
       quantity,
