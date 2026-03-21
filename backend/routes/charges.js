@@ -79,9 +79,15 @@ router.get('/', async (req, res) => {
     const { segment, level, instrumentSymbol, userId } = req.query
     
     let query = { isActive: true }
-    // Include charges for specific segment OR null segment (applies to all)
+    // Legacy ?segment=Forex hid INSTRUMENT rows with segment Metals/Crypto (e.g. XAUUSD). Those levels
+    // are keyed by symbol, not segment filter — always include them when segment filter is used.
     if (segment) {
-      query.$or = [{ segment: segment }, { segment: null }]
+      query.$or = [
+        { segment: segment },
+        { segment: null },
+        { level: 'INSTRUMENT' },
+        { level: 'USER' }
+      ]
     }
     if (level) query.level = level
     if (instrumentSymbol) query.instrumentSymbol = instrumentSymbol

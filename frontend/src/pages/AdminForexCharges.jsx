@@ -76,7 +76,10 @@ const AdminForexCharges = () => {
   const fetchCharges = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_URL}/charges`)
+      const res = await fetch(`${API_URL}/charges`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      })
       const data = await res.json()
       if (data.success) {
         setCharges(data.charges || [])
@@ -112,6 +115,13 @@ const AdminForexCharges = () => {
       const data = await res.json()
       if (data.success) {
         toast.success(editingCharge ? 'Updated!' : 'Created!')
+        if (data.charge) {
+          setCharges((prev) => {
+            const id = data.charge._id
+            const rest = prev.filter((c) => c._id !== id)
+            return [data.charge, ...rest]
+          })
+        }
         setModalType(null)
         setEditingCharge(null)
         resetForm()
@@ -218,7 +228,9 @@ const AdminForexCharges = () => {
         : charge.userId?.email || 'Unknown User'
       return `${userName} - ${charge.instrumentSymbol || 'All Instruments'}`
     }
-    if (charge.level === 'INSTRUMENT') return charge.instrumentSymbol
+    if (charge.level === 'INSTRUMENT') {
+      return charge.segment ? `${charge.instrumentSymbol} · ${charge.segment}` : charge.instrumentSymbol
+    }
     if (charge.level === 'SEGMENT') return charge.segment
     if (charge.level === 'GLOBAL') return 'Global'
     return charge.level
