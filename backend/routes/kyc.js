@@ -410,6 +410,8 @@ router.put('/reject/:kycId', async (req, res) => {
     kyc.reviewedAt = new Date()
     await kyc.save()
 
+    await User.findByIdAndUpdate(kyc.userId, { kycApproved: false })
+
     // Send KYC rejected email
     try {
       const user = await User.findById(kyc.userId)

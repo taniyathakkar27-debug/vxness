@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useInvestorMode, investorReadOnlyCSS } from '../hooks/useInvestorMode'
 import { 
   LayoutDashboard, 
@@ -23,8 +23,6 @@ import {
   EyeOff,
   Mail, 
   Phone, 
-  MapPin, 
-  Calendar, 
   Shield, 
   Save, 
   X, 
@@ -44,6 +42,8 @@ import logoImage from '../assets/logo.png'
 
 const ProfilePage = () => {
   const navigate = useNavigate()
+  const location = useLocation()
+  const scrollKycHandledKey = useRef(null)
   const { isDarkMode, toggleDarkMode } = useTheme()
   const { isInvestorMode } = useInvestorMode()
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
@@ -90,6 +90,17 @@ const ProfilePage = () => {
     fetchKycStatus()
     fetchUserBankAccounts()
   }, [])
+
+  useEffect(() => {
+    if (!location.state?.scrollToKyc) return
+    if (scrollKycHandledKey.current === location.key) return
+    scrollKycHandledKey.current = location.key
+    const t = setTimeout(() => {
+      document.getElementById('kyc-verification-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      navigate(location.pathname, { replace: true, state: {} })
+    }, 200)
+    return () => clearTimeout(t)
+  }, [location.key, location.pathname, location.state, navigate])
 
   // Fetch user's bank accounts
   const fetchUserBankAccounts = async () => {
@@ -261,13 +272,8 @@ const ProfilePage = () => {
   
   const [profile, setProfile] = useState({
     firstName: storedUser.firstName || '',
-    lastName: storedUser.lastName || '',
     email: storedUser.email || '',
     phone: storedUser.phone || '',
-    address: storedUser.address || '',
-    city: storedUser.city || '',
-    country: storedUser.country || '',
-    dateOfBirth: storedUser.dateOfBirth || '',
     bankDetails: storedUser.bankDetails || {
       bankName: '',
       accountNumber: '',
@@ -469,7 +475,7 @@ const ProfilePage = () => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col md:flex-row transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+    <div className={`h-screen flex flex-col md:flex-row md:overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
       {/* Investor Read-Only CSS */}
       {isInvestorMode && <style>{investorReadOnlyCSS}</style>}
       {/* Mobile Header */}
@@ -491,14 +497,14 @@ const ProfilePage = () => {
       {/* Sidebar - Hidden on Mobile */}
       {!isMobile && (
         <aside 
-          className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col transition-all duration-300`}
+          className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen shrink-0 sticky top-0 transition-all duration-300`}
           onMouseEnter={() => setSidebarExpanded(true)}
           onMouseLeave={() => setSidebarExpanded(false)}
         >
-          <div className="p-4 flex items-center justify-center">
+          <div className="p-4 flex items-center justify-center shrink-0">
             <img src={logoImage} alt="vxness" className="h-8 w-auto object-contain" />
           </div>
-          <nav className="flex-1 px-2">
+          <nav className="flex-1 min-h-0 px-2 overflow-y-auto">
             {menuItems.map((item) => {
               const isDisabledForInvestor = isInvestorMode && !investorAllowedMenus.includes(item.name)
               return (
@@ -518,7 +524,7 @@ const ProfilePage = () => {
               )
             })}
           </nav>
-          <div className={`p-2 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+          <div className={`p-2 border-t shrink-0 ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
             <button onClick={toggleDarkMode} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 ${isDarkMode ? 'text-yellow-400 hover:bg-dark-700' : 'text-blue-500 hover:bg-gray-100'}`}>
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
               {sidebarExpanded && <span className="text-sm">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>}
@@ -532,7 +538,7 @@ const ProfilePage = () => {
       )}
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-auto ${isMobile ? 'pt-14' : ''} ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
+      <main className={`flex-1 min-h-0 overflow-y-auto ${isMobile ? 'pt-14' : ''} ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
         {!isMobile && (
           <header className={`flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
             <h1 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>My Profile</h1>
@@ -586,7 +592,7 @@ const ProfilePage = () => {
                   ) : (
                     <div className={`${isMobile ? 'w-16 h-16' : 'w-24 h-24'} bg-accent-green/20 rounded-full flex items-center justify-center`}>
                       <span className={`text-accent-green font-bold ${isMobile ? 'text-xl' : 'text-3xl'}`}>
-                        {profile.firstName?.charAt(0)}{profile.lastName?.charAt(0)}
+                        {(profile.firstName?.charAt(0) || '?').toUpperCase()}
                       </span>
                     </div>
                   )}
@@ -606,7 +612,7 @@ const ProfilePage = () => {
                   </label>
                 </div>
                 <div className={isMobile ? 'text-center' : ''}>
-                  <h2 className={`font-bold ${isMobile ? 'text-lg' : 'text-2xl'} ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.firstName} {profile.lastName}</h2>
+                  <h2 className={`font-bold ${isMobile ? 'text-lg' : 'text-2xl'} ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{profile.firstName?.trim() || 'User'}</h2>
                   <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{profile.email}</p>
                   <div className={`flex ${isMobile ? 'justify-center flex-wrap' : ''} items-center gap-2 mt-2`}>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -651,27 +657,6 @@ const ProfilePage = () => {
                 </div>
 
                 <div>
-                  <label className={`text-sm mb-2 block ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Last Name</label>
-                  {editing ? (
-                    <input
-                      type="text"
-                      value={profile.lastName}
-                      onChange={(e) => setProfile({...profile, lastName: e.target.value})}
-                      className={`w-full rounded-lg px-4 py-2 border ${isDarkMode ? 'bg-dark-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
-                    />
-                  ) : (
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>{profile.lastName || '-'}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className={`text-sm mb-2 block flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    <Mail size={14} /> Email
-                  </label>
-                  <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>{profile.email}</p>
-                </div>
-
-                <div>
                   <label className={`text-sm mb-2 block flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                     <Phone size={14} /> Phone
                   </label>
@@ -687,52 +672,11 @@ const ProfilePage = () => {
                   )}
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
                   <label className={`text-sm mb-2 block flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                    <Calendar size={14} /> Date of Birth
+                    <Mail size={14} /> Email
                   </label>
-                  {editing ? (
-                    <input
-                      type="date"
-                      value={profile.dateOfBirth}
-                      onChange={(e) => setProfile({...profile, dateOfBirth: e.target.value})}
-                      className={`w-full rounded-lg px-4 py-2 border ${isDarkMode ? 'bg-dark-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
-                    />
-                  ) : (
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>{profile.dateOfBirth || '-'}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-gray-400 text-sm mb-2 block flex items-center gap-2">
-                    <MapPin size={14} /> Country
-                  </label>
-                  {editing ? (
-                    <input
-                      type="text"
-                      value={profile.country}
-                      onChange={(e) => setProfile({...profile, country: e.target.value})}
-                      className={`w-full rounded-lg px-4 py-2 border ${isDarkMode ? 'bg-dark-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
-                    />
-                  ) : (
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>{profile.country || '-'}</p>
-                  )}
-                </div>
-
-                <div className="col-span-2">
-                  <label className="text-gray-400 text-sm mb-2 block flex items-center gap-2">
-                    <MapPin size={14} /> Address
-                  </label>
-                  {editing ? (
-                    <input
-                      type="text"
-                      value={profile.address}
-                      onChange={(e) => setProfile({...profile, address: e.target.value})}
-                      className={`w-full rounded-lg px-4 py-2 border ${isDarkMode ? 'bg-dark-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
-                    />
-                  ) : (
-                    <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>{profile.address || '-'}</p>
-                  )}
+                  <p className={isDarkMode ? 'text-white' : 'text-gray-900'}>{profile.email}</p>
                 </div>
               </div>
             </div>
@@ -1037,7 +981,7 @@ const ProfilePage = () => {
             )}
 
             {/* KYC Verification Section */}
-            <div className={`${isDarkMode ? 'bg-dark-800 border-gray-800' : 'bg-white border-gray-200 shadow-sm'} rounded-xl p-6 border mt-6`}>
+            <div id="kyc-verification-section" className={`${isDarkMode ? 'bg-dark-800 border-gray-800' : 'bg-white border-gray-200 shadow-sm'} rounded-xl p-6 border mt-6 scroll-mt-24`}>
               <h3 className={`font-semibold mb-4 flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                 <FileCheck size={18} /> KYC Verification
               </h3>

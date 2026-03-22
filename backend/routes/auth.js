@@ -214,7 +214,8 @@ router.post('/signup', async (req, res) => {
         email: user.email,
         phone: user.phone,
         assignedAdmin,
-        adminUrlSlug
+        adminUrlSlug,
+        kycApproved: user.kycApproved || false
       },
       token
     })

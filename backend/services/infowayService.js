@@ -61,7 +61,7 @@ const CRYPTO_SYMBOLS = [
   'KLAYUSD', 'OGNUSD', 'RLCUSD', 'AUDIOUSD', 'BONKUSD', 'FLOKIUSD',
   'ORDIUSD', 'STXUSD', 'CFXUSD', 'IMXUSD', 'LDOUSD', 'INJUSD',
   'FETUSD', 'RNDRUSD', 'WLDUSD', 'SEIUSD', 'TIAUSD', 'BLURUSD',
-  'SUIUSD', 'APTUSD', 'QNTUSD', 'EGLDUSDUSD', 'DYDXUSD', 'GMXUSD'
+  'SUIUSD', 'APTUSD', 'QNTUSD', 'EGLDUSD', 'DYDXUSD', 'GMXUSD'
 ]
 
 // Infoway symbol format mapping
@@ -277,7 +277,7 @@ const FALLBACK_PRICES = {
   'SUIUSD': { bid: 1.20, ask: 1.22 },
   'APTUSD': { bid: 8.50, ask: 8.52 },
   'QNTUSD': { bid: 95.00, ask: 95.20 },
-  'EGLDUSDUSD': { bid: 38.00, ask: 38.10 },
+  'EGLDUSD': { bid: 38.00, ask: 38.10 },
   'DYDXUSD': { bid: 1.50, ask: 1.52 },
   'GMXUSD': { bid: 28.00, ask: 28.10 }
 }

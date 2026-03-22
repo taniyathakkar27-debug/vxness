@@ -38,6 +38,7 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import { API_URL } from '../config/api'
 import logoImage from '../assets/logo.png'
+import KycTradeRequiredModal from '../components/KycTradeRequiredModal'
 
 const Account = () => {
   const navigate = useNavigate()
@@ -87,6 +88,7 @@ const Account = () => {
   const [creditRequestReason, setCreditRequestReason] = useState('')
   const [creditRequests, setCreditRequests] = useState([])
   const [creditRequestLoading, setCreditRequestLoading] = useState(false)
+  const [showKycTradeRequiredModal, setShowKycTradeRequiredModal] = useState(false)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768)
@@ -96,6 +98,39 @@ const Account = () => {
 
   const tabs = challengeModeEnabled ? ['Real', 'Demo', 'Challenge', 'Archived'] : ['Real', 'Demo', 'Archived']
   const user = JSON.parse(localStorage.getItem('user') || '{}')
+
+  const ensureKycForTrading = async (onOk) => {
+    const token = localStorage.getItem('token')
+    const stored = JSON.parse(localStorage.getItem('user') || '{}')
+    if (!token || !stored._id) {
+      navigate('/user/login')
+      return
+    }
+    try {
+      const res = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.forceLogout || res.status === 403) {
+        toast.error(data.message || 'Session expired.')
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        navigate('/user/login')
+        return
+      }
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify({ ...stored, ...data.user }))
+        if (!data.user.kycApproved) {
+          setShowKycTradeRequiredModal(true)
+          return
+        }
+      }
+      onOk()
+    } catch (e) {
+      console.error(e)
+      toast.error('Could not verify your account.')
+    }
+  }
 
   // Menu items - investor can only access Dashboard and Orders
   const investorAllowedMenus = ['Dashboard', 'Orders']
@@ -643,7 +678,7 @@ const Account = () => {
   }
 
   return (
-    <div className={`h-screen flex flex-col md:flex-row transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+    <div className={`h-screen flex flex-col md:flex-row md:overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
       {/* Investor Read-Only CSS */}
       {isInvestorMode && <style>{investorReadOnlyCSS}</style>}
       {/* Mobile Header */}
@@ -722,7 +757,7 @@ const Account = () => {
       )}
 
       {/* Main Content - Scrollable */}
-      <main className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''} ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
+      <main className={`flex-1 min-h-0 overflow-y-auto ${isMobile ? 'pt-14' : ''} ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
         <div className={`${isMobile ? 'p-4' : 'p-6'}`}>
           {/* Success/Error Messages */}
           {success && (
@@ -1021,7 +1056,10 @@ const Account = () => {
                   {/* Card Footer - Actions */}
                   <div className={`flex border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
                     <button
-                      onClick={() => isMobile ? navigate(`/mobile?account=${account._id}`) : navigate(`/trade/${account._id}`)}
+                      onClick={() => ensureKycForTrading(() => {
+                        if (isMobile) navigate(`/mobile?account=${account._id}`)
+                        else navigate(`/trade/${account._id}`)
+                      })}
                       className={`flex-1 flex items-center justify-center gap-1 ${isMobile ? 'py-2 text-xs' : 'py-3'} bg-accent-green text-black font-medium hover:bg-accent-green/90 transition-colors`}
                     >
                       <ArrowRight size={isMobile ? 12 : 16} /> Trade
@@ -1702,11 +1740,13 @@ const Account = () => {
                 <button
                   onClick={() => {
                     setShowRulesModal(false)
-                    if (isMobile) {
-                      navigate(`/mobile?account=${selectedChallengeAccount._id}`)
-                    } else {
-                      navigate(`/trade/${selectedChallengeAccount._id}?type=challenge`)
-                    }
+                    ensureKycForTrading(() => {
+                      if (isMobile) {
+                        navigate(`/mobile?account=${selectedChallengeAccount._id}`)
+                      } else {
+                        navigate(`/trade/${selectedChallengeAccount._id}?type=challenge`)
+                      }
+                    })
                   }}
                   className="flex-1 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-400 transition-colors flex items-center justify-center gap-2"
                 >
@@ -1961,6 +2001,12 @@ const Account = () => {
           </div>
         </div>
       )}
+
+      <KycTradeRequiredModal
+        open={showKycTradeRequiredModal}
+        onClose={() => setShowKycTradeRequiredModal(false)}
+        isDarkMode={isDarkMode}
+      />
     </div>
   )
 }

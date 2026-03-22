@@ -13,7 +13,7 @@ import {
   FileText,
   Calendar
 } from 'lucide-react'
-import { API_URL } from '../config/api'
+import { API_URL, resolveMediaSrc } from '../config/api'
 
 const AdminKYC = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -372,7 +372,7 @@ const AdminKYC = () => {
                   <div>
                     <p className="text-gray-400 text-sm mb-2">Front Side</p>
                     <img 
-                      src={selectedKyc.frontImage.startsWith('http') ? selectedKyc.frontImage : `${API_URL.replace('/api', '')}${selectedKyc.frontImage}`} 
+                      src={resolveMediaSrc(selectedKyc.frontImage)} 
                       alt="Front" 
                       className="max-w-full rounded-lg border border-gray-700" 
                     />
@@ -382,7 +382,7 @@ const AdminKYC = () => {
                   <div>
                     <p className="text-gray-400 text-sm mb-2">Back Side</p>
                     <img 
-                      src={selectedKyc.backImage.startsWith('http') ? selectedKyc.backImage : `${API_URL.replace('/api', '')}${selectedKyc.backImage}`} 
+                      src={resolveMediaSrc(selectedKyc.backImage)} 
                       alt="Back" 
                       className="max-w-full rounded-lg border border-gray-700" 
                     />
@@ -392,7 +392,7 @@ const AdminKYC = () => {
                   <div>
                     <p className="text-gray-400 text-sm mb-2">Selfie with Document</p>
                     <img 
-                      src={selectedKyc.selfieImage.startsWith('http') ? selectedKyc.selfieImage : `${API_URL.replace('/api', '')}${selectedKyc.selfieImage}`} 
+                      src={resolveMediaSrc(selectedKyc.selfieImage)} 
                       alt="Selfie" 
                       className="max-w-full rounded-lg border border-gray-700" 
                     />

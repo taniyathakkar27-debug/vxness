@@ -26,11 +26,17 @@ import priceStreamService from '../services/priceStream'
 
 import { API_URL } from '../config/api'
 
+import { useTheme } from '../context/ThemeContext'
+
+import KycTradeRequiredModal from '../components/KycTradeRequiredModal'
+
 
 
 const MobileTradingApp = () => {
 
   const navigate = useNavigate()
+
+  const { isDarkMode } = useTheme()
 
   const [searchParams] = useSearchParams()
 
@@ -65,6 +71,8 @@ const MobileTradingApp = () => {
   const [livePrices, setLivePrices] = useState({})
 
   const [loading, setLoading] = useState(true)
+
+  const [showKycTradeRequiredModal, setShowKycTradeRequiredModal] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -204,29 +212,51 @@ const MobileTradingApp = () => {
 
   useEffect(() => {
 
-    const userData = JSON.parse(localStorage.getItem('user') || '{}')
+    const init = async () => {
+      const userData = JSON.parse(localStorage.getItem('user') || '{}')
+      const token = localStorage.getItem('token')
 
-    if (!userData._id) {
+      if (!userData._id || !token) {
+        navigate('/user/login')
+        return
+      }
 
-      navigate('/user/login')
+      let effective = userData
 
-      return
+      try {
+        const res = await fetch(`${API_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        const data = await res.json()
+        if (data.forceLogout || res.status === 403) {
+          toast.error(data.message || 'Session expired.')
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          navigate('/user/login')
+          return
+        }
+        if (data.user) {
+          effective = { ...userData, ...data.user }
+          localStorage.setItem('user', JSON.stringify(effective))
+        }
+      } catch (e) {
+        console.error(e)
+      }
 
+      setUser(effective)
+
+      if (!effective.kycApproved && accountIdFromUrl) {
+        setActiveTab('home')
+        setShowKycTradeRequiredModal(true)
+        return
+      }
+
+      fetchInstruments()
+      fetchAccounts(effective._id)
+      fetchLivePrices()
     }
 
-    setUser(userData)
-
-    fetchInstruments() // Fetch instruments from API
-
-    fetchAccounts(userData._id)
-
-    
-
-    // Initial price fetch
-
-    fetchLivePrices()
-
-
+    init()
 
     return () => {
 
@@ -234,7 +264,48 @@ const MobileTradingApp = () => {
 
     }
 
-  }, [])
+  }, [navigate, accountIdFromUrl])
+
+
+
+  const requestTradeTab = async () => {
+    const token = localStorage.getItem('token')
+    const stored = JSON.parse(localStorage.getItem('user') || '{}')
+    if (!token || !stored._id) {
+      navigate('/user/login')
+      return
+    }
+    try {
+      const res = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.forceLogout || res.status === 403) {
+        toast.error(data.message || 'Session expired.')
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        navigate('/user/login')
+        return
+      }
+      let approved = false
+      if (data.user) {
+        const merged = { ...stored, ...data.user }
+        localStorage.setItem('user', JSON.stringify(merged))
+        setUser(merged)
+        approved = !!data.user.kycApproved
+      } else {
+        approved = !!stored.kycApproved
+      }
+      if (!approved) {
+        setShowKycTradeRequiredModal(true)
+        return
+      }
+      setActiveTab('trade')
+    } catch (e) {
+      console.error(e)
+      toast.error('Could not verify your account.')
+    }
+  }
 
 
 
@@ -1025,7 +1096,17 @@ const MobileTradingApp = () => {
 
 
 
-  // Filter instruments: show all when "All" tab or searching, popular for specific categories
+  const hasValidBidAsk = (inst) => {
+
+    const b = Number(inst.bid)
+
+    const a = Number(inst.ask)
+
+    return Number.isFinite(b) && Number.isFinite(a) && b > 0 && a > 0
+
+  }
+
+  // Only instruments with real bid & ask (no placeholder rows).
 
   const filteredInstruments = instruments.filter(inst => {
 
@@ -1035,39 +1116,31 @@ const MobileTradingApp = () => {
 
     
 
-    // When searching, show all matching instruments
-
     if (searchTerm.length > 0) {
 
-      return matchesSearch
+      return matchesSearch && hasValidBidAsk(inst)
 
     }
 
     
-
-    // When viewing Starred, show all starred instruments
 
     if (activeCategory === 'Starred') {
 
-      return inst.starred
+      return inst.starred && hasValidBidAsk(inst)
 
     }
 
     
-
-    // When viewing "All", show ALL instruments
 
     if (activeCategory === 'All') {
 
-      return true
+      return hasValidBidAsk(inst)
 
     }
 
     
 
-    // For specific categories, show only popular by default
-
-    return inst.category === activeCategory && inst.popular
+    return inst.category === activeCategory && hasValidBidAsk(inst)
 
   })
 
@@ -1361,7 +1434,7 @@ const MobileTradingApp = () => {
 
         </button>
 
-        <button onClick={() => setActiveTab('trade')} className="flex flex-col items-center p-2.5 bg-dark-800 rounded-xl">
+        <button onClick={() => requestTradeTab()} className="flex flex-col items-center p-2.5 bg-dark-800 rounded-xl">
 
           <TrendingUp size={20} className="text-yellow-500 mb-1" />
 
@@ -1467,7 +1540,7 @@ const MobileTradingApp = () => {
 
             {openTrades.length > 3 && (
 
-              <button onClick={() => setActiveTab('trade')} className="w-full text-accent-green text-sm py-2">
+              <button onClick={() => requestTradeTab()} className="w-full text-accent-green text-sm py-2">
 
                 View all {openTrades.length} positions →
 
@@ -2888,6 +2961,10 @@ const MobileTradingApp = () => {
 
                   setShowMoreMenu(true)
 
+                } else if (item.id === 'trade') {
+
+                  requestTradeTab()
+
                 } else {
 
                   setActiveTab(item.id)
@@ -3649,6 +3726,12 @@ const MobileTradingApp = () => {
         ))}
 
       </div>
+
+      <KycTradeRequiredModal
+        open={showKycTradeRequiredModal}
+        onClose={() => setShowKycTradeRequiredModal(false)}
+        isDarkMode={isDarkMode}
+      />
 
     </div>
 

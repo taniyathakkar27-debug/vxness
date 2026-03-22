@@ -169,7 +169,7 @@ const SupportPage = () => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col md:flex-row transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+    <div className={`h-screen flex flex-col md:flex-row md:overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
       {/* Investor Read-Only CSS */}
       {isInvestorMode && <style>{investorReadOnlyCSS}</style>}
       {/* Mobile Header */}
@@ -191,14 +191,14 @@ const SupportPage = () => {
       {/* Sidebar - Hidden on Mobile */}
       {!isMobile && (
         <aside 
-          className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col transition-all duration-300`}
+          className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen shrink-0 sticky top-0 transition-all duration-300`}
           onMouseEnter={() => setSidebarExpanded(true)}
           onMouseLeave={() => setSidebarExpanded(false)}
         >
-          <div className="p-4 flex items-center justify-center">
+          <div className="p-4 flex items-center justify-center shrink-0">
             <img src={logoImage} alt="vxness" className="h-8 w-auto object-contain" />
           </div>
-          <nav className="flex-1 px-2">
+          <nav className="flex-1 min-h-0 px-2 overflow-y-auto">
             {menuItems.map((item) => {
               const isDisabledForInvestor = isInvestorMode && !investorAllowedMenus.includes(item.name)
               return (
@@ -218,7 +218,7 @@ const SupportPage = () => {
               )
             })}
           </nav>
-          <div className={`p-2 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+          <div className={`p-2 border-t shrink-0 ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
             <button onClick={toggleDarkMode} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 ${isDarkMode ? 'text-yellow-400 hover:bg-dark-700' : 'text-blue-500 hover:bg-gray-100'}`}>
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
               {sidebarExpanded && <span className="text-sm">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>}
@@ -232,7 +232,7 @@ const SupportPage = () => {
       )}
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-auto ${isMobile ? 'pt-14' : ''} ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
+      <main className={`flex-1 min-h-0 overflow-y-auto ${isMobile ? 'pt-14' : ''} ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
         {!isMobile && (
           <header className={`flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
             <h1 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Support</h1>

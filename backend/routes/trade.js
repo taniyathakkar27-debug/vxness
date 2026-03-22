@@ -2,6 +2,7 @@ import express from 'express'
 import Trade from '../models/Trade.js'
 import TradingAccount from '../models/TradingAccount.js'
 import ChallengeAccount from '../models/ChallengeAccount.js'
+import User from '../models/User.js'
 import Charges from '../models/Charges.js'
 import tradeEngine from '../services/tradeEngine.js'
 import propTradingEngine from '../services/propTradingEngine.js'
@@ -18,6 +19,31 @@ function getFreshPrice(symbol) {
 }
 
 const router = express.Router()
+
+async function assertKycApprovedForUserId(userId, res) {
+  if (!userId) {
+    res.status(400).json({
+      success: false,
+      message: 'Missing user context',
+      code: 'KYC_NOT_APPROVED'
+    })
+    return false
+  }
+  const user = await User.findById(userId).select('kycApproved')
+  if (!user) {
+    res.status(404).json({ success: false, message: 'User not found', code: 'KYC_NOT_APPROVED' })
+    return false
+  }
+  if (!user.kycApproved) {
+    res.status(403).json({
+      success: false,
+      message: 'Complete KYC verification and wait for admin approval before using the trade terminal.',
+      code: 'KYC_NOT_APPROVED'
+    })
+    return false
+  }
+  return true
+}
 
 // POST /api/trade/open - Open a new trade
 router.post('/open', async (req, res) => {
@@ -44,6 +70,8 @@ router.post('/open', async (req, res) => {
         message: 'Missing required fields' 
       })
     }
+
+    if (!(await assertKycApprovedForUserId(userId, res))) return
 
     // Check if market data is available (bid/ask must be valid numbers > 0)
     if (!bid || !ask || parseFloat(bid) <= 0 || parseFloat(ask) <= 0 || isNaN(parseFloat(bid)) || isNaN(parseFloat(ask))) {
@@ -208,6 +236,8 @@ router.post('/close', async (req, res) => {
       })
     }
 
+    if (!(await assertKycApprovedForUserId(tradeToClose.userId, res))) return
+
     // Check 3-minute minimum trade duration
     const tradeOpenTime = new Date(tradeToClose.openedAt || tradeToClose.createdAt)
     const now = new Date()
@@ -351,6 +381,7 @@ router.put('/modify', async (req, res) => {
 
     // First check if trade exists
     const existingTrade = await Trade.findById(tradeId)
+    if (existingTrade && !(await assertKycApprovedForUserId(existingTrade.userId, res))) return
     if (!existingTrade) {
       console.log('Trade not found:', tradeId)
       return res.status(404).json({ 
@@ -801,6 +832,8 @@ router.post('/cancel', async (req, res) => {
         message: 'Trade not found' 
       })
     }
+
+    if (!(await assertKycApprovedForUserId(trade.userId, res))) return
 
     if (trade.status !== 'PENDING') {
       return res.status(400).json({ 

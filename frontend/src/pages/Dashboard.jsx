@@ -438,7 +438,7 @@ const Dashboard = () => {
   }, [isDarkMode])
 
   return (
-    <div className={`h-screen flex transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+    <div className={`h-screen flex overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
       {/* Read-only CSS for investor mode - disable action buttons only, NOT navigation */}
       {isInvestorMode && (
         <style>{`
@@ -459,7 +459,7 @@ const Dashboard = () => {
       
       {/* Collapsible Sidebar - Fixed */}
       <aside 
-        className={`${sidebarExpanded ? 'w-48' : 'w-16'} ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out`}
+        className={`${sidebarExpanded ? 'w-48' : 'w-16'} shrink-0 ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out`}
         onMouseEnter={() => setSidebarExpanded(true)}
         onMouseLeave={() => setSidebarExpanded(false)}
       >
@@ -469,7 +469,7 @@ const Dashboard = () => {
         </div>
 
         {/* Menu */}
-        <nav className="flex-1 px-2 overflow-y-auto">
+        <nav className="flex-1 min-h-0 px-2 overflow-y-auto">
           {menuItems.map((item) => {
             const isDisabledForInvestor = isInvestorMode && !investorAllowedMenus.includes(item.name)
             return (
@@ -525,7 +525,7 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Content - Scrollable */}
-      <main className={`flex-1 overflow-y-auto ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
+      <main className={`flex-1 min-h-0 overflow-y-auto ${isInvestorMode ? 'investor-action-disabled' : ''}`}>
         {/* Welcome Banner */}
         <div className={`relative border-b ${isDarkMode ? 'bg-gradient-to-r from-dark-800 via-dark-900 to-dark-800 border-gray-800' : 'bg-gradient-to-r from-gray-100 via-white to-gray-100 border-gray-200'}`}>
           <div className="flex items-center justify-between px-6 py-3">

@@ -114,7 +114,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
   }
 
   return (
-    <div className={`min-h-screen flex transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
+    <div className={`h-screen min-h-0 flex overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-dark-900' : 'bg-gray-100'}`}>
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
@@ -126,7 +126,8 @@ const AdminLayout = ({ children, title, subtitle }) => {
       {/* Sidebar */}
       <aside 
         className={`
-          fixed lg:static inset-y-0 left-0 z-50
+          fixed lg:sticky lg:top-0 lg:self-start shrink-0 inset-y-0 left-0 z-50
+          h-screen max-h-screen
           ${sidebarExpanded ? 'w-64' : 'w-16'} 
           ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           ${isDarkMode ? 'bg-dark-900 border-gray-800' : 'bg-white border-gray-200'} border-r flex flex-col 
@@ -134,7 +135,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
         `}
       >
         {/* Logo */}
-        <div className={`p-4 flex items-center justify-between border-b ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+        <div className={`p-4 flex items-center justify-between border-b shrink-0 ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
           {sidebarExpanded && (
             <div className="flex items-center gap-2">
               <img src={logoImage} alt="vxness" className="h-12 w-auto object-contain flex-shrink-0" />
@@ -155,7 +156,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
         </div>
 
         {/* Menu */}
-        <nav className="flex-1 px-2 py-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
+        <nav className="flex-1 min-h-0 px-2 py-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
           {menuItems.map((item) => (
             <button
               key={item.name}
@@ -181,7 +182,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
         </nav>
 
         {/* Theme Toggle & Logout */}
-        <div className={`p-2 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+        <div className={`p-2 border-t shrink-0 ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
           {/* Theme Toggle */}
           <button 
             onClick={toggleDarkMode}
@@ -211,7 +212,7 @@ const AdminLayout = ({ children, title, subtitle }) => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto min-w-0">
+      <main className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
         {/* Header */}
         <header className={`sticky top-0 z-30 backdrop-blur-sm flex items-center justify-between px-4 sm:px-6 py-4 border-b ${isDarkMode ? 'bg-dark-900/95 border-gray-800' : 'bg-white/95 border-gray-200'}`}>
           <div className="flex items-center gap-4">

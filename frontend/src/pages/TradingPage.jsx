@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { Search, Star, X, Plus, Minus, Settings, Home, Wallet, LayoutGrid, BarChart3, Pencil, Trophy, AlertTriangle, Sun, Moon } from 'lucide-react'
+import { Search, Star, X, Plus, Minus, Settings, Home, Wallet, LayoutGrid, BarChart3, Pencil, Trophy, AlertTriangle, Sun, Moon, FileCheck, Clock } from 'lucide-react'
 
 import metaApiService from '../services/metaApi'
 
@@ -208,7 +208,8 @@ const TradingPage = () => {
 
   const [globalNotification, setGlobalNotification] = useState('')
 
-
+  const [kycAllowed, setKycAllowed] = useState(null)
+  const [kycDetailStatus, setKycDetailStatus] = useState(null)
 
   const categories = ['All', 'Starred', 'Forex', 'Metals', 'Crypto']
 
@@ -239,6 +240,57 @@ const TradingPage = () => {
 
 
   useEffect(() => {
+    const verifyKyc = async () => {
+      const token = localStorage.getItem('token')
+      const stored = JSON.parse(localStorage.getItem('user') || '{}')
+      if (!token || !stored._id) {
+        navigate('/user/login')
+        setKycAllowed(false)
+        return
+      }
+      try {
+        const res = await fetch(`${API_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        const data = await res.json()
+        if (data.forceLogout || res.status === 403) {
+          toast.error(data.message || 'Session expired. Please login again.')
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          navigate('/user/login')
+          setKycAllowed(false)
+          return
+        }
+        if (data.user) {
+          const merged = { ...stored, ...data.user }
+          localStorage.setItem('user', JSON.stringify(merged))
+          if (data.user.kycApproved) {
+            setKycAllowed(true)
+            setKycDetailStatus(null)
+            return
+          }
+        }
+        let detail = null
+        try {
+          const kRes = await fetch(`${API_URL}/kyc/status/${stored._id}`)
+          const kData = await kRes.json()
+          if (kData.success && kData.hasKYC && kData.kyc?.status) {
+            detail = kData.kyc.status
+          }
+        } catch (_) {}
+        setKycDetailStatus(detail)
+        setKycAllowed(false)
+      } catch (e) {
+        console.error('KYC gate error:', e)
+        setKycAllowed(false)
+      }
+    }
+    verifyKyc()
+  }, [navigate])
+
+  useEffect(() => {
+
+    if (kycAllowed !== true) return
 
     fetchAccount()
 
@@ -274,7 +326,7 @@ const TradingPage = () => {
 
     }
 
-  }, [accountId])
+  }, [accountId, kycAllowed])
 
 
 
@@ -282,7 +334,7 @@ const TradingPage = () => {
 
   useEffect(() => {
 
-    if (accountId) {
+    if (!accountId || kycAllowed !== true) return
 
       fetchOpenTrades()
 
@@ -312,9 +364,7 @@ const TradingPage = () => {
 
       return () => clearInterval(accountInterval)
 
-    }
-
-  }, [accountId])
+  }, [accountId, kycAllowed])
 
 
 
@@ -351,6 +401,8 @@ const TradingPage = () => {
   // Real-time price updates via WebSocket for institutional-grade streaming
 
   useEffect(() => {
+
+    if (kycAllowed !== true) return
 
     // Subscribe to WebSocket price stream
 
@@ -440,7 +492,7 @@ const TradingPage = () => {
 
     return () => unsubscribe()
 
-  }, [selectedInstrument?.symbol])
+  }, [selectedInstrument?.symbol, kycAllowed])
 
 
 
@@ -2171,9 +2223,17 @@ const TradingPage = () => {
 
 
 
-  // Filter instruments: show all when "All" tab or searching, popular for specific categories
+  // Only show instruments where bid & ask are both live (> 0) — same as what the row displays.
 
-  // Show popular instruments even without prices (prices will load async from AllTick)
+  const hasValidBidAsk = (inst) => {
+
+    const b = Number(inst.bid)
+
+    const a = Number(inst.ask)
+
+    return Number.isFinite(b) && Number.isFinite(a) && b > 0 && a > 0
+
+  }
 
   const filteredInstruments = instruments.filter(inst => {
 
@@ -2183,41 +2243,31 @@ const TradingPage = () => {
 
     
 
-    // When searching, show all matching instruments across all categories
-
     if (searchTerm.length > 0) {
 
-      return matchesSearch
+      return matchesSearch && hasValidBidAsk(inst)
 
     }
 
     
-
-    // When viewing Starred, show all starred instruments
 
     if (activeCategory === 'Starred') {
 
-      return inst.starred
+      return inst.starred && hasValidBidAsk(inst)
 
     }
 
     
-
-    // When viewing "All", show instruments with prices only (too many otherwise)
 
     if (activeCategory === 'All') {
 
-      return inst.bid > 0
+      return hasValidBidAsk(inst)
 
     }
 
-    
 
-    // For specific categories (Forex, Metals, Crypto), show popular instruments
 
-    // Popular instruments show even without prices (prices load async)
-
-    return inst.category === activeCategory && inst.popular
+    return inst.category === activeCategory && hasValidBidAsk(inst)
 
   })
 
@@ -2312,6 +2362,102 @@ const TradingPage = () => {
   }
 
 
+
+  if (kycAllowed === null) {
+
+    return (
+
+      <div className={`h-screen flex items-center justify-center ${isDarkMode ? 'bg-black' : 'bg-gray-100'}`}>
+
+        <div className={isDarkMode ? 'text-white' : 'text-gray-900'}>Loading...</div>
+
+      </div>
+
+    )
+
+  }
+
+  if (kycAllowed === false) {
+
+    const title = kycDetailStatus === 'pending'
+      ? 'KYC Under Review'
+      : kycDetailStatus === 'rejected'
+        ? 'KYC Rejected'
+        : 'KYC Not Submitted'
+
+    const subtitle = kycDetailStatus === 'pending'
+      ? 'Your documents are being reviewed. You can use the trade terminal after an admin approves your verification.'
+      : kycDetailStatus === 'rejected'
+        ? 'Please update your documents in your profile and resubmit for approval.'
+        : 'Complete your KYC verification to unlock all features'
+
+    return (
+
+      <div className={`h-screen flex items-center justify-center p-6 ${isDarkMode ? 'bg-black' : 'bg-gray-100'}`}>
+
+        <div className={`max-w-md w-full rounded-2xl border p-8 text-center ${isDarkMode ? 'bg-[#0a0a0a] border-gray-800' : 'bg-white border-gray-200 shadow-lg'}`}>
+
+          <div className={`flex items-center justify-center gap-2 mb-6 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+
+            <FileCheck size={20} className={isDarkMode ? 'text-gray-300' : 'text-gray-600'} />
+
+            <span className="font-semibold">KYC Verification</span>
+
+          </div>
+
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-amber-500/20 flex items-center justify-center">
+
+            {kycDetailStatus === 'pending' ? (
+
+              <Clock size={36} className="text-amber-400" />
+
+            ) : (
+
+              <FileCheck size={36} className="text-amber-400" />
+
+            )}
+
+          </div>
+
+          <h2 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{title}</h2>
+
+          <p className={`text-sm mb-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{subtitle}</p>
+
+          <button
+
+            type="button"
+
+            onClick={() => navigate('/profile')}
+
+            className="w-full py-3 rounded-xl bg-[#3B82F6] text-black font-semibold hover:bg-[#2563EB] transition-colors"
+
+          >
+
+            {kycDetailStatus === 'pending' ? 'Back to Profile' : 'Start KYC Verification'}
+
+          </button>
+
+          <button
+
+            type="button"
+
+            onClick={() => navigate('/account')}
+
+            className={`w-full mt-3 py-2 text-sm ${isDarkMode ? 'text-gray-500 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}
+
+          >
+
+            Return to accounts
+
+          </button>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
 
   if (loading) {
 

@@ -17,8 +17,34 @@ import {
 } from 'lucide-react'
 import { API_URL } from '../config/api'
 
+const INSTRUMENT_SEGMENT_ORDER = ['Forex', 'Metals', 'Crypto', 'Indices', 'Commodities']
+
+function sortCategories(categories) {
+  return [...categories].sort((a, b) => {
+    const ia = INSTRUMENT_SEGMENT_ORDER.indexOf(a)
+    const ib = INSTRUMENT_SEGMENT_ORDER.indexOf(b)
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+  })
+}
+
+function getInstrumentOptGroups(instruments, segmentFilter) {
+  if (!instruments?.length) return []
+  const cats = segmentFilter
+    ? [segmentFilter].filter((c) => instruments.some((i) => i.category === c))
+    : sortCategories([...new Set(instruments.map((i) => i.category))])
+  return cats
+    .map((category) => ({
+      category,
+      items: instruments
+        .filter((i) => i.category === category)
+        .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    }))
+    .filter((g) => g.items.length > 0)
+}
+
 const AdminForexCharges = () => {
   const [charges, setCharges] = useState([])
+  const [instruments, setInstruments] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalType, setModalType] = useState(null) // 'commission', 'spread', 'swap'
   const [editingCharge, setEditingCharge] = useState(null)
@@ -49,7 +75,20 @@ const AdminForexCharges = () => {
     fetchCharges()
     fetchUsers()
     fetchAccountTypes()
+    fetchInstruments()
   }, [])
+
+  const fetchInstruments = async () => {
+    try {
+      const res = await fetch(`${API_URL}/prices/instruments`, { cache: 'no-store' })
+      const data = await res.json()
+      if (data.success && Array.isArray(data.instruments)) {
+        setInstruments(data.instruments)
+      }
+    } catch (error) {
+      console.error('Error fetching instruments:', error)
+    }
+  }
 
   const fetchAccountTypes = async () => {
     try {
@@ -220,6 +259,49 @@ const AdminForexCharges = () => {
       user.phone?.includes(userSearch) ||
       user._id?.includes(userSearch)
   })
+
+  const instrumentSelectClass =
+    'w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white text-sm'
+
+  const handleInstrumentSymbolChange = (e) => {
+    const instrumentSymbol = e.target.value
+    setForm((prev) => ({
+      ...prev,
+      instrumentSymbol,
+      level: instrumentSymbol
+        ? 'INSTRUMENT'
+        : prev.accountTypeId
+          ? 'ACCOUNT_TYPE'
+          : prev.segment
+            ? 'SEGMENT'
+            : 'GLOBAL'
+    }))
+  }
+
+  const instrumentSelectEl = (
+    <select
+      value={form.instrumentSymbol}
+      onChange={handleInstrumentSymbolChange}
+      className={instrumentSelectClass}
+    >
+      <option value="">All Instruments</option>
+      {getInstrumentOptGroups(instruments, form.segment || null).map(({ category, items }) => (
+        <optgroup key={category} label={category}>
+          {items.map((inst) => {
+            const label =
+              inst.name && String(inst.name).trim() && inst.name !== inst.symbol
+                ? `${inst.symbol} (${inst.name})`
+                : inst.symbol
+            return (
+              <option key={inst.symbol} value={inst.symbol}>
+                {label}
+              </option>
+            )
+          })}
+        </optgroup>
+      ))}
+    </select>
+  )
 
   const getLevelLabel = (charge) => {
     if (charge.level === 'USER') {
@@ -413,58 +495,25 @@ const AdminForexCharges = () => {
                   const segment = e.target.value
                   const level = form.accountTypeId
                     ? 'ACCOUNT_TYPE'
-                    : (segment ? 'SEGMENT' : (form.instrumentSymbol ? 'INSTRUMENT' : 'GLOBAL'))
-                  setForm({ ...form, segment, level })
+                    : (segment ? 'SEGMENT' : 'GLOBAL')
+                  setForm({ ...form, segment, instrumentSymbol: '', level })
                 }} className="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white text-sm">
                   <option value="">All Segments</option>
                   <option value="Forex">Forex</option>
                   <option value="Metals">Metals</option>
                   <option value="Crypto">Crypto</option>
                   <option value="Indices">Indices</option>
+                  <option value="Commodities">Commodities</option>
                 </select>
               </div>
 
               {/* Step 3: Instrument - Filtered by Segment */}
               <div>
                 <label className="block text-gray-400 text-xs mb-1">3. Instrument <span className="text-gray-600">(optional{form.segment ? ` - showing ${form.segment} only` : ''})</span></label>
-                <select value={form.instrumentSymbol} onChange={(e) => setForm({ ...form, instrumentSymbol: e.target.value, level: e.target.value ? 'INSTRUMENT' : (form.accountTypeId ? 'ACCOUNT_TYPE' : (form.segment ? 'SEGMENT' : 'GLOBAL')) })} className="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white text-sm">
-                  <option value="">All Instruments</option>
-                  {(!form.segment || form.segment === 'Forex') && (
-                    <optgroup label="Forex">
-                      <option value="EURUSD">EURUSD</option>
-                      <option value="GBPUSD">GBPUSD</option>
-                      <option value="USDJPY">USDJPY</option>
-                      <option value="USDCHF">USDCHF</option>
-                      <option value="AUDUSD">AUDUSD</option>
-                      <option value="NZDUSD">NZDUSD</option>
-                      <option value="USDCAD">USDCAD</option>
-                      <option value="EURGBP">EURGBP</option>
-                      <option value="EURJPY">EURJPY</option>
-                      <option value="GBPJPY">GBPJPY</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Metals') && (
-                    <optgroup label="Metals">
-                      <option value="XAUUSD">XAUUSD (Gold)</option>
-                      <option value="XAGUSD">XAGUSD (Silver)</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Crypto') && (
-                    <optgroup label="Crypto">
-                      <option value="BTCUSD">BTCUSD</option>
-                      <option value="ETHUSD">ETHUSD</option>
-                      <option value="LTCUSD">LTCUSD</option>
-                      <option value="XRPUSD">XRPUSD</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Indices') && (
-                    <optgroup label="Indices">
-                      <option value="US30">US30 (Dow Jones)</option>
-                      <option value="US500">US500 (S&P 500)</option>
-                      <option value="NAS100">NAS100 (Nasdaq)</option>
-                    </optgroup>
-                  )}
-                </select>
+                {instrumentSelectEl}
+                {instruments.length === 0 && (
+                  <p className="text-gray-500 text-xs mt-1">Loading symbols from trading API…</p>
+                )}
               </div>
 
               {/* Step 4: User (Optional - Highest Priority) */}
@@ -598,50 +647,17 @@ const AdminForexCharges = () => {
                   <option value="Metals">Metals</option>
                   <option value="Crypto">Crypto</option>
                   <option value="Indices">Indices</option>
+                  <option value="Commodities">Commodities</option>
                 </select>
               </div>
 
               {/* Step 3: Instrument - Filtered by Segment */}
               <div>
                 <label className="block text-gray-400 text-xs mb-1">3. Instrument <span className="text-gray-600">(optional{form.segment ? ` - showing ${form.segment} only` : ''})</span></label>
-                <select value={form.instrumentSymbol} onChange={(e) => setForm({ ...form, instrumentSymbol: e.target.value, level: e.target.value ? 'INSTRUMENT' : (form.accountTypeId ? 'ACCOUNT_TYPE' : (form.segment ? 'SEGMENT' : 'GLOBAL')) })} className="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white text-sm">
-                  <option value="">All Instruments</option>
-                  {(!form.segment || form.segment === 'Forex') && (
-                    <optgroup label="Forex">
-                      <option value="EURUSD">EURUSD</option>
-                      <option value="GBPUSD">GBPUSD</option>
-                      <option value="USDJPY">USDJPY</option>
-                      <option value="USDCHF">USDCHF</option>
-                      <option value="AUDUSD">AUDUSD</option>
-                      <option value="NZDUSD">NZDUSD</option>
-                      <option value="USDCAD">USDCAD</option>
-                      <option value="EURGBP">EURGBP</option>
-                      <option value="EURJPY">EURJPY</option>
-                      <option value="GBPJPY">GBPJPY</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Metals') && (
-                    <optgroup label="Metals">
-                      <option value="XAUUSD">XAUUSD (Gold)</option>
-                      <option value="XAGUSD">XAGUSD (Silver)</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Crypto') && (
-                    <optgroup label="Crypto">
-                      <option value="BTCUSD">BTCUSD</option>
-                      <option value="ETHUSD">ETHUSD</option>
-                      <option value="LTCUSD">LTCUSD</option>
-                      <option value="XRPUSD">XRPUSD</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Indices') && (
-                    <optgroup label="Indices">
-                      <option value="US30">US30 (Dow Jones)</option>
-                      <option value="US500">US500 (S&P 500)</option>
-                      <option value="NAS100">NAS100 (Nasdaq)</option>
-                    </optgroup>
-                  )}
-                </select>
+                {instrumentSelectEl}
+                {instruments.length === 0 && (
+                  <p className="text-gray-500 text-xs mt-1">Loading symbols from trading API…</p>
+                )}
               </div>
 
               {/* Step 4: User Override (Optional) */}
@@ -755,50 +771,17 @@ const AdminForexCharges = () => {
                   <option value="Metals">Metals</option>
                   <option value="Crypto">Crypto</option>
                   <option value="Indices">Indices</option>
+                  <option value="Commodities">Commodities</option>
                 </select>
               </div>
 
               {/* Step 3: Instrument - Filtered by Segment */}
               <div>
                 <label className="block text-gray-400 text-xs mb-1">3. Instrument <span className="text-gray-600">(optional{form.segment ? ` - showing ${form.segment} only` : ''})</span></label>
-                <select value={form.instrumentSymbol} onChange={(e) => setForm({ ...form, instrumentSymbol: e.target.value, level: e.target.value ? 'INSTRUMENT' : (form.accountTypeId ? 'ACCOUNT_TYPE' : (form.segment ? 'SEGMENT' : 'GLOBAL')) })} className="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white text-sm">
-                  <option value="">All Instruments</option>
-                  {(!form.segment || form.segment === 'Forex') && (
-                    <optgroup label="Forex">
-                      <option value="EURUSD">EURUSD</option>
-                      <option value="GBPUSD">GBPUSD</option>
-                      <option value="USDJPY">USDJPY</option>
-                      <option value="USDCHF">USDCHF</option>
-                      <option value="AUDUSD">AUDUSD</option>
-                      <option value="NZDUSD">NZDUSD</option>
-                      <option value="USDCAD">USDCAD</option>
-                      <option value="EURGBP">EURGBP</option>
-                      <option value="EURJPY">EURJPY</option>
-                      <option value="GBPJPY">GBPJPY</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Metals') && (
-                    <optgroup label="Metals">
-                      <option value="XAUUSD">XAUUSD (Gold)</option>
-                      <option value="XAGUSD">XAGUSD (Silver)</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Crypto') && (
-                    <optgroup label="Crypto">
-                      <option value="BTCUSD">BTCUSD</option>
-                      <option value="ETHUSD">ETHUSD</option>
-                      <option value="LTCUSD">LTCUSD</option>
-                      <option value="XRPUSD">XRPUSD</option>
-                    </optgroup>
-                  )}
-                  {(!form.segment || form.segment === 'Indices') && (
-                    <optgroup label="Indices">
-                      <option value="US30">US30 (Dow Jones)</option>
-                      <option value="US500">US500 (S&P 500)</option>
-                      <option value="NAS100">NAS100 (Nasdaq)</option>
-                    </optgroup>
-                  )}
-                </select>
+                {instrumentSelectEl}
+                {instruments.length === 0 && (
+                  <p className="text-gray-500 text-xs mt-1">Loading symbols from trading API…</p>
+                )}
               </div>
 
               {/* Step 4: User Override (Optional) */}
