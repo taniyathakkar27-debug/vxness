@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 
 import toast from 'react-hot-toast'
 
@@ -13,6 +13,8 @@ import priceStreamService from '../services/priceStream'
 import { useTheme } from '../context/ThemeContext'
 
 import { API_URL } from '../config/api'
+
+import { adjustQuotesForTradingDisplay } from '../services/chargePricing'
 
 
 
@@ -170,7 +172,9 @@ const TradingPage = () => {
 
   const [livePrices, setLivePrices] = useState({}) // Store live prices separately
 
-  const [adminSpreads, setAdminSpreads] = useState({}) // Store admin-set spreads
+  const [adminCommissions, setAdminCommissions] = useState({}) // Admin commission per symbol (instruments column)
+
+  const [adminSpreads, setAdminSpreads] = useState({}) // Admin spread per symbol (Forex Charges → Spread)
 
   
 
@@ -216,6 +220,120 @@ const TradingPage = () => {
 
 
   const user = JSON.parse(localStorage.getItem('user') || '{}')
+
+
+
+  const accountTypeKeyForCharges =
+
+    account?.accountTypeId?._id?.toString?.() ||
+
+    account?.accountTypeId?.toString?.() ||
+
+    ''
+
+
+
+  const instrumentsSymbolsParam = useMemo(
+
+    () =>
+
+      [...new Set(instruments.map((i) => (i.symbol || '').toString().toUpperCase().trim()).filter(Boolean))].join(
+
+        ','
+
+      ),
+
+    [instruments]
+
+  )
+
+
+
+  const fetchAdminSpreads = useCallback(async () => {
+
+    try {
+
+      const qs = new URLSearchParams()
+
+      if (accountTypeKeyForCharges) qs.set('accountTypeId', accountTypeKeyForCharges)
+
+      if (user?._id) qs.set('userId', String(user._id))
+
+      if (instrumentsSymbolsParam) qs.set('symbols', instrumentsSymbolsParam)
+
+      const suffix = qs.toString() ? `?${qs.toString()}` : ''
+
+      const res = await fetch(`${API_URL}/charges/spreads${suffix}`)
+
+      const data = await res.json()
+
+      if (data.success) setAdminSpreads(data.spreads || {})
+
+    } catch (error) {
+
+      console.error('Error fetching admin spreads:', error)
+
+    }
+
+  }, [accountTypeKeyForCharges, user?._id, instrumentsSymbolsParam])
+
+
+
+  const fetchAdminCommissions = useCallback(async () => {
+
+    try {
+
+      const res = await fetch(`${API_URL}/charges/commissions`)
+
+      const data = await res.json()
+
+      if (data.success) setAdminCommissions(data.commissions || {})
+
+    } catch (error) {
+
+      console.error('Error fetching admin commissions:', error)
+
+    }
+
+  }, [])
+
+
+
+  const getDisplayQuotes = useCallback(
+
+    (symbol, bid, ask) => {
+
+      const k = (symbol || '').toUpperCase()
+
+      const spreadEntry = adminSpreads[k] || adminSpreads[symbol]
+
+      const commEntry = adminCommissions[k] || adminCommissions[symbol]
+
+      return adjustQuotesForTradingDisplay(Number(bid), Number(ask), symbol, spreadEntry, commEntry)
+
+    },
+
+    [adminSpreads, adminCommissions]
+
+  )
+
+
+
+  const formatTradePrice = (symbol, price) => {
+
+    const n = Number(price)
+
+    if (!Number.isFinite(n) || n <= 0) return '...'
+
+    const sym = symbol || ''
+
+    if (sym.includes('JPY')) return n.toFixed(3)
+
+    if (['BTCUSD', 'ETHUSD', 'XAUUSD', 'XAGUSD'].includes(sym)) return n.toFixed(2)
+
+    return n.toFixed(5)
+
+  }
 
 
 
@@ -302,10 +420,6 @@ const TradingPage = () => {
 
     fetchLivePrices()
 
-    // Fetch admin-set spreads
-
-    fetchAdminSpreads()
-
     
 
     // Refresh prices every 2 seconds for real-time P/L updates
@@ -327,6 +441,26 @@ const TradingPage = () => {
     }
 
   }, [accountId, kycAllowed])
+
+
+
+  useEffect(() => {
+
+    if (kycAllowed !== true) return
+
+    fetchAdminSpreads()
+
+  }, [kycAllowed, fetchAdminSpreads])
+
+
+
+  useEffect(() => {
+
+    if (kycAllowed !== true) return
+
+    fetchAdminCommissions()
+
+  }, [kycAllowed, fetchAdminCommissions])
 
 
 
@@ -1023,27 +1157,63 @@ const TradingPage = () => {
 
 
 
-  // Fetch admin-set spreads for instruments
+  const formatInstrumentCommission = (entry) => {
 
-  const fetchAdminSpreads = async () => {
+    if (!entry || !(entry.commission > 0)) return null
 
-    try {
+    if (entry.commissionType === 'PERCENTAGE') {
 
-      const res = await fetch(`${API_URL}/charges/spreads`)
-
-      const data = await res.json()
-
-      if (data.success) {
-
-        setAdminSpreads(data.spreads || {})
-
-      }
-
-    } catch (error) {
-
-      console.error('Error fetching admin spreads:', error)
+      return `${Number(entry.commission)}%`
 
     }
+
+    const n = Number(entry.commission)
+
+    return Number.isInteger(n) ? String(n) : n.toFixed(2)
+
+  }
+
+
+
+  /** Admin spread value as shown between Bid/Ask (uses category so XAG/XAU work before bid loads). */
+
+  const formatAdminSpreadForInstrument = (inst, spreadEntry) => {
+
+    const v = Number(spreadEntry?.spread ?? spreadEntry?.spreadValue)
+
+    if (!spreadEntry || !Number.isFinite(v) || v <= 0) return null
+
+    const sym = (inst.symbol || '').toUpperCase()
+
+    const cat = inst.category || getSymbolCategory(sym, inst)
+
+    if (sym.includes('JPY')) return (v * 100).toFixed(1)
+
+    if (cat === 'Metals' || cat === 'Indices' || cat === 'Commodities' || cat === 'Crypto') {
+
+      return Number(v).toFixed(2)
+
+    }
+
+    return (v * 10000).toFixed(1)
+
+  }
+
+
+
+  const formatInstrumentChargeCell = (inst) => {
+
+    const symKey = (inst.symbol || '').toUpperCase()
+
+    const spreadStr = formatAdminSpreadForInstrument(inst, adminSpreads[symKey] || adminSpreads[inst.symbol])
+
+    if (spreadStr != null) return spreadStr
+
+    const commStr = formatInstrumentCommission(adminCommissions[symKey] || adminCommissions[inst.symbol])
+
+    if (commStr != null) return commStr
+
+    return '0'
 
   }
 
@@ -2673,9 +2843,29 @@ const TradingPage = () => {
 
           <div className="flex-1" />
 
-          <span className="text-red-500 font-mono text-xs sm:text-sm mr-1 sm:mr-2">{selectedInstrument.bid?.toFixed(2)}</span>
+          {(() => {
 
-          <span className="text-green-500 font-mono text-xs sm:text-sm mr-2 sm:mr-4">{selectedInstrument.ask?.toFixed(2)}</span>
+            const lp = livePrices[selectedInstrument.symbol]
+
+            const rb = lp?.bid ?? selectedInstrument.bid
+
+            const ra = lp?.ask ?? selectedInstrument.ask
+
+            const q = getDisplayQuotes(selectedInstrument.symbol, rb, ra)
+
+            return (
+
+              <>
+
+                <span className="text-red-500 font-mono text-xs sm:text-sm mr-1 sm:mr-2">{formatTradePrice(selectedInstrument.symbol, q.bid)}</span>
+
+                <span className="text-green-500 font-mono text-xs sm:text-sm mr-2 sm:mr-4">{formatTradePrice(selectedInstrument.symbol, q.ask)}</span>
+
+              </>
+
+            )
+
+          })()}
 
           <button 
 
@@ -2917,7 +3107,13 @@ const TradingPage = () => {
 
                         <div className="text-red-500 text-xs font-mono">
 
-                          {inst.bid > 0 ? inst.bid.toFixed(inst.bid > 100 ? 2 : 5) : '...'}
+                          {(() => {
+
+                            const dq = getDisplayQuotes(inst.symbol, inst.bid, inst.ask)
+
+                            return dq.bid > 0 ? formatTradePrice(inst.symbol, dq.bid) : '...'
+
+                          })()}
 
                         </div>
 
@@ -2927,29 +3123,7 @@ const TradingPage = () => {
 
                       <div className={`px-1.5 py-0.5 rounded text-[10px] font-medium min-w-[28px] text-center mx-2 ${isDarkMode ? 'bg-[#2a2a2a] text-cyan-400' : 'bg-blue-100 text-blue-600'}`}>
 
-                        {/* Show admin-set spread if available, otherwise show market spread */}
-
-                        {adminSpreads[inst.symbol]?.spread > 0 ? (
-
-                          // Convert admin spread to pips for display
-
-                          inst.symbol.includes('JPY') ? (adminSpreads[inst.symbol].spread * 100).toFixed(1) :
-
-                          inst.bid > 100 ? adminSpreads[inst.symbol].spread.toFixed(2) :
-
-                          (adminSpreads[inst.symbol].spread * 10000).toFixed(1)
-
-                        ) : inst.spread > 0 ? (
-
-                          // Convert market spread to pips
-
-                          inst.symbol.includes('JPY') ? (inst.spread * 100).toFixed(1) :
-
-                          inst.bid > 100 ? inst.spread.toFixed(2) :
-
-                          (inst.spread * 10000).toFixed(1)
-
-                        ) : '-'}
+                        {formatInstrumentChargeCell(inst)}
 
                       </div>
 
@@ -2957,7 +3131,13 @@ const TradingPage = () => {
 
                         <div className="text-green-500 text-xs font-mono">
 
-                          {inst.ask > 0 ? inst.ask.toFixed(inst.ask > 100 ? 2 : 5) : '...'}
+                          {(() => {
+
+                            const dq = getDisplayQuotes(inst.symbol, inst.bid, inst.ask)
+
+                            return dq.ask > 0 ? formatTradePrice(inst.symbol, dq.ask) : '...'
+
+                          })()}
 
                         </div>
 
@@ -3837,7 +4017,19 @@ const TradingPage = () => {
 
 
 
-                  {/* One-Click Buy/Sell Buttons */}
+                  {/* One-Click Buy/Sell Buttons (prices include admin spread like execution) */}
+
+                  {(() => {
+
+                    const lp = livePrices[selectedInstrument.symbol]
+
+                    const rb = lp?.bid ?? selectedInstrument.bid
+
+                    const ra = lp?.ask ?? selectedInstrument.ask
+
+                    const q = getDisplayQuotes(selectedInstrument.symbol, rb, ra)
+
+                    return (
 
                   <div className="flex gap-2 mb-3">
 
@@ -3855,15 +4047,7 @@ const TradingPage = () => {
 
                       <div className="text-white font-mono text-lg font-bold">
 
-                        {selectedInstrument.symbol?.includes('JPY') 
-
-                          ? selectedInstrument.bid?.toFixed(3)
-
-                          : ['BTCUSD', 'ETHUSD', 'XAUUSD'].includes(selectedInstrument.symbol)
-
-                            ? selectedInstrument.bid?.toFixed(2)
-
-                            : selectedInstrument.bid?.toFixed(5)}
+                        {formatTradePrice(selectedInstrument.symbol, q.bid)}
 
                       </div>
 
@@ -3883,21 +4067,17 @@ const TradingPage = () => {
 
                       <div className="text-white font-mono text-lg font-bold">
 
-                        {selectedInstrument.symbol?.includes('JPY') 
-
-                          ? selectedInstrument.ask?.toFixed(3)
-
-                          : ['BTCUSD', 'ETHUSD', 'XAUUSD'].includes(selectedInstrument.symbol)
-
-                            ? selectedInstrument.ask?.toFixed(2)
-
-                            : selectedInstrument.ask?.toFixed(5)}
+                        {formatTradePrice(selectedInstrument.symbol, q.ask)}
 
                       </div>
 
                     </button>
 
                   </div>
+
+                    )
+
+                  })()}
 
 
 
@@ -4039,7 +4219,15 @@ const TradingPage = () => {
 
                             : 100000
 
-                          const margin = (parseFloat(volume || 0) * contractSize * (selectedInstrument.ask || 0)) / leverageNum
+                          const lpM = livePrices[selectedInstrument.symbol]
+
+                          const rbM = lpM?.bid ?? selectedInstrument.bid
+
+                          const raM = lpM?.ask ?? selectedInstrument.ask
+
+                          const qM = getDisplayQuotes(selectedInstrument.symbol, rbM, raM)
+
+                          const margin = (parseFloat(volume || 0) * contractSize * (qM.ask || 0)) / leverageNum
 
                           return margin.toFixed(2)
 
@@ -4267,7 +4455,17 @@ const TradingPage = () => {
 
                   <div className="text-center text-gray-500 text-xs mt-2">
 
-                    {volume} lots @ {selectedSide === 'BUY' ? selectedInstrument.ask?.toFixed(2) : selectedInstrument.bid?.toFixed(2)}
+                    {(() => {
+
+                      const lp = livePrices[selectedInstrument.symbol]
+
+                      const q = getDisplayQuotes(selectedInstrument.symbol, lp?.bid ?? selectedInstrument.bid, lp?.ask ?? selectedInstrument.ask)
+
+                      const px = selectedSide === 'BUY' ? q.ask : q.bid
+
+                      return `${volume} lots @ ${formatTradePrice(selectedInstrument.symbol, px)}`
+
+                    })()}
 
                   </div>
 

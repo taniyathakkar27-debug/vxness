@@ -1,5 +1,10 @@
 import mongoose from 'mongoose'
 
+function normSymbol(s) {
+  if (s == null || s === '') return ''
+  return String(s).toUpperCase().trim()
+}
+
 const chargesSchema = new mongoose.Schema({
   // Hierarchy level - higher priority overrides lower
   // Priority: USER > INSTRUMENT > SEGMENT > ACCOUNT_TYPE > GLOBAL
@@ -92,11 +97,14 @@ const chargesSchema = new mongoose.Schema({
 }, { timestamps: true })
 
 // Merges charges from multiple levels - most specific wins for each field
-chargesSchema.statics.getChargesForTrade = async function(userId, symbol, segment, accountTypeId) {
-  console.log(`Getting charges for: userId=${userId}, symbol=${symbol}, segment=${segment}, accountTypeId=${accountTypeId}`)
+// preloadedCharges: optional array from a single find() — avoids N DB round-trips when resolving many symbols
+chargesSchema.statics.getChargesForTrade = async function(userId, symbol, segment, accountTypeId, preloadedCharges) {
+  const symNorm = normSymbol(symbol)
+  console.log(`Getting charges for: userId=${userId}, symbol=${symbol} (${symNorm}), segment=${segment}, accountTypeId=${accountTypeId}`)
   
-  // Build query to find all potentially applicable charges
-  const allCharges = await this.find({ isActive: true }).sort({ createdAt: -1 })
+  const allCharges = Array.isArray(preloadedCharges)
+    ? preloadedCharges
+    : await this.find({ isActive: true }).sort({ createdAt: -1 })
   
   // Filter charges that apply to this trade
   let applicableCharges = allCharges.filter(charge => {
@@ -104,13 +112,13 @@ chargesSchema.statics.getChargesForTrade = async function(userId, symbol, segmen
     if (charge.level === 'USER') {
       if (!charge.userId || charge.userId.toString() !== userId?.toString()) return false
       // If instrument is specified, must match
-      if (charge.instrumentSymbol && charge.instrumentSymbol !== symbol) return false
+      if (charge.instrumentSymbol && normSymbol(charge.instrumentSymbol) !== symNorm) return false
       return true
     }
     
     // INSTRUMENT level - must match symbol
     if (charge.level === 'INSTRUMENT') {
-      if (charge.instrumentSymbol !== symbol) return false
+      if (normSymbol(charge.instrumentSymbol) !== symNorm) return false
       // If accountTypeId is specified, must match
       if (charge.accountTypeId && charge.accountTypeId.toString() !== accountTypeId?.toString()) return false
       return true

@@ -268,8 +268,23 @@ class PropTradingEngine {
     // Get charges for this trade (use default charges for challenge accounts)
     const charges = await Charges.getChargesForTrade(userId, symbol, resolvedSegment, null)
     
-    // Calculate execution price with spread
-    const openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
+    const commissionEmbeddedInBuyPrice =
+      side === 'BUY' &&
+      charges.commissionValue > 0 &&
+      ['PER_LOT', 'PER_TRADE', 'PERCENTAGE'].includes(String(charges.commissionType || 'PER_LOT'))
+
+    // Calculate execution price with spread + commission on ASK for BUY
+    let openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
+
+    if (commissionEmbeddedInBuyPrice) {
+      const ct = String(charges.commissionType || 'PER_LOT')
+      const cv = Number(charges.commissionValue)
+      if ((ct === 'PER_LOT' || ct === 'PER_TRADE') && Number.isFinite(cv)) {
+        openPrice += cv
+      } else if (ct === 'PERCENTAGE' && Number.isFinite(cv)) {
+        openPrice += openPrice * (cv / 100)
+      }
+    }
 
     // Get contract size based on symbol
     const contractSize = this.getContractSize(symbol)
@@ -282,7 +297,7 @@ class PropTradingEngine {
     let commission = 0
     const shouldChargeCommission = (side === 'BUY' && charges.commissionOnBuy !== false) || 
                                    (side === 'SELL' && charges.commissionOnSell !== false)
-    if (shouldChargeCommission && charges.commissionValue > 0) {
+    if (shouldChargeCommission && charges.commissionValue > 0 && !commissionEmbeddedInBuyPrice) {
       commission = this.calculateCommission(quantity, openPrice, charges.commissionType, charges.commissionValue, contractSize)
     }
 

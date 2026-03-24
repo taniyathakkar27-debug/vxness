@@ -510,9 +510,41 @@ class TradeEngine {
 
 
 
+    // BUY: add admin commission value onto ASK-based execution price (matches trading UI)
+
+    const commissionEmbeddedInBuyPrice =
+
+      side === 'BUY' &&
+
+      charges.commissionValue > 0 &&
+
+      ['PER_LOT', 'PER_TRADE', 'PERCENTAGE'].includes(String(charges.commissionType || 'PER_LOT'))
+
+
+
     // Calculate execution price with spread
 
-    const openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
+    let openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
+
+
+
+    if (commissionEmbeddedInBuyPrice) {
+
+      const ct = String(charges.commissionType || 'PER_LOT')
+
+      const cv = Number(charges.commissionValue)
+
+      if ((ct === 'PER_LOT' || ct === 'PER_TRADE') && Number.isFinite(cv)) {
+
+        openPrice += cv
+
+      } else if (ct === 'PERCENTAGE' && Number.isFinite(cv)) {
+
+        openPrice += openPrice * (cv / 100)
+
+      }
+
+    }
 
 
 
@@ -582,13 +614,13 @@ class TradeEngine {
 
     
 
-    if (shouldChargeCommission && charges.commissionValue > 0) {
+    if (shouldChargeCommission && charges.commissionValue > 0 && !commissionEmbeddedInBuyPrice) {
 
       commission = this.calculateCommission(quantity, openPrice, charges.commissionType, charges.commissionValue, contractSize)
 
     }
 
-    console.log(`Commission calculated: $${commission} (side=${side}, commissionOnBuy=${charges.commissionOnBuy}, commissionOnSell=${charges.commissionOnSell})`)
+    console.log(`Commission calculated: $${commission} (embeddedInBuyPrice=${commissionEmbeddedInBuyPrice}, side=${side}, commissionOnBuy=${charges.commissionOnBuy}, commissionOnSell=${charges.commissionOnSell})`)
 
 
 
