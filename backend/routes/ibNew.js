@@ -6,21 +6,24 @@ import IBWallet from '../models/IBWallet.js'
 import IBLevel from '../models/IBLevel.js'
 import IBSettings from '../models/IBSettings.js'
 import ibEngine from '../services/ibEngineNew.js'
+import IBTierChangeRequest from '../models/IBTierChangeRequest.js'
+import IBCommissionConfig from '../models/IBCommissionConfig.js'
+import AccountType from '../models/AccountType.js'
 import mongoose from 'mongoose'
 
 const router = express.Router()
 
 // ==================== USER ROUTES ====================
 
-// POST /api/ib/apply - Apply to become an IB
+// POST /api/ib/apply - Apply to become an IB (optional requestedLevelId = commission tier)
 router.post('/apply', async (req, res) => {
   try {
-    const { userId } = req.body
+    const { userId, requestedLevelId } = req.body
     if (!userId) {
       return res.status(400).json({ success: false, message: 'User ID is required' })
     }
 
-    const user = await ibEngine.applyForIB(userId)
+    const user = await ibEngine.applyForIB(userId, requestedLevelId || null)
     res.json({
       success: true,
       message: 'IB application submitted successfully',
@@ -81,7 +84,14 @@ router.get('/my-profile/:userId', async (req, res) => {
 
     const wallet = await IBWallet.getOrCreateWallet(userId)
     const stats = await ibEngine.getIBStats(userId)
-    
+
+    // Check for auto-upgrade before building level progress
+    if (user.autoUpgradeEnabled) {
+      await ibEngine.checkAndUpgradeLevel(userId)
+    }
+
+    const userFresh = await User.findById(userId).populate('ibPlanId').populate('ibLevelId')
+
     // Get level progress
     let levelProgress = null
     try {
@@ -90,29 +100,47 @@ router.get('/my-profile/:userId', async (req, res) => {
       console.error('Error getting level progress:', e)
     }
 
-    // Check for auto-upgrade
-    if (user.autoUpgradeEnabled) {
-      await ibEngine.checkAndUpgradeLevel(userId)
+    let pendingTierRequest = null
+    try {
+      pendingTierRequest = await ibEngine.getPendingTierRequestForUser(userId)
+    } catch (e) {
+      console.error('Error getting pending tier request:', e)
+    }
+
+    let pendingApplicationTier = null
+    if (userFresh.ibStatus === 'PENDING') {
+      const appReq = await IBTierChangeRequest.findOne({
+        userId,
+        requestType: 'APPLICATION',
+        status: 'PENDING'
+      }).populate('requestedLevelId', 'name order commissionRate color')
+      if (appReq?.requestedLevelId) {
+        pendingApplicationTier = appReq.requestedLevelId
+      }
     }
 
     res.json({
       success: true,
       isIB: true,
       ibUser: {
-        _id: user._id,
-        firstName: user.firstName,
-        email: user.email,
-        referralCode: user.referralCode,
-        ibStatus: user.ibStatus,
-        ibLevel: user.ibLevel,
-        ibLevelOrder: user.ibLevelOrder,
-        ibLevelId: user.ibLevelId,
-        autoUpgradeEnabled: user.autoUpgradeEnabled,
-        ibPlan: user.ibPlanId
+        _id: userFresh._id,
+        firstName: userFresh.firstName,
+        email: userFresh.email,
+        referralCode: userFresh.referralCode,
+        ibStatus: userFresh.ibStatus,
+        ibLevel: userFresh.ibLevel,
+        ibLevelOrder: userFresh.ibLevelOrder,
+        ibLevelId: userFresh.ibLevelId,
+        autoUpgradeEnabled: userFresh.autoUpgradeEnabled,
+        ibPlan: userFresh.ibPlanId,
+        ibRejectionReason: userFresh.ibRejectionReason,
+        rejectionReason: userFresh.ibRejectionReason
       },
       wallet,
       stats: stats.stats,
-      levelProgress
+      levelProgress,
+      pendingTierRequest,
+      pendingApplicationTier
     })
   } catch (error) {
     console.error('Error fetching IB profile:', error)
@@ -235,9 +263,22 @@ router.get('/admin/all', async (req, res) => {
 // GET /api/ib/admin/pending - Get pending IB applications
 router.get('/admin/pending', async (req, res) => {
   try {
-    const pending = await User.find({ isIB: true, ibStatus: 'PENDING' })
+    const pendingUsers = await User.find({ isIB: true, ibStatus: 'PENDING' })
       .select('firstName lastName email referralCode ibLevel createdAt')
       .sort({ createdAt: -1 })
+
+    const pending = await Promise.all(
+      pendingUsers.map(async (u) => {
+        const appReq = await IBTierChangeRequest.findOne({
+          userId: u._id,
+          requestType: 'APPLICATION',
+          status: 'PENDING'
+        }).populate('requestedLevelId', 'name order commissionRate')
+        const o = u.toObject()
+        o.requestedTier = appReq?.requestedLevelId || null
+        return o
+      })
+    )
 
     res.json({ success: true, pending })
   } catch (error) {
@@ -246,13 +287,81 @@ router.get('/admin/pending', async (req, res) => {
   }
 })
 
+// GET /api/ib/admin/tier-change-requests — pending LEVEL_CHANGE queue
+router.get('/admin/tier-change-requests', async (req, res) => {
+  try {
+    const { status = 'PENDING' } = req.query
+    const q = { requestType: 'LEVEL_CHANGE' }
+    if (status) q.status = status
+
+    const requests = await IBTierChangeRequest.find(q)
+      .populate('userId', 'firstName lastName email referralCode')
+      .populate('requestedLevelId', 'name order commissionRate referralTarget color')
+      .populate('previousLevelId', 'name order commissionRate')
+      .sort({ createdAt: -1 })
+
+    res.json({ success: true, requests })
+  } catch (error) {
+    console.error('Error fetching tier change requests:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// PUT /api/ib/admin/tier-change-requests/:requestId/approve
+router.put('/admin/tier-change-requests/:requestId/approve', async (req, res) => {
+  try {
+    const { requestId } = req.params
+    const result = await ibEngine.approveTierChangeRequest(requestId)
+    res.json({
+      success: true,
+      message: `Tier updated to ${result.level.name}`,
+      ...result
+    })
+  } catch (error) {
+    console.error('Error approving tier request:', error)
+    res.status(400).json({ success: false, message: error.message })
+  }
+})
+
+// PUT /api/ib/admin/tier-change-requests/:requestId/reject
+router.put('/admin/tier-change-requests/:requestId/reject', async (req, res) => {
+  try {
+    const { requestId } = req.params
+    const { reason } = req.body
+    await ibEngine.rejectTierChangeRequest(requestId, reason)
+    res.json({ success: true, message: 'Tier change request rejected' })
+  } catch (error) {
+    console.error('Error rejecting tier request:', error)
+    res.status(400).json({ success: false, message: error.message })
+  }
+})
+
+// POST /api/ib/request-tier-change — active IB asks admin to change commission tier
+router.post('/request-tier-change', async (req, res) => {
+  try {
+    const { userId, requestedLevelId } = req.body
+    if (!userId || !requestedLevelId) {
+      return res.status(400).json({ success: false, message: 'userId and requestedLevelId are required' })
+    }
+    const request = await ibEngine.requestIbTierChange(userId, requestedLevelId)
+    res.json({
+      success: true,
+      message: 'Tier change request submitted. An admin will review it.',
+      request
+    })
+  } catch (error) {
+    console.error('Error requesting tier change:', error)
+    res.status(400).json({ success: false, message: error.message })
+  }
+})
+
 // PUT /api/ib/admin/approve/:userId - Approve IB application
 router.put('/admin/approve/:userId', async (req, res) => {
   try {
     const { userId } = req.params
-    const { planId } = req.body
+    const { planId, levelId } = req.body
 
-    const user = await ibEngine.approveIB(userId, planId)
+    const user = await ibEngine.approveIB(userId, planId, levelId || null)
     res.json({
       success: true,
       message: 'IB approved successfully',
@@ -281,6 +390,8 @@ router.put('/admin/reject/:userId', async (req, res) => {
     user.ibStatus = 'REJECTED'
     user.ibRejectionReason = reason
     await user.save()
+
+    await ibEngine.rejectPendingApplicationTierRequests(userId, reason || 'IB application rejected')
 
     res.json({
       success: true,
@@ -935,6 +1046,131 @@ router.post('/admin/init-levels', async (req, res) => {
   } catch (error) {
     console.error('Error initializing levels:', error)
     res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// ==================== IB COMMISSION % (per account type × chain level) ====================
+
+// GET /api/ib/admin/commission-config/summary — which account types have configs
+router.get('/admin/commission-config/summary', async (req, res) => {
+  try {
+    const types = await AccountType.find({}).select('name isActive').sort({ name: 1 }).lean()
+    const withCounts = await Promise.all(
+      types.map(async (t) => {
+        const n = await IBCommissionConfig.countDocuments({ accountTypeId: t._id, isActive: true })
+        return { ...t, activeLevelCount: n }
+      })
+    )
+    res.json({ success: true, accountTypes: withCounts })
+  } catch (error) {
+    console.error('Error fetching commission config summary:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// GET /api/ib/admin/commission-config/:accountTypeId
+router.get('/admin/commission-config/:accountTypeId', async (req, res) => {
+  try {
+    const { accountTypeId } = req.params
+    const accountType = await AccountType.findById(accountTypeId).lean()
+    if (!accountType) {
+      return res.status(404).json({ success: false, message: 'Account type not found' })
+    }
+    const levels = await IBCommissionConfig.find({ accountTypeId }).sort({ level: 1 }).lean()
+    const totalPercent = levels.filter((l) => l.isActive).reduce((s, l) => s + l.commissionPercent, 0)
+    res.json({ success: true, accountType, levels, totalPercent })
+  } catch (error) {
+    console.error('Error fetching commission config:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// PUT /api/ib/admin/commission-config/:accountTypeId
+// body: { levels: [{ level: 1, commissionPercent: 30, isActive: true }, ...] }
+router.put('/admin/commission-config/:accountTypeId', async (req, res) => {
+  try {
+    const { accountTypeId } = req.params
+    const { levels } = req.body
+    if (!Array.isArray(levels) || levels.length === 0) {
+      return res.status(400).json({ success: false, message: 'levels array required' })
+    }
+    const at = await AccountType.findById(accountTypeId)
+    if (!at) {
+      return res.status(404).json({ success: false, message: 'Account type not found' })
+    }
+    const activeSum = levels.filter((l) => l.isActive !== false).reduce((s, l) => s + Number(l.commissionPercent || 0), 0)
+    if (activeSum > 100) {
+      return res.status(400).json({
+        success: false,
+        message: `Total active commission % is ${activeSum}. Must be ≤ 100 (remainder stays with platform).`
+      })
+    }
+    const seen = new Set()
+    for (const row of levels) {
+      if (row.level < 1 || row.level > 20) {
+        return res.status(400).json({ success: false, message: 'Each level must be between 1 and 20' })
+      }
+      if (seen.has(row.level)) {
+        return res.status(400).json({ success: false, message: `Duplicate level ${row.level}` })
+      }
+      seen.add(row.level)
+      if (Number(row.commissionPercent) < 0) {
+        return res.status(400).json({ success: false, message: 'commissionPercent must be ≥ 0' })
+      }
+    }
+    await IBCommissionConfig.replaceForAccountType(accountTypeId, levels)
+    const saved = await IBCommissionConfig.find({ accountTypeId }).sort({ level: 1 }).lean()
+    const totalPercent = saved.filter((l) => l.isActive).reduce((s, l) => s + l.commissionPercent, 0)
+    res.json({
+      success: true,
+      message: 'IB commission configuration saved. Applies to new closed trades only.',
+      levels: saved,
+      totalPercent,
+      platformApproxPercent: Math.max(0, 100 - totalPercent)
+    })
+  } catch (error) {
+    console.error('Error saving commission config:', error)
+    res.status(400).json({ success: false, message: error.message })
+  }
+})
+
+// POST /api/ib/admin/commission-config/seed-defaults — 30/22/15/8/5 for each account type missing config
+router.post('/admin/commission-config/seed-defaults', async (req, res) => {
+  try {
+    const types = await AccountType.find({})
+    const template = [30, 22, 15, 8, 5]
+    let created = 0
+    for (const t of types) {
+      const n = await IBCommissionConfig.countDocuments({ accountTypeId: t._id })
+      if (n > 0) continue
+      for (let i = 0; i < template.length; i++) {
+        await IBCommissionConfig.create({
+          accountTypeId: t._id,
+          level: i + 1,
+          commissionPercent: template[i],
+          isActive: true
+        })
+        created++
+      }
+    }
+    res.json({
+      success: true,
+      message: `Seeded default 5-level % for account types that had no config (${created} rows).`
+    })
+  } catch (error) {
+    console.error('Error seeding commission config:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// DELETE /api/ib/admin/commission-config/:accountTypeId — remove config (fall back to legacy IB plan)
+router.delete('/admin/commission-config/:accountTypeId', async (req, res) => {
+  try {
+    await IBCommissionConfig.deleteMany({ accountTypeId: req.params.accountTypeId })
+    res.json({ success: true, message: 'Config removed. Trades will use legacy IB plan distribution.' })
+  } catch (error) {
+    console.error('Error deleting commission config:', error)
+    res.status(400).json({ success: false, message: error.message })
   }
 })
 

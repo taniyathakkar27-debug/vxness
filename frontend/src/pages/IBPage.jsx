@@ -27,6 +27,11 @@ const IBPage = () => {
   const [challengeModeEnabled, setChallengeModeEnabled] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [levelProgress, setLevelProgress] = useState(null)
+  const [ibLevelsCatalog, setIbLevelsCatalog] = useState([])
+  const [selectedApplyLevelId, setSelectedApplyLevelId] = useState('')
+  const [pendingTierRequest, setPendingTierRequest] = useState(null)
+  const [pendingApplicationTier, setPendingApplicationTier] = useState(null)
+  const [tierChangeLoading, setTierChangeLoading] = useState(false)
 
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
@@ -63,6 +68,24 @@ const IBPage = () => {
     return () => clearInterval(refreshInterval)
   }, [])
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/ib/levels`)
+        const data = await res.json()
+        const levels = data.levels || []
+        setIbLevelsCatalog(levels)
+        setSelectedApplyLevelId((prev) => {
+          if (prev) return prev
+          const std = levels.find((l) => l.order === 1) || levels[0]
+          return std?._id || ''
+        })
+      } catch (e) {
+        console.error('Error loading IB levels:', e)
+      }
+    })()
+  }, [])
+
   const fetchChallengeStatus = async () => {
     try {
       const res = await fetch(`${API_URL}/prop/status`)
@@ -91,6 +114,8 @@ const IBPage = () => {
         if (data.levelProgress) {
           setLevelProgress(data.levelProgress)
         }
+        setPendingTierRequest(data.pendingTierRequest || null)
+        setPendingApplicationTier(data.pendingApplicationTier || null)
         // Check both status and ibStatus for compatibility
         if (data.ibUser.status === 'ACTIVE' || data.ibUser.ibStatus === 'ACTIVE') {
           fetchReferrals()
@@ -135,13 +160,40 @@ const IBPage = () => {
     }
   }
 
+  const handleTierChangeRequest = async (levelId) => {
+    if (!levelId || pendingTierRequest) return
+    setTierChangeLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/ib/request-tier-change`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user._id, requestedLevelId: levelId })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(data.message || 'Request sent to admin')
+        fetchIBProfile()
+      } else {
+        toast.error(data.message || 'Request failed')
+      }
+    } catch (error) {
+      console.error('Error requesting tier change:', error)
+      toast.error('Failed to submit tier request')
+    }
+    setTierChangeLoading(false)
+  }
+
   const handleApply = async () => {
+    if (!selectedApplyLevelId) {
+      toast.error('Please select a commission tier (Standard, Bronze, etc.)')
+      return
+    }
     setApplying(true)
     try {
       const res = await fetch(`${API_URL}/ib/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user._id })
+        body: JSON.stringify({ userId: user._id, requestedLevelId: selectedApplyLevelId })
       })
       const data = await res.json()
       if (data.success || data.ibUser || data.user) {
@@ -224,6 +276,80 @@ const IBPage = () => {
     toast.success('Logged out successfully!')
     navigate('/user/login')
   }
+
+  const renderIbApplyForm = (isReapply) => (
+    <div className={`${isMobile ? '' : 'max-w-lg mx-auto'} ${isReapply ? 'mt-2' : `text-center ${isMobile ? 'py-6' : 'py-12'}`}`}>
+      {!isReapply && (
+        <>
+          <div className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} bg-accent-green/20 rounded-full flex items-center justify-center mx-auto mb-4`}>
+            <Award size={isMobile ? 32 : 40} className="text-accent-green" />
+          </div>
+          <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-white mb-3`}>Become an Introducing Broker</h2>
+          <p className="text-gray-400 mb-4 text-sm">
+            Earn commissions by referring traders. Get up to 5 levels of referral commissions!
+          </p>
+        </>
+      )}
+      {isReapply && (
+        <p className="text-gray-400 text-sm mb-4 text-center">
+          Choose a commission tier and submit a new application. An admin will review it again.
+        </p>
+      )}
+      <div className={`bg-dark-800 rounded-xl ${isMobile ? 'p-4' : 'p-6'} mb-4 text-left`}>
+        <h3 className="text-white font-semibold mb-3 text-sm">Choose your commission tier</h3>
+        <p className="text-gray-500 text-xs mb-3">Admin must approve your IB application and this tier before it applies.</p>
+        {ibLevelsCatalog.length === 0 ? (
+          <p className="text-gray-500 text-sm">Loading tiers…</p>
+        ) : (
+          <div className={`grid ${isMobile ? 'grid-cols-2 gap-2' : 'grid-cols-2 sm:grid-cols-3 gap-2'}`}>
+            {ibLevelsCatalog.map((lvl) => (
+              <button
+                key={lvl._id}
+                type="button"
+                onClick={() => setSelectedApplyLevelId(lvl._id)}
+                className={`text-left rounded-lg border-2 p-3 transition-all ${
+                  selectedApplyLevelId === lvl._id
+                    ? 'border-accent-green bg-accent-green/10'
+                    : 'border-gray-700 bg-dark-900 hover:border-gray-600'
+                }`}
+              >
+                <p className="text-white font-medium text-sm">{lvl.name}</p>
+                <p className="text-accent-green text-sm font-bold">${lvl.commissionRate}<span className="text-gray-500 font-normal text-xs">/lot</span></p>
+              </button>
+            ))}
+          </div>
+        )}
+        <h3 className="text-white font-semibold mb-3 text-sm mt-4">Benefits:</h3>
+        <ul className="space-y-2 text-gray-400 text-sm">
+          <li className="flex items-center gap-2">
+            <ChevronRight size={14} className="text-accent-green flex-shrink-0" />
+            Earn commission on every trade your referrals make
+          </li>
+          <li className="flex items-center gap-2">
+            <ChevronRight size={14} className="text-accent-green flex-shrink-0" />
+            Multi-level commissions (up to 5 levels)
+          </li>
+          <li className="flex items-center gap-2">
+            <ChevronRight size={14} className="text-accent-green flex-shrink-0" />
+            Real-time commission tracking
+          </li>
+          <li className="flex items-center gap-2">
+            <ChevronRight size={16} className="text-accent-green" />
+            Easy withdrawal to your wallet
+          </li>
+        </ul>
+      </div>
+      <div className={isReapply ? 'text-center' : ''}>
+        <button
+          onClick={handleApply}
+          disabled={applying || !selectedApplyLevelId}
+          className="bg-accent-green text-black px-8 py-3 rounded-lg font-semibold hover:bg-accent-green/90 disabled:opacity-50"
+        >
+          {applying ? 'Applying...' : isReapply ? 'Apply again' : 'Apply Now'}
+        </button>
+      </div>
+    </div>
+  )
 
   const renderDownlineTree = (nodes, level = 0) => {
     if (!nodes || nodes.length === 0) return null
@@ -322,44 +448,7 @@ const IBPage = () => {
           {loading ? (
             <div className="text-center py-12 text-gray-500">Loading...</div>
           ) : !ibProfile ? (
-            /* Not an IB - Show Apply */
-            <div className={`${isMobile ? '' : 'max-w-lg mx-auto'} text-center ${isMobile ? 'py-6' : 'py-12'}`}>
-              <div className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} bg-accent-green/20 rounded-full flex items-center justify-center mx-auto mb-4`}>
-                <Award size={isMobile ? 32 : 40} className="text-accent-green" />
-              </div>
-              <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-white mb-3`}>Become an Introducing Broker</h2>
-              <p className="text-gray-400 mb-4 text-sm">
-                Earn commissions by referring traders. Get up to 5 levels of referral commissions!
-              </p>
-              <div className={`bg-dark-800 rounded-xl ${isMobile ? 'p-4' : 'p-6'} mb-4 text-left`}>
-                <h3 className="text-white font-semibold mb-3 text-sm">Benefits:</h3>
-                <ul className="space-y-2 text-gray-400 text-sm">
-                  <li className="flex items-center gap-2">
-                    <ChevronRight size={14} className="text-accent-green flex-shrink-0" />
-                    Earn commission on every trade your referrals make
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <ChevronRight size={14} className="text-accent-green flex-shrink-0" />
-                    Multi-level commissions (up to 5 levels)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <ChevronRight size={14} className="text-accent-green flex-shrink-0" />
-                    Real-time commission tracking
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <ChevronRight size={16} className="text-accent-green" />
-                    Easy withdrawal to your wallet
-                  </li>
-                </ul>
-              </div>
-              <button
-                onClick={handleApply}
-                disabled={applying}
-                className="bg-accent-green text-black px-8 py-3 rounded-lg font-semibold hover:bg-accent-green/90 disabled:opacity-50"
-              >
-                {applying ? 'Applying...' : 'Apply Now'}
-              </button>
-            </div>
+            renderIbApplyForm(false)
           ) : (ibProfile.status === 'PENDING' || ibProfile.ibStatus === 'PENDING') ? (
             /* Pending Approval */
             <div className={`${isMobile ? '' : 'max-w-lg mx-auto'} text-center ${isMobile ? 'py-6' : 'py-12'}`}>
@@ -370,18 +459,29 @@ const IBPage = () => {
               <p className="text-gray-400 text-sm">
                 Your IB application is under review. You will be notified once approved.
               </p>
+              {pendingApplicationTier && (
+                <p className="text-amber-400 text-sm mt-4">
+                  Requested commission tier:{' '}
+                  <span className="font-semibold text-white">{pendingApplicationTier.name}</span>
+                  {' '}(${pendingApplicationTier.commissionRate}/lot) — applies when admin approves your application.
+                </p>
+              )}
             </div>
           ) : (ibProfile.status === 'REJECTED' || ibProfile.ibStatus === 'REJECTED') ? (
-            /* Rejected */
-            <div className={`${isMobile ? '' : 'max-w-lg mx-auto'} text-center ${isMobile ? 'py-6' : 'py-12'}`}>
-              <div className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4`}>
-                <Award size={isMobile ? 32 : 40} className="text-red-500" />
+            <div className={`${isMobile ? '' : 'max-w-2xl mx-auto'} ${isMobile ? 'py-6' : 'py-8'}`}>
+              <div className="text-center mb-2">
+                <div className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4`}>
+                  <Award size={isMobile ? 32 : 40} className="text-red-500" />
+                </div>
+                <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-white mb-3`}>Application Rejected</h2>
+                <p className="text-gray-400 mb-2 text-sm">Your IB application was not approved. You can submit a new application below.</p>
+                {(ibProfile.rejectionReason || ibProfile.ibRejectionReason) && (
+                  <p className="text-red-400 text-sm mb-2">
+                    Reason: {ibProfile.rejectionReason || ibProfile.ibRejectionReason}
+                  </p>
+                )}
               </div>
-              <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-white mb-3`}>Application Rejected</h2>
-              <p className="text-gray-400 mb-2 text-sm">Unfortunately, your IB application was not approved.</p>
-              {ibProfile.rejectionReason && (
-                <p className="text-red-400 text-sm">Reason: {ibProfile.rejectionReason}</p>
-              )}
+              {renderIbApplyForm(true)}
             </div>
           ) : (
             /* Active IB Dashboard */
@@ -473,90 +573,87 @@ const IBPage = () => {
                 </div>
               </div>
 
-              {/* Commission Levels Section */}
+              {/* Commission tier — manual requests, admin approval */}
               {levelProgress && (
                 <div className={`${isDarkMode ? 'bg-dark-800 border-gray-800' : 'bg-white border-gray-200 shadow-sm'} rounded-xl ${isMobile ? 'p-4' : 'p-5'} border mb-4`}>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                     <div className="flex items-center gap-2">
                       <Award size={20} className="text-accent-green" />
-                      <h3 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Commission Levels</h3>
+                      <div>
+                        <h3 className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Commission tier</h3>
+                        <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-600'}`}>
+                          Pick a tier and submit a request. It applies only after admin approval.
+                        </p>
+                      </div>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      levelProgress.autoUpgradeEnabled 
-                        ? 'bg-accent-green/20 text-accent-green' 
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium shrink-0 ${
+                      levelProgress.autoUpgradeEnabled
+                        ? 'bg-accent-green/20 text-accent-green'
                         : 'bg-gray-700 text-gray-400'
                     }`}>
-                      {levelProgress.autoUpgradeEnabled ? 'Auto-Upgrade Enabled' : 'Auto-Upgrade Disabled'}
+                      {levelProgress.autoUpgradeEnabled ? 'Referral auto-upgrade on' : 'Referral auto-upgrade off'}
                     </span>
                   </div>
 
-                  {/* Progress Bar */}
-                  {levelProgress.nextLevel && (
-                    <div className="mb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-gray-400 text-sm">
-                          Progress to <span className="text-white font-medium">{levelProgress.nextLevel.name}</span>
-                        </p>
-                        <p className="text-accent-green font-medium">{levelProgress.progressPercent}%</p>
-                      </div>
-                      <div className={`h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-dark-700' : 'bg-gray-200'}`}>
-                        <div 
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ 
-                            width: `${levelProgress.progressPercent}%`,
-                            background: `linear-gradient(90deg, ${levelProgress.currentLevel.color}, ${levelProgress.nextLevel.color})`
-                          }}
-                        />
-                      </div>
-                      <p className="text-gray-500 text-xs mt-2">
-                        {levelProgress.referralsNeeded} more referrals needed for {levelProgress.nextLevel.name} ({levelProgress.nextLevel.referralTarget} total required)
-                      </p>
+                  {pendingTierRequest?.requestedLevel && (
+                    <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-100 text-sm">
+                      Pending admin approval to move to{' '}
+                      <strong>{pendingTierRequest.requestedLevel.name}</strong> (${pendingTierRequest.requestedLevel.commissionRate}/lot).
                     </div>
                   )}
 
-                  {/* Level Cards */}
                   <div className={`grid ${isMobile ? 'grid-cols-2 gap-2' : 'grid-cols-5 gap-3'}`}>
-                    {levelProgress.allLevels?.map((level) => (
-                      <div 
-                        key={level._id}
-                        className={`relative rounded-xl p-3 border-2 transition-all ${
-                          level.isCurrentLevel 
-                            ? 'border-accent-green bg-accent-green/10' 
-                            : level.isUnlocked 
-                              ? 'border-gray-700 bg-dark-700' 
-                              : 'border-gray-800 bg-dark-900 opacity-60'
-                        }`}
-                      >
-                        {level.isCurrentLevel && (
-                          <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-accent-green text-black text-xs font-bold rounded">
-                            Current
-                          </span>
-                        )}
-                        <div className="flex items-center gap-2 mb-2">
-                          <div 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center"
-                            style={{ backgroundColor: `${level.color}20` }}
-                          >
-                            {level.icon === 'crown' ? <Crown size={16} style={{ color: level.color }} /> :
-                             level.icon === 'trophy' ? <Trophy size={16} style={{ color: level.color }} /> :
-                             <Award size={16} style={{ color: level.color }} />}
+                    {levelProgress.allLevels?.map((level) => {
+                      const rid = pendingTierRequest?.requestedLevel?._id || pendingTierRequest?.requestedLevel
+                      const pendingThis = rid && String(rid) === String(level._id)
+                      return (
+                        <div
+                          key={level._id}
+                          className={`relative rounded-xl p-3 border-2 transition-all ${
+                            level.isCurrentLevel
+                              ? 'border-accent-green bg-accent-green/10'
+                              : 'border-gray-700 bg-dark-700'
+                          }`}
+                        >
+                          {level.isCurrentLevel && (
+                            <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-accent-green text-black text-xs font-bold rounded">
+                              Current
+                            </span>
+                          )}
+                          <div className="flex items-center gap-2 mb-2">
+                            <div
+                              className="w-8 h-8 rounded-lg flex items-center justify-center"
+                              style={{ backgroundColor: `${level.color}20` }}
+                            >
+                              {level.icon === 'crown' ? <Crown size={16} style={{ color: level.color }} /> :
+                               level.icon === 'trophy' ? <Trophy size={16} style={{ color: level.color }} /> :
+                               <Award size={16} style={{ color: level.color }} />}
+                            </div>
+                            <span className="text-white font-medium text-sm">{level.name}</span>
                           </div>
-                          <span className="text-white font-medium text-sm">{level.name}</span>
+                          <p className="text-white font-bold text-lg mb-1">
+                            ${level.commissionRate}
+                            <span className="text-gray-500 text-xs font-normal">/lot</span>
+                          </p>
+                          <p className="text-gray-500 text-xs mb-2">Admin-approved tier</p>
+                          {!level.isCurrentLevel && pendingThis && (
+                            <span className="block w-full text-center py-1.5 bg-amber-500/20 text-amber-400 text-xs rounded-lg">
+                              Awaiting approval
+                            </span>
+                          )}
+                          {!level.isCurrentLevel && !pendingThis && (
+                            <button
+                              type="button"
+                              disabled={!!pendingTierRequest || tierChangeLoading}
+                              onClick={() => handleTierChangeRequest(level._id)}
+                              className="w-full mt-1 py-1.5 bg-accent-green/20 hover:bg-accent-green/30 disabled:opacity-40 disabled:cursor-not-allowed text-accent-green text-xs font-medium rounded-lg transition-colors"
+                            >
+                              {tierChangeLoading ? '…' : 'Request this tier'}
+                            </button>
+                          )}
                         </div>
-                        <p className="text-white font-bold text-lg mb-1">
-                          ${level.commissionRate}
-                          <span className="text-gray-500 text-xs font-normal">/lot</span>
-                        </p>
-                        <p className="text-gray-500 text-xs">
-                          {level.referralTarget === 0 ? 'Default' : `${level.referralTarget}+ referrals`}
-                        </p>
-                        {!level.isCurrentLevel && !level.isUnlocked && (
-                          <button className="w-full mt-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-colors">
-                            Need {level.referralTarget - levelProgress.referralCount} more
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}

@@ -47,6 +47,24 @@ const ibCommissionSchema = new mongoose.Schema({
     enum: ['PER_LOT', 'PERCENT'],
     required: true
   },
+  distributionMode: {
+    type: String,
+    enum: ['LEGACY_PLAN', 'ACCOUNT_TYPE_GROSS_PERCENT'],
+    default: 'LEGACY_PLAN'
+  },
+  accountTypeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'AccountType',
+    default: null
+  },
+  grossCommissionPool: {
+    type: Number,
+    default: null
+  },
+  commissionPercentApplied: {
+    type: Number,
+    default: null
+  },
   status: {
     type: String,
     enum: ['CREDITED', 'REVERSED'],

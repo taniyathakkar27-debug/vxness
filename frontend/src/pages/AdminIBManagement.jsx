@@ -56,6 +56,11 @@ const AdminIBManagement = () => {
   const [ibCommission, setIbCommission] = useState('')
   const [ibPlan, setIbPlan] = useState('')
   const [savingIB, setSavingIB] = useState(false)
+  const [tierRequests, setTierRequests] = useState([])
+  const [accountTypesIbConfig, setAccountTypesIbConfig] = useState([])
+  const [ibConfigSelectedId, setIbConfigSelectedId] = useState('')
+  const [ibConfigRows, setIbConfigRows] = useState([])
+  const [ibConfigLoading, setIbConfigLoading] = useState(false)
 
   useEffect(() => {
     fetchDashboard()
@@ -65,16 +70,113 @@ const AdminIBManagement = () => {
     fetchSettings()
     fetchAllUsers()
     fetchIBLevels()
+    fetchTierChangeRequests()
 
     // Auto-refresh every 10 seconds
     const refreshInterval = setInterval(() => {
       fetchDashboard()
       fetchIBs()
       fetchApplications()
+      fetchTierChangeRequests()
     }, 10000)
 
     return () => clearInterval(refreshInterval)
   }, [])
+
+  useEffect(() => {
+    if (activeTab !== 'ib-commission-config') return
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_URL}/account-types/all`)
+        const data = await res.json()
+        setAccountTypesIbConfig(data.accountTypes || [])
+      } catch (e) {
+        console.error('Error loading account types:', e)
+      }
+    })()
+  }, [activeTab])
+
+  const defaultIbConfigRows = () =>
+    [1, 2, 3, 4, 5].map((n) => ({
+      level: n,
+      commissionPercent: [30, 22, 15, 8, 5][n - 1],
+      isActive: true
+    }))
+
+  const loadIbCommissionConfig = async (typeId) => {
+    if (!typeId) return
+    setIbConfigSelectedId(typeId)
+    setIbConfigLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/ib/admin/commission-config/${typeId}`)
+      const data = await res.json()
+      if (data.levels?.length) {
+        setIbConfigRows(
+          data.levels.map((l) => ({
+            level: l.level,
+            commissionPercent: l.commissionPercent,
+            isActive: l.isActive !== false
+          }))
+        )
+      } else {
+        setIbConfigRows(defaultIbConfigRows())
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('Failed to load IB commission config')
+    }
+    setIbConfigLoading(false)
+  }
+
+  const saveIbCommissionConfig = async () => {
+    if (!ibConfigSelectedId) {
+      toast.error('Select an account type')
+      return
+    }
+    setIbConfigLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/ib/admin/commission-config/${ibConfigSelectedId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ levels: ibConfigRows })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(data.message || 'Saved')
+      } else {
+        toast.error(data.message || 'Save failed')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('Save failed')
+    }
+    setIbConfigLoading(false)
+  }
+
+  const seedIbCommissionDefaults = async () => {
+    try {
+      const res = await fetch(`${API_URL}/ib/admin/commission-config/seed-defaults`, { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(data.message)
+        if (ibConfigSelectedId) await loadIbCommissionConfig(ibConfigSelectedId)
+      } else {
+        toast.error(data.message || 'Seed failed')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('Seed failed')
+    }
+  }
+
+  const addIbConfigLevelRow = () => {
+    const next = Math.max(0, ...ibConfigRows.map((r) => r.level)) + 1
+    if (next > 15) {
+      toast.error('Max 15 levels')
+      return
+    }
+    setIbConfigRows([...ibConfigRows, { level: next, commissionPercent: 0, isActive: true }])
+  }
 
   const fetchAllUsers = async () => {
     try {
@@ -190,6 +292,16 @@ const AdminIBManagement = () => {
     }
   }
 
+  const fetchTierChangeRequests = async () => {
+    try {
+      const res = await fetch(`${API_URL}/ib/admin/tier-change-requests?status=PENDING`)
+      const data = await res.json()
+      setTierRequests(data.requests || [])
+    } catch (error) {
+      console.error('Error fetching tier change requests:', error)
+    }
+  }
+
   const fetchPlans = async () => {
     try {
       const res = await fetch(`${API_URL}/ib/admin/plans`)
@@ -267,12 +379,12 @@ const AdminIBManagement = () => {
     }
   }
 
-  const handleApprove = async (userId, planId = null) => {
+  const handleApprove = async (userId, planId = null, levelId = null) => {
     try {
       const res = await fetch(`${API_URL}/ib/admin/approve/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: planId })
+        body: JSON.stringify({ planId: planId || undefined, levelId: levelId || undefined })
       })
       const data = await res.json()
       if (data.success) {
@@ -280,12 +392,54 @@ const AdminIBManagement = () => {
         fetchApplications()
         fetchIBs()
         fetchDashboard()
+        fetchTierChangeRequests()
       } else {
         toast.error(data.message || 'Failed to approve')
       }
     } catch (error) {
       console.error('Error approving:', error)
       toast.error('Failed to approve IB')
+    }
+  }
+
+  const handleApproveTierRequest = async (requestId) => {
+    try {
+      const res = await fetch(`${API_URL}/ib/admin/tier-change-requests/${requestId}/approve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(data.message || 'Tier request approved')
+        fetchTierChangeRequests()
+        fetchIBs()
+      } else {
+        toast.error(data.message || 'Failed to approve')
+      }
+    } catch (error) {
+      console.error('Error approving tier request:', error)
+      toast.error('Failed to approve tier request')
+    }
+  }
+
+  const handleRejectTierRequest = async (requestId) => {
+    const reason = prompt('Rejection reason (optional):') ?? ''
+    try {
+      const res = await fetch(`${API_URL}/ib/admin/tier-change-requests/${requestId}/reject`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('Tier request rejected')
+        fetchTierChangeRequests()
+      } else {
+        toast.error(data.message || 'Failed to reject')
+      }
+    } catch (error) {
+      console.error('Error rejecting tier request:', error)
+      toast.error('Failed to reject tier request')
     }
   }
 
@@ -479,8 +633,10 @@ const AdminIBManagement = () => {
         {[
           { id: 'ibs', label: 'Active IBs', count: dashboard?.ibs?.active },
           { id: 'applications', label: 'Applications', count: applications.length },
+          { id: 'tier-requests', label: 'Tier requests', count: tierRequests.length },
           { id: 'levels', label: 'IB Levels', count: ibLevels.length, icon: Award },
           { id: 'transfer', label: 'Referral Transfer', icon: ArrowRightLeft },
+          { id: 'ib-commission-config', label: 'IB % by account' },
           { id: 'settings', label: 'Settings' }
         ].map(tab => (
           <button
@@ -616,6 +772,9 @@ const AdminIBManagement = () => {
         <div className="bg-dark-800 rounded-xl border border-gray-800 overflow-hidden">
           <div className="p-4 sm:p-5 border-b border-gray-800">
             <h2 className="text-white font-semibold text-lg">Pending Applications</h2>
+            <p className="text-gray-500 text-sm mt-1">
+              Default IB commission plan is applied on approval. The tier the user chose when applying is pre-selected; change the tier dropdown only if you want a different tier.
+            </p>
           </div>
 
           {applications.length === 0 ? (
@@ -632,29 +791,42 @@ const AdminIBManagement = () => {
                       <p className="text-white font-medium">{app.firstName} {app.lastName}</p>
                       <p className="text-gray-500 text-sm">{app.email}</p>
                       <p className="text-gray-600 text-xs">Applied: {new Date(app.createdAt).toLocaleDateString()}</p>
+                      {app.requestedTier ? (
+                        <p className="text-amber-300 text-sm mt-2 font-medium">
+                          Tier at application:{' '}
+                          <span className="text-white">{app.requestedTier.name}</span>
+                          <span className="text-amber-400/90 font-normal">
+                            {' '}(${app.requestedTier.commissionRate}/lot)
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-gray-500 text-xs mt-1">No tier selected on apply — Standard will be used on approval.</p>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select 
-                      className="bg-dark-700 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
-                      id={`plan-${app._id}`}
-                      defaultValue=""
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <select
+                      className="bg-dark-700 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm min-w-[200px]"
+                      id={`tier-override-${app._id}`}
+                      title="Commission tier (applicant's choice is pre-selected)"
+                      defaultValue={app.requestedTier?._id ? String(app.requestedTier._id) : ''}
                     >
-                      <option value="" disabled>Select Plan</option>
-                      {plans.map(plan => (
-                        <option key={plan._id} value={plan._id}>{plan.name}</option>
+                      <option value="">
+                        {app.requestedTier ? 'Applicant jaisa (same tier)' : 'Standard / default'}
+                      </option>
+                      {ibLevels.map((lvl) => (
+                        <option key={lvl._id} value={String(lvl._id)}>{lvl.name} (${lvl.commissionRate}/lot)</option>
                       ))}
-                      <option value="default">Default Plan</option>
                     </select>
                     <button
                       onClick={() => {
-                        const planSelect = document.getElementById(`plan-${app._id}`)
-                        const planId = planSelect?.value === 'default' ? null : planSelect?.value
-                        if (!planSelect?.value) {
-                          toast.error('Please select a plan first')
-                          return
+                        const tierSel = document.getElementById(`tier-override-${app._id}`)
+                        let levelId = tierSel?.value?.trim() || null
+                        const requestedId = app.requestedTier?._id ? String(app.requestedTier._id) : null
+                        if (requestedId && levelId && levelId === requestedId) {
+                          levelId = null
                         }
-                        handleApprove(app._id, planId)
+                        handleApprove(app._id, null, levelId)
                       }}
                       className="flex items-center gap-1 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm"
                     >
@@ -663,6 +835,66 @@ const AdminIBManagement = () => {
                     <button
                       onClick={() => handleReject(app._id)}
                       className="flex items-center gap-1 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
+                    >
+                      <X size={16} /> Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tier change requests (active IBs) */}
+      {activeTab === 'tier-requests' && (
+        <div className="bg-dark-800 rounded-xl border border-gray-800 overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-gray-800 flex items-center justify-between">
+            <h2 className="text-white font-semibold text-lg">Commission tier change requests</h2>
+            <button
+              type="button"
+              onClick={() => fetchTierChangeRequests()}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm"
+            >
+              <RefreshCw size={16} />
+              Refresh
+            </button>
+          </div>
+          {tierRequests.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">No pending tier requests</div>
+          ) : (
+            <div className="divide-y divide-gray-800">
+              {tierRequests.map((req) => (
+                <div key={req._id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <p className="text-white font-medium">
+                      {req.userId?.firstName} {req.userId?.lastName}{' '}
+                      <span className="text-gray-500 font-normal text-sm">({req.userId?.email})</span>
+                    </p>
+                    <p className="text-gray-400 text-sm mt-1">
+                      From{' '}
+                      <span className="text-gray-300">{req.previousLevelId?.name || '—'}</span>
+                      {' → '}
+                      <span className="text-amber-400">{req.requestedLevelId?.name}</span>
+                      {' '}
+                      (${req.requestedLevelId?.commissionRate}/lot)
+                    </p>
+                    <p className="text-gray-600 text-xs mt-1">
+                      Requested {new Date(req.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleApproveTierRequest(req._id)}
+                      className="flex items-center gap-1 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm"
+                    >
+                      <Check size={16} /> Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRejectTierRequest(req._id)}
+                      className="flex items-center gap-1 px-3 py-2 bg-red-500/90 text-white rounded-lg hover:bg-red-600 text-sm"
                     >
                       <X size={16} /> Reject
                     </button>
@@ -848,6 +1080,143 @@ const AdminIBManagement = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* IB commission % per account type (gross pool split by upline level) */}
+      {activeTab === 'ib-commission-config' && (
+        <div className="bg-dark-800 rounded-xl border border-gray-800 overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-gray-800">
+            <h2 className="text-white font-semibold text-lg">IB commission % (by account type)</h2>
+            <p className="text-gray-500 text-sm mt-1 max-w-3xl">
+              When a trader closes a trade, gross commission = open fee + close fee (if any), or lots × account type commission.
+              That pool is split: level 1 = direct referrer IB, level 2 = their upline, etc. Total active % must be ≤ 100%;
+              remainder stays with the platform. Applies to <span className="text-gray-300">new</span> closed trades only.
+              If no rows exist for an account type, the system uses the legacy IB Plan (per-IB) rules.
+            </p>
+            <button
+              type="button"
+              onClick={seedIbCommissionDefaults}
+              className="mt-3 px-4 py-2 bg-amber-600/90 text-white text-sm rounded-lg hover:bg-amber-600"
+            >
+              Seed 30/22/15/8/5 % for all account types missing config
+            </button>
+          </div>
+          <div className="p-4 sm:p-5 space-y-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Account type</label>
+                <select
+                  value={ibConfigSelectedId}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v) loadIbCommissionConfig(v)
+                    else {
+                      setIbConfigSelectedId('')
+                      setIbConfigRows([])
+                    }
+                  }}
+                  className="bg-dark-700 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm min-w-[200px]"
+                >
+                  <option value="">Select…</option>
+                  {accountTypesIbConfig.map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                disabled={!ibConfigSelectedId || ibConfigLoading}
+                onClick={saveIbCommissionConfig}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 text-sm"
+              >
+                Save configuration
+              </button>
+            </div>
+
+            {ibConfigSelectedId && (
+              <>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <p className="text-gray-400">
+                    Active total:{' '}
+                    <span className="text-white font-medium">
+                      {ibConfigRows.filter((r) => r.isActive).reduce((s, r) => s + Number(r.commissionPercent || 0), 0)}%
+                    </span>
+                  </p>
+                  <p className="text-gray-400">
+                    Platform (approx):{' '}
+                    <span className="text-green-400 font-medium">
+                      {Math.max(
+                        0,
+                        100 -
+                          ibConfigRows.filter((r) => r.isActive).reduce((s, r) => s + Number(r.commissionPercent || 0), 0)
+                      )}
+                      %
+                    </span>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {ibConfigRows.map((row, idx) => (
+                    <div
+                      key={`${row.level}-${idx}`}
+                      className="flex flex-wrap items-center gap-3 bg-dark-700/80 rounded-lg p-3 border border-gray-700"
+                    >
+                      <span className="text-gray-500 text-xs w-28">Chain level {row.level}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        value={row.commissionPercent}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value)
+                          setIbConfigRows((prev) => {
+                            const next = [...prev]
+                            next[idx] = { ...next[idx], commissionPercent: Number.isNaN(v) ? 0 : v }
+                            return next
+                          })
+                        }}
+                        className="w-24 bg-dark-900 border border-gray-600 rounded px-2 py-1.5 text-white text-sm"
+                      />
+                      <span className="text-gray-400 text-sm">% of gross</span>
+                      <label className="flex items-center gap-2 text-gray-400 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={row.isActive}
+                          onChange={(e) => {
+                            setIbConfigRows((prev) => {
+                              const next = [...prev]
+                              next[idx] = { ...next[idx], isActive: e.target.checked }
+                              return next
+                            })
+                          }}
+                        />
+                        Active
+                      </label>
+                      <span className="text-gray-600 text-xs">
+                        {row.level === 1
+                          ? '(direct referrer)'
+                          : row.level === 2
+                            ? '(1st upline)'
+                            : `(${row.level - 1} upline)`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={addIbConfigLevelRow}
+                  className="text-sm text-blue-400 hover:text-blue-300"
+                >
+                  + Add level
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

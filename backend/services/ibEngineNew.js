@@ -3,6 +3,11 @@ import IBPlan from '../models/IBPlanNew.js'
 import IBCommission from '../models/IBCommissionNew.js'
 import IBWallet from '../models/IBWallet.js'
 import IBLevel from '../models/IBLevel.js'
+import IBTierChangeRequest from '../models/IBTierChangeRequest.js'
+import Trade from '../models/Trade.js'
+import Charges from '../models/Charges.js'
+import IBCommissionConfig from '../models/IBCommissionConfig.js'
+import { resolveTradeSegment } from '../utils/tradeSegment.js'
 
 class IBEngine {
   constructor() {
@@ -24,6 +29,55 @@ class IBEngine {
     return this.CONTRACT_SIZES.DEFAULT_FOREX
   }
 
+  _calcChargeCommission(quantity, price, commissionType, commissionValue, contractSize) {
+    const ct = String(commissionType || 'PER_LOT')
+    const cv = Number(commissionValue) || 0
+    if (cv <= 0) return 0
+    if (ct === 'PER_LOT') return quantity * cv
+    if (ct === 'PER_TRADE') return cv
+    if (ct === 'PERCENTAGE') return quantity * contractSize * price * (cv / 100)
+    return quantity * cv
+  }
+
+  /**
+   * Gross pool for IB % split: open commission + close commission (if configured) + account-type fallback ($/lot).
+   */
+  async getGrossCommissionPoolForTrade(tradeId) {
+    const t = await Trade.findById(tradeId).populate({
+      path: 'tradingAccountId',
+      populate: { path: 'accountTypeId' }
+    })
+    if (!t || t.status !== 'CLOSED') return { gross: 0, accountTypeId: null, skip: true }
+    if (t.isChallengeAccount || t.accountType === 'ChallengeAccount') {
+      return { gross: 0, accountTypeId: null, skip: true }
+    }
+
+    const account = t.tradingAccountId
+    const at = account?.accountTypeId
+    const accountTypeId = at?._id || null
+    if (!accountTypeId) return { gross: t.commission || 0, accountTypeId: null, skip: false }
+
+    const segment = resolveTradeSegment(t.symbol, t.segment)
+    const charges = await Charges.getChargesForTrade(t.userId, t.symbol, segment, accountTypeId)
+
+    let gross = Number(t.commission) || 0
+    if (charges.commissionOnClose && charges.commissionValue > 0 && t.closePrice) {
+      gross += this._calcChargeCommission(
+        t.quantity,
+        t.closePrice,
+        charges.commissionType,
+        charges.commissionValue,
+        t.contractSize || this.getContractSize(t.symbol)
+      )
+    }
+
+    if (gross <= 0 && at?.commission > 0) {
+      gross = t.quantity * at.commission
+    }
+
+    return { gross, accountTypeId, skip: false }
+  }
+
   // Generate unique referral code
   async generateReferralCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -41,21 +95,31 @@ class IBEngine {
     return code
   }
 
-  // Apply to become IB
-  async applyForIB(userId) {
+  // Apply to become IB (optional requestedLevelId = commission tier Standard/Bronze/…)
+  async applyForIB(userId, requestedLevelId = null) {
     const user = await User.findById(userId)
     if (!user) throw new Error('User not found')
-    
-    if (user.isIB) {
+
+    const reapplyAfterReject = user.isIB && user.ibStatus === 'REJECTED'
+    if (user.isIB && !reapplyAfterReject) {
       throw new Error('User is already an IB')
     }
 
+    if (requestedLevelId) {
+      const tier = await IBLevel.findOne({ _id: requestedLevelId, isActive: true })
+      if (!tier) throw new Error('Invalid or inactive commission tier')
+    }
+
     const referralCode = await this.generateReferralCode()
-    
+
     user.isIB = true
     user.ibStatus = 'PENDING'
     user.referralCode = referralCode
-    
+    user.ibRejectionReason = null
+    user.ibPlanId = null
+    user.ibLevelId = null
+    user.ibLevelOrder = 1
+
     // If user was referred by an IB, set parent and level
     if (user.referredBy) {
       const parentIB = await User.findOne({ 
@@ -77,12 +141,26 @@ class IBEngine {
     
     // Create IB wallet
     await IBWallet.getOrCreateWallet(userId)
+
+    await IBTierChangeRequest.updateMany(
+      { userId, requestType: 'APPLICATION', status: 'PENDING' },
+      { $set: { status: 'REJECTED', rejectionReason: 'Replaced by new application', reviewedAt: new Date() } }
+    )
+
+    if (requestedLevelId) {
+      await IBTierChangeRequest.create({
+        userId,
+        requestType: 'APPLICATION',
+        requestedLevelId,
+        status: 'PENDING'
+      })
+    }
     
     return user
   }
 
-  // Admin approve IB
-  async approveIB(userId, planId = null) {
+  // Admin approve IB (optional explicitLevelId overrides pending APPLICATION tier)
+  async approveIB(userId, planId = null, explicitLevelId = null) {
     const user = await User.findById(userId)
     if (!user) throw new Error('User not found')
     if (!user.isIB) throw new Error('User is not an IB applicant')
@@ -96,8 +174,144 @@ class IBEngine {
       user.ibPlanId = defaultPlan._id
     }
 
+    let levelApplied = false
+    const explicit = explicitLevelId ? await IBLevel.findOne({ _id: explicitLevelId, isActive: true }) : null
+    if (explicit) {
+      user.ibLevelId = explicit._id
+      user.ibLevelOrder = explicit.order
+      levelApplied = true
+      await IBTierChangeRequest.updateMany(
+        { userId, requestType: 'APPLICATION', status: 'PENDING' },
+        { $set: { status: 'REJECTED', rejectionReason: 'Admin assigned tier from panel', reviewedAt: new Date() } }
+      )
+    }
+
+    if (!levelApplied) {
+      const appReq = await IBTierChangeRequest.findOne({
+        userId,
+        requestType: 'APPLICATION',
+        status: 'PENDING'
+      })
+      if (appReq) {
+        const lvl = await IBLevel.findOne({ _id: appReq.requestedLevelId, isActive: true })
+        if (lvl) {
+          user.ibLevelId = lvl._id
+          user.ibLevelOrder = lvl.order
+          levelApplied = true
+          appReq.status = 'APPROVED'
+        } else {
+          appReq.status = 'REJECTED'
+          appReq.rejectionReason = 'Requested tier is no longer available'
+        }
+        appReq.reviewedAt = new Date()
+        await appReq.save()
+      }
+    }
+
+    if (!levelApplied) {
+      await IBLevel.initializeDefaultLevels()
+      const firstLevel = await IBLevel.findOne({ order: 1, isActive: true })
+      if (firstLevel) {
+        user.ibLevelId = firstLevel._id
+        user.ibLevelOrder = firstLevel.order
+      }
+    }
+
     await user.save()
     return user
+  }
+
+  async rejectPendingApplicationTierRequests(userId, reason = 'IB application rejected') {
+    await IBTierChangeRequest.updateMany(
+      { userId, requestType: 'APPLICATION', status: 'PENDING' },
+      { $set: { status: 'REJECTED', rejectionReason: reason, reviewedAt: new Date() } }
+    )
+  }
+
+  async requestIbTierChange(ibUserId, requestedLevelId) {
+    const user = await User.findById(ibUserId)
+    if (!user || !user.isIB || user.ibStatus !== 'ACTIVE') {
+      throw new Error('Only active IBs can request a tier change')
+    }
+
+    const target = await IBLevel.findOne({ _id: requestedLevelId, isActive: true })
+    if (!target) throw new Error('Invalid or inactive tier')
+
+    const currentId = user.ibLevelId?.toString() || null
+    if (currentId && currentId === target._id.toString()) {
+      throw new Error('You are already on this tier')
+    }
+
+    const dup = await IBTierChangeRequest.findOne({
+      userId: ibUserId,
+      requestType: 'LEVEL_CHANGE',
+      status: 'PENDING'
+    })
+    if (dup) throw new Error('You already have a pending tier change request')
+
+    return IBTierChangeRequest.create({
+      userId: ibUserId,
+      requestType: 'LEVEL_CHANGE',
+      requestedLevelId: target._id,
+      previousLevelId: user.ibLevelId || null,
+      status: 'PENDING'
+    })
+  }
+
+  async getPendingTierRequestForUser(userId) {
+    const r = await IBTierChangeRequest.findOne({
+      userId,
+      status: 'PENDING',
+      requestType: 'LEVEL_CHANGE'
+    }).populate('requestedLevelId', 'name order commissionRate color icon referralTarget')
+
+    if (!r) return null
+    return {
+      _id: r._id,
+      requestType: r.requestType,
+      requestedLevel: r.requestedLevelId,
+      createdAt: r.createdAt
+    }
+  }
+
+  async approveTierChangeRequest(requestId) {
+    const reqDoc = await IBTierChangeRequest.findById(requestId)
+    if (!reqDoc || reqDoc.status !== 'PENDING') {
+      throw new Error('Request not found or already processed')
+    }
+    if (reqDoc.requestType === 'APPLICATION') {
+      throw new Error('Application tier is applied when you approve the IB from Applications')
+    }
+
+    const level = await IBLevel.findOne({ _id: reqDoc.requestedLevelId, isActive: true })
+    if (!level) throw new Error('Requested tier no longer exists or is inactive')
+
+    const user = await User.findById(reqDoc.userId)
+    if (!user || !user.isIB || user.ibStatus !== 'ACTIVE') {
+      throw new Error('User is not an active IB')
+    }
+
+    user.ibLevelId = level._id
+    user.ibLevelOrder = level.order
+    await user.save()
+
+    reqDoc.status = 'APPROVED'
+    reqDoc.reviewedAt = new Date()
+    await reqDoc.save()
+
+    return { user, level, request: reqDoc }
+  }
+
+  async rejectTierChangeRequest(requestId, reason = '') {
+    const reqDoc = await IBTierChangeRequest.findById(requestId)
+    if (!reqDoc || reqDoc.status !== 'PENDING') {
+      throw new Error('Request not found or already processed')
+    }
+    reqDoc.status = 'REJECTED'
+    reqDoc.rejectionReason = reason || 'Rejected by admin'
+    reqDoc.reviewedAt = new Date()
+    await reqDoc.save()
+    return reqDoc
   }
 
   // Admin block IB
@@ -165,15 +379,116 @@ class IBEngine {
   // Calculate and distribute IB commission when a trade closes
   async processTradeCommission(trade) {
     console.log(`Processing IB commission for trade ${trade.tradeId || trade._id}, userId: ${trade.userId}`)
-    
-    // Get the IB chain for the trader
+
+    const pool = await this.getGrossCommissionPoolForTrade(trade._id)
+    if (pool.skip) {
+      return { processed: false, reason: 'IB commission not applied (challenge or invalid trade)' }
+    }
+
+    if (pool.accountTypeId) {
+      const configs = await IBCommissionConfig.getOrderedForAccountType(pool.accountTypeId)
+      const hasPayable = configs.some((c) => c.isActive && c.commissionPercent > 0)
+      if (configs.length > 0 && hasPayable) {
+        return this.processTradeCommissionByAccountTypeConfig(trade, pool.gross, pool.accountTypeId, configs)
+      }
+    }
+
+    return this.processTradeCommissionLegacy(trade)
+  }
+
+  /**
+   * Spec: % of gross commission pool per chain level, keyed by trader's account type.
+   */
+  async processTradeCommissionByAccountTypeConfig(trade, grossCommission, accountTypeId, configs) {
     const ibChain = await this.getIBChain(trade.userId)
-    
-    console.log(`IB Chain length: ${ibChain.length}`)
-    
+    if (ibChain.length === 0) {
+      return { processed: false, reason: 'No IB chain found for trader', mode: 'ACCOUNT_TYPE_GROSS_PERCENT' }
+    }
+
+    const commissionResults = []
+    const contractSize = this.getContractSize(trade.symbol)
+    const baseAmount = trade.quantity
+
+    for (const { ibUser, level } of ibChain) {
+      const cfg = configs.find((c) => c.level === level)
+      if (!cfg || !cfg.isActive || cfg.commissionPercent <= 0) {
+        console.log(`[IB %] No active config for chain level ${level}, stopping cascade`)
+        break
+      }
+
+      try {
+        const commissionAmount = grossCommission * (cfg.commissionPercent / 100)
+        if (commissionAmount <= 0) continue
+
+        const existingCommission = await IBCommission.findOne({
+          tradeId: trade._id,
+          ibUserId: ibUser._id,
+          level
+        })
+        if (existingCommission) continue
+
+        const commission = await IBCommission.create({
+          tradeId: trade._id,
+          traderUserId: trade.userId,
+          ibUserId: ibUser._id,
+          level,
+          baseAmount,
+          commissionAmount,
+          symbol: trade.symbol,
+          tradeLotSize: trade.quantity,
+          contractSize,
+          commissionType: 'PERCENT',
+          distributionMode: 'ACCOUNT_TYPE_GROSS_PERCENT',
+          accountTypeId,
+          grossCommissionPool: grossCommission,
+          commissionPercentApplied: cfg.commissionPercent,
+          status: 'CREDITED'
+        })
+
+        const wallet = await IBWallet.getOrCreateWallet(ibUser._id)
+        await wallet.creditCommission(commissionAmount)
+
+        commissionResults.push({
+          ibUserId: ibUser._id,
+          ibName: ibUser.firstName,
+          level,
+          commissionAmount,
+          commissionId: commission._id,
+          percent: cfg.commissionPercent
+        })
+
+        console.log(
+          `[IB %] Level ${level} ${ibUser.firstName}: ${cfg.commissionPercent}% of $${grossCommission.toFixed(2)} = $${commissionAmount.toFixed(2)}`
+        )
+      } catch (error) {
+        console.error(`Error processing IB % commission for level ${level}:`, error)
+      }
+    }
+
+    const totalPct = configs.filter((c) => c.isActive).reduce((s, c) => s + c.commissionPercent, 0)
+    const platformRemainder = Math.max(0, grossCommission - commissionResults.reduce((s, r) => s + r.commissionAmount, 0))
+    console.log(
+      `[IB %] Trade ${trade.tradeId}: gross=$${grossCommission.toFixed(2)}, paid IBs=$${(grossCommission - platformRemainder).toFixed(2)}, platform~=$${platformRemainder.toFixed(2)} (config levels sum ${totalPct}%)`
+    )
+
+    return {
+      processed: true,
+      mode: 'ACCOUNT_TYPE_GROSS_PERCENT',
+      grossCommission,
+      commissionsGenerated: commissionResults.length,
+      results: commissionResults
+    }
+  }
+
+  /** Legacy: each IB's IBPlan (PER_LOT or % of notional) */
+  async processTradeCommissionLegacy(trade) {
+    console.log(`Processing IB commission (legacy plan) for trade ${trade.tradeId || trade._id}`)
+
+    const ibChain = await this.getIBChain(trade.userId)
+
     if (ibChain.length === 0) {
       console.log('No IB chain found for trader')
-      return { processed: false, reason: 'No IB chain found for trader' }
+      return { processed: false, reason: 'No IB chain found for trader', mode: 'LEGACY_PLAN' }
     }
 
     const commissionResults = []
@@ -182,8 +497,7 @@ class IBEngine {
     for (const { ibUser, level } of ibChain) {
       try {
         console.log(`Processing level ${level} for IB ${ibUser.firstName} (${ibUser._id})`)
-        
-        // Get IB's plan - always fetch fresh from DB
+
         let plan = await IBPlan.findById(ibUser.ibPlanId)
         if (!plan) {
           plan = await IBPlan.getDefaultPlan()
@@ -192,65 +506,44 @@ class IBEngine {
           console.log(`No plan found for IB ${ibUser.firstName}`)
           continue
         }
-        
-        console.log(`Plan: ${plan.name}, maxLevels: ${plan.maxLevels}, commissionType: ${plan.commissionType}`)
-        console.log(`levelCommissions:`, plan.levelCommissions)
 
-        // Check if level is within plan's max levels
         if (level > plan.maxLevels) {
           console.log(`Level ${level} exceeds maxLevels ${plan.maxLevels}`)
           continue
         }
 
-        // Get rate for this level - support both levelCommissions object and levels array
         let rate = 0
         if (plan.levelCommissions && plan.levelCommissions[`level${level}`]) {
           rate = plan.levelCommissions[`level${level}`]
         } else if (plan.levels && plan.levels.length > 0) {
-          const levelConfig = plan.levels.find(l => l.level === level)
+          const levelConfig = plan.levels.find((l) => l.level === level)
           rate = levelConfig ? levelConfig.rate : 0
         } else if (plan.getRateForLevel) {
           rate = plan.getRateForLevel(level)
         }
-        
-        console.log(`Level ${level} rate: ${rate}`)
-        
-        if (rate <= 0) {
-          console.log(`Rate is 0 for level ${level}`)
-          continue
-        }
 
-        // Calculate commission based on commission type
+        if (rate <= 0) continue
+
         let commissionAmount = 0
-        let baseAmount = trade.quantity // lot size
-        
+        const baseAmount = trade.quantity
+
         if (plan.commissionType === 'PER_LOT') {
-          // PER_LOT: rate is $ per lot
           commissionAmount = trade.quantity * rate
         } else {
-          // PERCENTAGE: rate is % of trade value
           const tradeValue = trade.quantity * contractSize * (trade.openPrice || 0)
           commissionAmount = tradeValue * (rate / 100)
         }
 
-        if (commissionAmount <= 0) {
-          console.log(`IB Commission: Skipping - commission amount is 0 for level ${level}`)
-          continue
-        }
+        if (commissionAmount <= 0) continue
 
-        // Check if commission already exists for this trade and IB to prevent duplicates
         const existingCommission = await IBCommission.findOne({
           tradeId: trade._id,
           ibUserId: ibUser._id,
           level
         })
-        
-        if (existingCommission) {
-          console.log(`IB Commission: Skipping - commission already exists for trade ${trade._id} and IB ${ibUser._id} at level ${level}`)
-          continue
-        }
 
-        // Create commission record
+        if (existingCommission) continue
+
         const commission = await IBCommission.create({
           tradeId: trade._id,
           traderUserId: trade.userId,
@@ -262,10 +555,10 @@ class IBEngine {
           tradeLotSize: trade.quantity,
           contractSize,
           commissionType: plan.commissionType,
+          distributionMode: 'LEGACY_PLAN',
           status: 'CREDITED'
         })
 
-        // Credit IB wallet
         const wallet = await IBWallet.getOrCreateWallet(ibUser._id)
         await wallet.creditCommission(commissionAmount)
 
@@ -278,8 +571,7 @@ class IBEngine {
           commissionId: commission._id
         })
 
-        console.log(`IB Commission: Level ${level} IB ${ibUser.firstName} earned $${commissionAmount.toFixed(2)} from trade ${trade.tradeId}`)
-
+        console.log(`IB Commission (legacy): Level ${level} IB ${ibUser.firstName} earned $${commissionAmount.toFixed(2)}`)
       } catch (error) {
         console.error(`Error processing IB commission for level ${level}:`, error)
       }
@@ -287,6 +579,7 @@ class IBEngine {
 
     return {
       processed: true,
+      mode: 'LEGACY_PLAN',
       commissionsGenerated: commissionResults.length,
       results: commissionResults
     }
