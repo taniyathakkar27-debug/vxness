@@ -200,25 +200,37 @@ chargesSchema.statics.getChargesForTrade = async function(userId, symbol, segmen
   }
   
   // Apply charges from least specific to most specific (so most specific overwrites)
-  for (let i = applicableCharges.length - 1; i >= 0; i--) {
+  // Track which fields have been explicitly set by higher priority charges
+  const explicitlySet = { spread: false, commission: false, swap: false }
+  
+  // Apply from most specific to least specific
+  for (let i = 0; i < applicableCharges.length; i++) {
     const charge = applicableCharges[i]
     
-    // Only overwrite if the charge has a non-zero/non-default value
-    if (charge.spreadValue > 0) {
+    // Spread: If not already set by higher priority, apply this charge's spread
+    // spreadValue can be 0 (admin explicitly wants no spread) or > 0
+    if (!explicitlySet.spread && charge.spreadValue !== undefined && charge.spreadValue !== null) {
       result.spreadValue = charge.spreadValue
-      result.spreadType = charge.spreadType
+      result.spreadType = charge.spreadType || 'FIXED'
+      explicitlySet.spread = true
     }
-    if (charge.commissionValue > 0) {
+    
+    // Commission: Same logic - 0 means no commission
+    if (!explicitlySet.commission && charge.commissionValue !== undefined && charge.commissionValue !== null) {
       result.commissionValue = charge.commissionValue
-      result.commissionType = charge.commissionType
-      result.commissionOnBuy = charge.commissionOnBuy
-      result.commissionOnSell = charge.commissionOnSell
-      result.commissionOnClose = charge.commissionOnClose
+      result.commissionType = charge.commissionType || 'PER_LOT'
+      result.commissionOnBuy = charge.commissionOnBuy !== undefined ? charge.commissionOnBuy : true
+      result.commissionOnSell = charge.commissionOnSell !== undefined ? charge.commissionOnSell : true
+      result.commissionOnClose = charge.commissionOnClose !== undefined ? charge.commissionOnClose : false
+      explicitlySet.commission = true
     }
-    if (charge.swapLong !== 0 || charge.swapShort !== 0) {
-      result.swapLong = charge.swapLong
-      result.swapShort = charge.swapShort
-      result.swapType = charge.swapType
+    
+    // Swap: Same logic
+    if (!explicitlySet.swap && (charge.swapLong !== undefined || charge.swapShort !== undefined)) {
+      result.swapLong = charge.swapLong || 0
+      result.swapShort = charge.swapShort || 0
+      result.swapType = charge.swapType || 'POINTS'
+      explicitlySet.swap = true
     }
   }
   

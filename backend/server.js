@@ -198,7 +198,31 @@ async function streamPrices() {
 
     if (price && price.bid) {
 
-      priceCache.set(symbol, price)
+      // If not connected to Infoway, simulate small price movements
+
+      if (!infowayConnected) {
+
+        const variation = (Math.random() - 0.5) * 0.0002 * price.bid
+
+        const newBid = price.bid + variation
+
+        const spread = price.ask - price.bid
+
+        priceCache.set(symbol, {
+
+          bid: parseFloat(newBid.toFixed(symbol.includes('JPY') ? 3 : 5)),
+
+          ask: parseFloat((newBid + spread).toFixed(symbol.includes('JPY') ? 3 : 5)),
+
+          time: Date.now()
+
+        })
+
+      } else {
+
+        priceCache.set(symbol, price)
+
+      }
 
     }
 

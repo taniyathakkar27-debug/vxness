@@ -308,15 +308,20 @@ class InfowayService {
       return true
     } catch (error) {
       console.error('[Infoway] Connection error:', error.message)
+      console.log('[Infoway] Connection failed. Prices will use fallback values.')
+      console.log('[Infoway] To enable live prices, set a valid INFOWAY_API_KEY in .env')
       return false
     }
   }
 
   connectForex() {
     return new Promise((resolve, reject) => {
+      let settled = false
       this.forexWs = new WebSocket(WS_FOREX_URL)
       
       this.forexWs.on('open', () => {
+        if (settled) return
+        settled = true
         console.log('[Infoway] Forex WebSocket connected')
         // Subscribe to forex, metals, and commodities
         const allForexSymbols = [...FOREX_SYMBOLS, ...METALS_SYMBOLS, ...COMMODITIES_SYMBOLS]
@@ -325,34 +330,63 @@ class InfowayService {
       })
 
       this.forexWs.on('message', (data) => this.handleMessage(data))
-      this.forexWs.on('error', (err) => console.error('[Infoway] Forex WS error:', err.message))
+      this.forexWs.on('error', (err) => {
+        console.error('[Infoway] Forex WS error:', err.message)
+        if (!settled) {
+          settled = true
+          reject(new Error(`Forex connection failed: ${err.message}`))
+        }
+      })
       this.forexWs.on('close', () => {
-        console.log('[Infoway] Forex WS closed, reconnecting...')
-        setTimeout(() => this.connectForex(), 5000)
+        if (this.isConnected) {
+          console.log('[Infoway] Forex WS closed, reconnecting in 30s...')
+          setTimeout(() => this.connectForex().catch(() => {}), 30000)
+        }
       })
 
-      setTimeout(() => reject(new Error('Forex connection timeout')), 10000)
+      setTimeout(() => {
+        if (!settled) {
+          settled = true
+          reject(new Error('Forex connection timeout'))
+        }
+      }, 10000)
     })
   }
 
   connectCrypto() {
     return new Promise((resolve, reject) => {
+      let settled = false
       this.cryptoWs = new WebSocket(WS_CRYPTO_URL)
       
       this.cryptoWs.on('open', () => {
+        if (settled) return
+        settled = true
         console.log('[Infoway] Crypto WebSocket connected')
         this.subscribeToDepth(this.cryptoWs, CRYPTO_SYMBOLS.map(toInfowaySymbol))
         resolve()
       })
 
       this.cryptoWs.on('message', (data) => this.handleMessage(data))
-      this.cryptoWs.on('error', (err) => console.error('[Infoway] Crypto WS error:', err.message))
+      this.cryptoWs.on('error', (err) => {
+        console.error('[Infoway] Crypto WS error:', err.message)
+        if (!settled) {
+          settled = true
+          reject(new Error(`Crypto connection failed: ${err.message}`))
+        }
+      })
       this.cryptoWs.on('close', () => {
-        console.log('[Infoway] Crypto WS closed, reconnecting...')
-        setTimeout(() => this.connectCrypto(), 5000)
+        if (this.isConnected) {
+          console.log('[Infoway] Crypto WS closed, reconnecting in 30s...')
+          setTimeout(() => this.connectCrypto().catch(() => {}), 30000)
+        }
       })
 
-      setTimeout(() => reject(new Error('Crypto connection timeout')), 10000)
+      setTimeout(() => {
+        if (!settled) {
+          settled = true
+          reject(new Error('Crypto connection timeout'))
+        }
+      }, 10000)
     })
   }
 
@@ -418,6 +452,11 @@ class InfowayService {
 
   getAllPrices() {
     const prices = {}
+    // Start with fallback prices
+    Object.entries(FALLBACK_PRICES).forEach(([symbol, price]) => {
+      prices[symbol] = price
+    })
+    // Override with live prices if available
     this.prices.forEach((price, symbol) => { prices[symbol] = price })
     return prices
   }

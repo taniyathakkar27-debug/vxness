@@ -643,20 +643,26 @@ router.get('/pending/:tradingAccountId', async (req, res) => {
   }
 })
 
-// GET /api/trade/history/:tradingAccountId - Get trade history for an account
+// GET /api/trade/history/:tradingAccountId - Get trade history for an account (UNLIMITED - no auto-delete)
 router.get('/history/:tradingAccountId', async (req, res) => {
   try {
     const { tradingAccountId } = req.params
-    const { limit = 50, offset = 0 } = req.query
+    const { limit = 0, offset = 0 } = req.query // 0 = unlimited (no limit)
 
-    const trades = await Trade.find({ 
+    let query = Trade.find({ 
       tradingAccountId, 
       status: { $in: ['CLOSED', 'STOPPED_OUT'] }
     })
       .sort({ closedAt: -1 })
       .skip(parseInt(offset))
-      .limit(parseInt(limit))
       .populate('tradingAccountId', 'accountNumber')
+    
+    // Only apply limit if > 0
+    if (parseInt(limit) > 0) {
+      query = query.limit(parseInt(limit))
+    }
+
+    const trades = await query
 
     const total = await Trade.countDocuments({ 
       tradingAccountId, 

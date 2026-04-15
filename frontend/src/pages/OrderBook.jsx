@@ -110,7 +110,7 @@ const OrderBook = () => {
 
   const [currentPage, setCurrentPage] = useState(1)
 
-  const itemsPerPage = 20
+  const [itemsPerPage, setItemsPerPage] = useState(20)
 
 
 
@@ -364,7 +364,7 @@ const OrderBook = () => {
 
 
 
-        // Fetch closed trades (history)
+        // Fetch closed trades (history) - UNLIMITED, no auto-delete
 
         const historyRes = await fetch(`${API_URL}/trade/history/${account._id}`)
 
@@ -521,11 +521,13 @@ const OrderBook = () => {
       .filter(t => t.status === 'CLOSED' || t.closePrice)
       .reduce((sum, t) => sum + (t.commission || 0), 0)
     
-    // Current Balance (sum of all selected accounts)
-    const selectedAccounts = selectedAccount === 'all' 
-      ? accounts 
-      : accounts.filter(a => a._id === selectedAccount)
-    const totalBalance = selectedAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0)
+    // Total Withdrawals
+    const totalWithdrawal = filtered
+      .filter(t => (t.type === 'WITHDRAWAL' || t.type === 'Withdrawal') && (t.status === 'APPROVED' || t.status === 'Approved' || t.status === 'Completed'))
+      .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0)
+    
+    // Grand Total Balance = Deposits + Credits + Profits - Withdrawals - Commissions + Swaps
+    const totalBalance = totalDeposit + totalCredit + totalProfit - totalWithdrawal - totalCommission + totalSwap
     
     return {
       deposit: totalDeposit,
@@ -1689,47 +1691,113 @@ const OrderBook = () => {
 
                         {/* Pagination */}
 
-                        {totalPages > 1 && (
+                        {getFilteredHistory().length > 0 && (
 
-                          <div className="flex items-center justify-between p-4 border-t border-gray-800">
+                          <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
 
-                            <span className="text-gray-500 text-sm">
-
-                              Page {currentPage} of {totalPages}
-
-                            </span>
-
-                            <div className="flex gap-2">
-
-                              <button
-
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-
-                                disabled={currentPage === 1}
-
-                                className="px-3 py-1.5 bg-dark-700 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-dark-600"
-
-                              >
-
-                                Previous
-
-                              </button>
-
-                              <button
-
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-
-                                disabled={currentPage === totalPages}
-
-                                className="px-3 py-1.5 bg-dark-700 text-white rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-dark-600"
-
-                              >
-
-                                Next
-
-                              </button>
-
+                            {/* Left: Items per page & count */}
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Show:</span>
+                                <select
+                                  value={itemsPerPage}
+                                  onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1) }}
+                                  className={`px-2 py-1 rounded text-sm ${isDarkMode ? 'bg-dark-700 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-300'} border`}
+                                >
+                                  <option value={10}>10</option>
+                                  <option value={20}>20</option>
+                                  <option value={50}>50</option>
+                                  <option value={100}>100</option>
+                                </select>
+                              </div>
+                              <span className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-600'}`}>
+                                {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, getFilteredHistory().length)} of {getFilteredHistory().length}
+                              </span>
                             </div>
+
+                            {/* Right: Page navigation */}
+                            {totalPages > 1 && (
+                              <div className="flex items-center gap-1">
+                                {/* First page */}
+                                <button
+                                  onClick={() => setCurrentPage(1)}
+                                  disabled={currentPage === 1}
+                                  className={`px-2 py-1 rounded text-sm ${isDarkMode ? 'bg-dark-700 hover:bg-dark-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  «
+                                </button>
+                                
+                                {/* Previous */}
+                                <button
+                                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                  disabled={currentPage === 1}
+                                  className={`px-2 py-1 rounded text-sm ${isDarkMode ? 'bg-dark-700 hover:bg-dark-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  ‹
+                                </button>
+
+                                {/* Page numbers */}
+                                {(() => {
+                                  const pages = []
+                                  const maxVisible = 5
+                                  let start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+                                  let end = Math.min(totalPages, start + maxVisible - 1)
+                                  if (end - start + 1 < maxVisible) {
+                                    start = Math.max(1, end - maxVisible + 1)
+                                  }
+                                  
+                                  if (start > 1) {
+                                    pages.push(
+                                      <button key={1} onClick={() => setCurrentPage(1)} className={`px-3 py-1 rounded text-sm ${isDarkMode ? 'bg-dark-700 hover:bg-dark-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'}`}>1</button>
+                                    )
+                                    if (start > 2) pages.push(<span key="dots1" className="px-1 text-gray-500">...</span>)
+                                  }
+                                  
+                                  for (let i = start; i <= end; i++) {
+                                    pages.push(
+                                      <button
+                                        key={i}
+                                        onClick={() => setCurrentPage(i)}
+                                        className={`px-3 py-1 rounded text-sm ${
+                                          currentPage === i 
+                                            ? 'bg-accent-green text-black font-medium' 
+                                            : isDarkMode ? 'bg-dark-700 hover:bg-dark-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                                        }`}
+                                      >
+                                        {i}
+                                      </button>
+                                    )
+                                  }
+                                  
+                                  if (end < totalPages) {
+                                    if (end < totalPages - 1) pages.push(<span key="dots2" className="px-1 text-gray-500">...</span>)
+                                    pages.push(
+                                      <button key={totalPages} onClick={() => setCurrentPage(totalPages)} className={`px-3 py-1 rounded text-sm ${isDarkMode ? 'bg-dark-700 hover:bg-dark-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'}`}>{totalPages}</button>
+                                    )
+                                  }
+                                  
+                                  return pages
+                                })()}
+
+                                {/* Next */}
+                                <button
+                                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                  disabled={currentPage === totalPages}
+                                  className={`px-2 py-1 rounded text-sm ${isDarkMode ? 'bg-dark-700 hover:bg-dark-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  ›
+                                </button>
+
+                                {/* Last page */}
+                                <button
+                                  onClick={() => setCurrentPage(totalPages)}
+                                  disabled={currentPage === totalPages}
+                                  className={`px-2 py-1 rounded text-sm ${isDarkMode ? 'bg-dark-700 hover:bg-dark-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  »
+                                </button>
+                              </div>
+                            )}
 
                           </div>
 
