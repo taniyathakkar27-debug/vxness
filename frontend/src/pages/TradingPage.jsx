@@ -1181,13 +1181,13 @@ const TradingPage = () => {
 
     const v = Number(spreadEntry?.spread ?? spreadEntry?.spreadValue)
 
-    if (!spreadEntry || !Number.isFinite(v) || v <= 0) return null
+    if (!spreadEntry || !Number.isFinite(v) || v < 0) return null
 
+    // Admin sets spread in PIPS directly, no conversion needed
+    // Just display the value as-is with appropriate decimal places
     const sym = (inst.symbol || '').toUpperCase()
 
     const cat = inst.category || getSymbolCategory(sym, inst)
-
-    if (sym.includes('JPY')) return (v * 100).toFixed(1)
 
     if (cat === 'Metals' || cat === 'Indices' || cat === 'Commodities' || cat === 'Crypto') {
 
@@ -1195,7 +1195,8 @@ const TradingPage = () => {
 
     }
 
-    return (v * 10000).toFixed(1)
+    // Forex pairs - display as-is (admin enters in pips)
+    return Number(v).toFixed(1)
 
   }
 
