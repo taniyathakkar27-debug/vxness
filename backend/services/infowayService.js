@@ -150,25 +150,25 @@ const FALLBACK_PRICES = {
   'EURHUF': { bid: 396.60, ask: 396.80 },
   'USDCZK': { bid: 23.45, ask: 23.47 },
   'EURCZK': { bid: 25.44, ask: 25.46 },
-  // Metals
-  'XAUUSD': { bid: 2870.00, ask: 2870.50 },
-  'XAGUSD': { bid: 32.10, ask: 32.12 },
-  'XPTUSD': { bid: 1020.00, ask: 1021.00 },
-  'XPDUSD': { bid: 980.00, ask: 981.00 },
-  'XAUEUR': { bid: 2645.00, ask: 2645.50 },
-  'XAUGBP': { bid: 2268.00, ask: 2268.50 },
-  'XAUAUD': { bid: 4380.00, ask: 4380.50 },
-  'XAUCHF': { bid: 2530.00, ask: 2530.50 },
-  'XAUJPY': { bid: 429000.00, ask: 429050.00 },
-  'XAGEUR': { bid: 29.60, ask: 29.62 },
-  'XAGGBP': { bid: 25.40, ask: 25.42 },
-  'XAGAUD': { bid: 49.00, ask: 49.02 },
-  'XAGCHF': { bid: 28.30, ask: 28.32 },
-  'XAGJPY': { bid: 4800.00, ask: 4802.00 },
-  'XAUCAD': { bid: 3890.00, ask: 3890.50 },
-  'XAUNZD': { bid: 4665.00, ask: 4665.50 },
-  'XAGCAD': { bid: 43.50, ask: 43.52 },
-  'XAGNZD': { bid: 52.20, ask: 52.22 },
+  // Metals - Updated April 2026
+  'XAUUSD': { bid: 4801.50, ask: 4802.00 },
+  'XAGUSD': { bid: 58.50, ask: 58.55 },
+  'XPTUSD': { bid: 1450.00, ask: 1451.00 },
+  'XPDUSD': { bid: 1280.00, ask: 1281.00 },
+  'XAUEUR': { bid: 4425.00, ask: 4425.50 },
+  'XAUGBP': { bid: 3795.00, ask: 3795.50 },
+  'XAUAUD': { bid: 7330.00, ask: 7330.50 },
+  'XAUCHF': { bid: 4235.00, ask: 4235.50 },
+  'XAUJPY': { bid: 716000.00, ask: 716050.00 },
+  'XAGEUR': { bid: 53.90, ask: 53.92 },
+  'XAGGBP': { bid: 46.25, ask: 46.27 },
+  'XAGAUD': { bid: 89.30, ask: 89.32 },
+  'XAGCHF': { bid: 51.60, ask: 51.62 },
+  'XAGJPY': { bid: 8730.00, ask: 8732.00 },
+  'XAUCAD': { bid: 6510.00, ask: 6510.50 },
+  'XAUNZD': { bid: 7800.00, ask: 7800.50 },
+  'XAGCAD': { bid: 79.30, ask: 79.32 },
+  'XAGNZD': { bid: 95.10, ask: 95.12 },
   // Commodities
   'USOIL': { bid: 72.50, ask: 72.55 },
   'UKOIL': { bid: 76.80, ask: 76.85 },
@@ -409,24 +409,48 @@ class InfowayService {
         const infowaySymbol = msg.data.s
         const symbol = fromInfowaySymbol(infowaySymbol)
         
-        // a = ask side, b = bid side
-        // a[0] = ask prices array, b[0] = bid prices array
-        const askPrice = msg.data.a?.[0]?.[0]
-        const bidPrice = msg.data.b?.[0]?.[0]
+        // Infoway sends: a = ask prices array, b = bid prices array
+        // Format: [[price, volume], [price, volume], ...]
+        // We take the best (first) price from each side
+        const askData = msg.data.a?.[0]
+        const bidData = msg.data.b?.[0]
+        
+        // Price is the first element [0], volume is second [1]
+        const askPrice = Array.isArray(askData) ? askData[0] : askData
+        const bidPrice = Array.isArray(bidData) ? bidData[0] : bidData
         
         if (bidPrice && askPrice) {
-          const priceData = {
-            bid: parseFloat(bidPrice),
-            ask: parseFloat(askPrice),
-            time: msg.data.t || Date.now()
+          const bid = parseFloat(bidPrice)
+          const ask = parseFloat(askPrice)
+          
+          // Validate: bid should be less than ask
+          if (bid > 0 && ask > 0 && bid <= ask) {
+            const priceData = {
+              bid: bid,
+              ask: ask,
+              time: msg.data.t || Date.now()
+            }
+            
+            this.prices.set(symbol, priceData)
+            
+            // Notify subscribers
+            this.subscribers.forEach(callback => {
+              try { callback(symbol, priceData) } catch (e) {}
+            })
+          } else if (bid > 0 && ask > 0 && bid > ask) {
+            // Bid and Ask might be swapped, fix it
+            const priceData = {
+              bid: ask,  // Swap
+              ask: bid,  // Swap
+              time: msg.data.t || Date.now()
+            }
+            
+            this.prices.set(symbol, priceData)
+            
+            this.subscribers.forEach(callback => {
+              try { callback(symbol, priceData) } catch (e) {}
+            })
           }
-          
-          this.prices.set(symbol, priceData)
-          
-          // Notify subscribers
-          this.subscribers.forEach(callback => {
-            try { callback(symbol, priceData) } catch (e) {}
-          })
         }
       }
     } catch (e) {
