@@ -3372,7 +3372,7 @@ const TradingPage = () => {
 
                 )}
 
-                <span className="text-xs sm:text-sm text-gray-500">P/L: <span className={accountSummary.floatingPnl >= 0 ? 'text-green-500' : 'text-red-500'}>{accountSummary.floatingPnl >= 0 ? '+' : ''}${accountSummary.floatingPnl?.toFixed(2) || '0.00'}</span></span>
+                <span className="text-xs sm:text-sm text-gray-500">P/L: <span className={accountSummary.floatingPnl >= 0 ? 'text-green-500' : 'text-red-500'}>{(accountSummary.floatingPnl || 0) >= 0 ? '+' : '-'}${Math.abs(accountSummary.floatingPnl || 0).toFixed(2)}</span></span>
 
               </div>
 
@@ -3496,7 +3496,7 @@ const TradingPage = () => {
 
                           <td className={`py-2 px-3 text-xs font-medium ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
 
-                            ${pnl.toFixed(2)}
+                            {pnl >= 0 ? '+' : '-'}${Math.abs(pnl).toFixed(2)}
 
                           </td>
 
@@ -3592,7 +3592,7 @@ const TradingPage = () => {
 
                         Net P/L: <span className={nettingData.summary.totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}>
 
-                          ${nettingData.summary.totalNetPnl?.toFixed(2) || '0.00'}
+                          {(nettingData.summary.totalNetPnl || 0) >= 0 ? '+' : '-'}${Math.abs(nettingData.summary.totalNetPnl || 0).toFixed(2)}
 
                         </span>
 
@@ -3694,7 +3694,7 @@ const TradingPage = () => {
 
                             <td className={`py-2 px-2 text-xs font-medium ${pos.netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
 
-                              ${pos.netPnl?.toFixed(2)}
+                              {(pos.netPnl || 0) >= 0 ? '+' : '-'}${Math.abs(pos.netPnl || 0).toFixed(2)}
 
                             </td>
 
@@ -3800,7 +3800,7 @@ const TradingPage = () => {
 
                           <td className={`py-2 px-3 text-xs font-medium ${trade.realizedPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
 
-                            ${trade.realizedPnl?.toFixed(2) || '0.00'}
+                            {(trade.realizedPnl || 0) >= 0 ? '+' : '-'}${Math.abs(trade.realizedPnl || 0).toFixed(2)}
 
                           </td>
 
