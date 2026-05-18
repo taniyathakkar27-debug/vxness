@@ -9,12 +9,12 @@ import propTradingEngine from '../services/propTradingEngine.js'
 import copyTradingEngine from '../services/copyTradingEngine.js'
 import ibEngine from '../services/ibEngineNew.js'
 import MasterTrader from '../models/MasterTrader.js'
-import infowayService from '../services/infowayService.js'
+import metaApiService from '../services/metaApiService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
 
 // Get price from cache (populated by background streamPrices in server.js)
 function getFreshPrice(symbol) {
-  const price = infowayService.getPrice(symbol)
+  const price = metaApiService.getPrice(symbol)
   return price || null
 }
 
@@ -473,7 +473,7 @@ router.get('/netting/:tradingAccountId', async (req, res) => {
     const symbols = [...new Set(openTrades.map(t => t.symbol))]
     const currentPrices = {}
     for (const symbol of symbols) {
-      const price = infowayService.getPrice(symbol)
+      const price = metaApiService.getPrice(symbol)
       if (price) {
         currentPrices[symbol] = price
       }

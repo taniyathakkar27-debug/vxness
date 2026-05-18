@@ -72,134 +72,136 @@ const CRYPTO_SYMBOLS = SUPPORTED_SYMBOLS.filter(s =>
 )
 
 // Fallback static prices for ALL 116 supported symbols
+// NOTE: These are USED ONLY when LP doesn't supply a symbol.
+// Updated to ~2026-Q2 levels so fallback isn't grossly outdated.
 const FALLBACK_PRICES = {
   // ========== FOREX MAJORS (7) ==========
-  'EURUSD': { bid: 1.0850, ask: 1.0852 },
-  'GBPUSD': { bid: 1.2650, ask: 1.2652 },
-  'USDJPY': { bid: 149.50, ask: 149.52 },
-  'USDCHF': { bid: 0.8820, ask: 0.8822 },
-  'AUDUSD': { bid: 0.6550, ask: 0.6552 },
-  'NZDUSD': { bid: 0.6150, ask: 0.6152 },
-  'USDCAD': { bid: 1.3550, ask: 1.3552 },
-  
+  'EURUSD': { bid: 1.1320, ask: 1.1322 },
+  'GBPUSD': { bid: 1.3450, ask: 1.3452 },
+  'USDJPY': { bid: 145.50, ask: 145.52 },
+  'USDCHF': { bid: 0.8050, ask: 0.8052 },
+  'AUDUSD': { bid: 0.6450, ask: 0.6452 },
+  'NZDUSD': { bid: 0.5980, ask: 0.5982 },
+  'USDCAD': { bid: 1.3950, ask: 1.3952 },
+
   // ========== FOREX CROSSES (21) ==========
-  'EURGBP': { bid: 0.8580, ask: 0.8582 },
-  'EURJPY': { bid: 162.20, ask: 162.22 },
-  'GBPJPY': { bid: 189.10, ask: 189.12 },
-  'EURCHF': { bid: 0.9570, ask: 0.9572 },
-  'EURAUD': { bid: 1.6560, ask: 1.6562 },
-  'EURCAD': { bid: 1.4700, ask: 1.4702 },
-  'GBPAUD': { bid: 1.9320, ask: 1.9322 },
-  'GBPCAD': { bid: 1.7150, ask: 1.7152 },
-  'AUDCAD': { bid: 0.8880, ask: 0.8882 },
-  'AUDJPY': { bid: 97.90, ask: 97.92 },
-  'CADJPY': { bid: 110.30, ask: 110.32 },
-  'CHFJPY': { bid: 169.50, ask: 169.52 },
-  'NZDJPY': { bid: 91.80, ask: 91.82 },
-  'AUDNZD': { bid: 1.0650, ask: 1.0652 },
-  'CADCHF': { bid: 0.6510, ask: 0.6512 },
-  'GBPCHF': { bid: 1.1150, ask: 1.1152 },
-  'GBPNZD': { bid: 2.0550, ask: 2.0552 },
-  'EURNZD': { bid: 1.7620, ask: 1.7622 },
+  'EURGBP': { bid: 0.8420, ask: 0.8422 },
+  'EURJPY': { bid: 164.80, ask: 164.82 },
+  'GBPJPY': { bid: 195.80, ask: 195.82 },
+  'EURCHF': { bid: 0.9120, ask: 0.9122 },
+  'EURAUD': { bid: 1.7550, ask: 1.7552 },
+  'EURCAD': { bid: 1.5790, ask: 1.5792 },
+  'GBPAUD': { bid: 2.0850, ask: 2.0852 },
+  'GBPCAD': { bid: 1.8770, ask: 1.8772 },
+  'AUDCAD': { bid: 0.9000, ask: 0.9002 },
+  'AUDJPY': { bid: 93.85, ask: 93.87 },
+  'CADJPY': { bid: 104.30, ask: 104.32 },
+  'CHFJPY': { bid: 180.70, ask: 180.72 },
+  'NZDJPY': { bid: 87.05, ask: 87.07 },
+  'AUDNZD': { bid: 1.0785, ask: 1.0787 },
+  'CADCHF': { bid: 0.5770, ask: 0.5772 },
+  'GBPCHF': { bid: 1.0825, ask: 1.0827 },
+  'GBPNZD': { bid: 2.2490, ask: 2.2492 },
+  'EURNZD': { bid: 1.8930, ask: 1.8932 },
   'NZDCAD': { bid: 0.8340, ask: 0.8342 },
-  'NZDCHF': { bid: 0.5420, ask: 0.5422 },
-  'AUDCHF': { bid: 0.5780, ask: 0.5782 },
-  
+  'NZDCHF': { bid: 0.4820, ask: 0.4822 },
+  'AUDCHF': { bid: 0.5195, ask: 0.5197 },
+
   // ========== FOREX EXOTICS (36) ==========
-  'USDSGD': { bid: 1.3420, ask: 1.3422 },
-  'EURSGD': { bid: 1.4560, ask: 1.4562 },
-  'GBPSGD': { bid: 1.6980, ask: 1.6982 },
-  'AUDSGD': { bid: 0.8790, ask: 0.8792 },
-  'SGDJPY': { bid: 111.40, ask: 111.42 },
-  'USDHKD': { bid: 7.8150, ask: 7.8152 },
-  'USDZAR': { bid: 18.50, ask: 18.52 },
-  'EURZAR': { bid: 20.08, ask: 20.10 },
-  'GBPZAR': { bid: 23.40, ask: 23.42 },
-  'ZARJPY': { bid: 8.08, ask: 8.09 },
-  'USDTRY': { bid: 32.50, ask: 32.52 },
-  'EURTRY': { bid: 35.26, ask: 35.28 },
-  'TRYJPY': { bid: 4.60, ask: 4.61 },
-  'USDMXN': { bid: 17.20, ask: 17.22 },
-  'EURMXN': { bid: 18.66, ask: 18.68 },
-  'MXNJPY': { bid: 8.69, ask: 8.70 },
-  'USDPLN': { bid: 4.02, ask: 4.022 },
-  'EURPLN': { bid: 4.36, ask: 4.362 },
-  'GBPPLN': { bid: 5.08, ask: 5.082 },
-  'USDSEK': { bid: 10.45, ask: 10.452 },
-  'EURSEK': { bid: 11.34, ask: 11.342 },
-  'GBPSEK': { bid: 13.22, ask: 13.222 },
-  'SEKJPY': { bid: 14.31, ask: 14.32 },
-  'USDNOK': { bid: 10.85, ask: 10.852 },
-  'EURNOK': { bid: 11.77, ask: 11.772 },
+  'USDSGD': { bid: 1.2920, ask: 1.2922 },
+  'EURSGD': { bid: 1.4625, ask: 1.4627 },
+  'GBPSGD': { bid: 1.7378, ask: 1.7380 },
+  'AUDSGD': { bid: 0.8333, ask: 0.8335 },
+  'SGDJPY': { bid: 112.60, ask: 112.62 },
+  'USDHKD': { bid: 7.7820, ask: 7.7822 },
+  'USDZAR': { bid: 18.20, ask: 18.22 },
+  'EURZAR': { bid: 20.60, ask: 20.62 },
+  'GBPZAR': { bid: 24.48, ask: 24.50 },
+  'ZARJPY': { bid: 8.00, ask: 8.01 },
+  'USDTRY': { bid: 38.50, ask: 38.55 },
+  'EURTRY': { bid: 43.58, ask: 43.62 },
+  'TRYJPY': { bid: 3.78, ask: 3.79 },
+  'USDMXN': { bid: 19.40, ask: 19.42 },
+  'EURMXN': { bid: 21.96, ask: 21.98 },
+  'MXNJPY': { bid: 7.50, ask: 7.51 },
+  'USDPLN': { bid: 3.75, ask: 3.752 },
+  'EURPLN': { bid: 4.24, ask: 4.242 },
+  'GBPPLN': { bid: 5.04, ask: 5.042 },
+  'USDSEK': { bid: 9.55, ask: 9.552 },
+  'EURSEK': { bid: 10.81, ask: 10.812 },
+  'GBPSEK': { bid: 12.85, ask: 12.852 },
+  'SEKJPY': { bid: 15.23, ask: 15.24 },
+  'USDNOK': { bid: 10.20, ask: 10.202 },
+  'EURNOK': { bid: 11.55, ask: 11.552 },
   'GBPNOK': { bid: 13.72, ask: 13.722 },
-  'NOKJPY': { bid: 13.78, ask: 13.79 },
-  'USDDKK': { bid: 6.92, ask: 6.922 },
-  'EURDKK': { bid: 7.51, ask: 7.512 },
-  'DKKJPY': { bid: 21.61, ask: 21.62 },
-  'USDCNH': { bid: 7.25, ask: 7.252 },
-  'CNHJPY': { bid: 20.62, ask: 20.63 },
-  'USDHUF': { bid: 365.50, ask: 365.70 },
-  'EURHUF': { bid: 396.60, ask: 396.80 },
-  'USDCZK': { bid: 23.45, ask: 23.47 },
-  'EURCZK': { bid: 25.44, ask: 25.46 },
-  
+  'NOKJPY': { bid: 14.26, ask: 14.27 },
+  'USDDKK': { bid: 6.58, ask: 6.582 },
+  'EURDKK': { bid: 7.45, ask: 7.452 },
+  'DKKJPY': { bid: 22.10, ask: 22.11 },
+  'USDCNH': { bid: 7.20, ask: 7.202 },
+  'CNHJPY': { bid: 20.20, ask: 20.21 },
+  'USDHUF': { bid: 348.50, ask: 348.70 },
+  'EURHUF': { bid: 394.30, ask: 394.50 },
+  'USDCZK': { bid: 21.90, ask: 21.92 },
+  'EURCZK': { bid: 24.79, ask: 24.81 },
+
   // ========== METALS (4) ==========
-  'XAUUSD': { bid: 2870.00, ask: 2870.50 },
-  'XAGUSD': { bid: 32.10, ask: 32.12 },
-  'XPTUSD': { bid: 1020.00, ask: 1021.00 },
+  'XAUUSD': { bid: 3245.00, ask: 3245.50 },
+  'XAGUSD': { bid: 32.85, ask: 32.87 },
+  'XPTUSD': { bid: 1075.00, ask: 1076.00 },
   'XPDUSD': { bid: 980.00, ask: 981.00 },
-  
+
   // ========== COMMODITIES (4) ==========
-  'USOIL': { bid: 72.50, ask: 72.55 },
-  'UKOIL': { bid: 76.80, ask: 76.85 },
-  'NGAS': { bid: 2.85, ask: 2.86 },
-  'COPPER': { bid: 4.25, ask: 4.26 },
-  
+  'USOIL': { bid: 62.30, ask: 62.35 },
+  'UKOIL': { bid: 65.80, ask: 65.85 },
+  'NGAS': { bid: 3.45, ask: 3.46 },
+  'COPPER': { bid: 4.65, ask: 4.66 },
+
   // ========== CRYPTO (44) - Binance provides live prices ==========
-  'BTCUSD': { bid: 97000.00, ask: 97050.00 },
-  'ETHUSD': { bid: 2650.00, ask: 2652.00 },
-  'LTCUSD': { bid: 105.00, ask: 105.20 },
-  'XRPUSD': { bid: 2.45, ask: 2.46 },
-  'BCHUSD': { bid: 420.00, ask: 420.50 },
-  'BNBUSD': { bid: 580.00, ask: 580.50 },
-  'ADAUSD': { bid: 0.95, ask: 0.952 },
-  'DOTUSD': { bid: 7.50, ask: 7.52 },
-  'SOLUSD': { bid: 195.00, ask: 195.20 },
-  'DOGEUSD': { bid: 0.32, ask: 0.321 },
-  'MATICUSD': { bid: 0.45, ask: 0.452 },
-  'AVAXUSD': { bid: 38.50, ask: 38.55 },
-  'LINKUSD': { bid: 18.50, ask: 18.52 },
-  'UNIUSD': { bid: 12.50, ask: 12.52 },
-  'ATOMUSD': { bid: 9.80, ask: 9.82 },
-  'XLMUSD': { bid: 0.42, ask: 0.421 },
-  'ALGOUSD': { bid: 0.38, ask: 0.381 },
-  'VETUSD': { bid: 0.045, ask: 0.0451 },
-  'ICPUSD': { bid: 12.80, ask: 12.82 },
-  'FILUSD': { bid: 5.80, ask: 5.82 },
-  'TRXUSD': { bid: 0.24, ask: 0.241 },
-  'ETCUSD': { bid: 28.50, ask: 28.55 },
-  'XMRUSD': { bid: 185.00, ask: 185.50 },
-  'EOSUSD': { bid: 0.85, ask: 0.852 },
-  'AAVEUSD': { bid: 280.00, ask: 280.50 },
-  'MKRUSD': { bid: 1850.00, ask: 1852.00 },
-  'COMPUSD': { bid: 85.00, ask: 85.20 },
-  'SNXUSD': { bid: 3.20, ask: 3.22 },
-  'YFIUSD': { bid: 8500.00, ask: 8510.00 },
-  'SUSHIUSD': { bid: 1.45, ask: 1.46 },
-  'NEARUSD': { bid: 5.20, ask: 5.22 },
-  'FTMUSD': { bid: 0.72, ask: 0.722 },
-  'SANDUSD': { bid: 0.58, ask: 0.582 },
-  'MANAUSD': { bid: 0.52, ask: 0.522 },
-  'AXSUSD': { bid: 8.20, ask: 8.22 },
-  'GALAUSD': { bid: 0.042, ask: 0.0422 },
-  'APEUSD': { bid: 1.35, ask: 1.36 },
-  'GMTUSD': { bid: 0.22, ask: 0.221 },
-  'OPUSD': { bid: 2.15, ask: 2.16 },
-  'ARBUSD': { bid: 0.85, ask: 0.852 },
-  'PEPEUSD': { bid: 0.000018, ask: 0.0000181 },
-  'SHIBUSD': { bid: 0.000022, ask: 0.0000221 },
-  'TONUSD': { bid: 5.50, ask: 5.52 },
-  'HBARUSD': { bid: 0.28, ask: 0.281 }
+  'BTCUSD': { bid: 103500.00, ask: 103550.00 },
+  'ETHUSD': { bid: 2480.00, ask: 2482.00 },
+  'LTCUSD': { bid: 96.00, ask: 96.20 },
+  'XRPUSD': { bid: 2.42, ask: 2.43 },
+  'BCHUSD': { bid: 412.00, ask: 412.50 },
+  'BNBUSD': { bid: 645.00, ask: 645.50 },
+  'ADAUSD': { bid: 0.78, ask: 0.782 },
+  'DOTUSD': { bid: 4.50, ask: 4.52 },
+  'SOLUSD': { bid: 168.00, ask: 168.20 },
+  'DOGEUSD': { bid: 0.22, ask: 0.221 },
+  'MATICUSD': { bid: 0.24, ask: 0.242 },
+  'AVAXUSD': { bid: 23.50, ask: 23.55 },
+  'LINKUSD': { bid: 16.50, ask: 16.52 },
+  'UNIUSD': { bid: 7.80, ask: 7.82 },
+  'ATOMUSD': { bid: 4.60, ask: 4.62 },
+  'XLMUSD': { bid: 0.30, ask: 0.301 },
+  'ALGOUSD': { bid: 0.22, ask: 0.221 },
+  'VETUSD': { bid: 0.030, ask: 0.0301 },
+  'ICPUSD': { bid: 5.80, ask: 5.82 },
+  'FILUSD': { bid: 3.20, ask: 3.22 },
+  'TRXUSD': { bid: 0.26, ask: 0.261 },
+  'ETCUSD': { bid: 17.20, ask: 17.25 },
+  'XMRUSD': { bid: 325.00, ask: 325.50 },
+  'EOSUSD': { bid: 0.58, ask: 0.582 },
+  'AAVEUSD': { bid: 240.00, ask: 240.50 },
+  'MKRUSD': { bid: 1620.00, ask: 1622.00 },
+  'COMPUSD': { bid: 45.00, ask: 45.20 },
+  'SNXUSD': { bid: 1.20, ask: 1.22 },
+  'YFIUSD': { bid: 5800.00, ask: 5810.00 },
+  'SUSHIUSD': { bid: 0.78, ask: 0.79 },
+  'NEARUSD': { bid: 2.85, ask: 2.87 },
+  'FTMUSD': { bid: 0.78, ask: 0.782 },
+  'SANDUSD': { bid: 0.32, ask: 0.322 },
+  'MANAUSD': { bid: 0.32, ask: 0.322 },
+  'AXSUSD': { bid: 3.20, ask: 3.22 },
+  'GALAUSD': { bid: 0.022, ask: 0.0222 },
+  'APEUSD': { bid: 0.78, ask: 0.79 },
+  'GMTUSD': { bid: 0.085, ask: 0.086 },
+  'OPUSD': { bid: 0.85, ask: 0.86 },
+  'ARBUSD': { bid: 0.38, ask: 0.382 },
+  'PEPEUSD': { bid: 0.0000115, ask: 0.0000116 },
+  'SHIBUSD': { bid: 0.0000142, ask: 0.0000143 },
+  'TONUSD': { bid: 3.20, ask: 3.22 },
+  'HBARUSD': { bid: 0.19, ask: 0.191 }
 }
 
 // Price listener that extends SynchronizationListener from MetaAPI SDK
@@ -324,6 +326,7 @@ class MetaApiService {
     if (newSymbols.length === 0) return
 
     let subscribed = 0
+    const failed = []
     for (const symbol of newSymbols) {
       try {
         const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
@@ -331,17 +334,36 @@ class MetaApiService {
         this.subscribedSymbols.add(symbol)
         subscribed++
       } catch (e) {
-        // Symbol may not be available on this broker
-        if (!e.message?.includes('TooManyRequests')) {
-          // Silent for unavailable symbols
-        } else {
+        if (e.message?.includes('TooManyRequests')) {
           console.error('[MetaApi] Rate limited while subscribing, pausing...')
           await new Promise(r => setTimeout(r, 5000))
+        } else {
+          failed.push(symbol)
         }
       }
     }
 
     console.log(`[MetaApi] Subscribed to ${subscribed}/${newSymbols.length} symbols via SDK streaming`)
+    if (failed.length > 0) {
+      console.log(`[MetaApi] LP does NOT have these symbols (using fallback prices):`, failed.join(', '))
+    }
+
+    // After 10s, log diagnostic about which symbols are actually streaming live prices
+    setTimeout(() => {
+      const liveSymbols = []
+      const noPriceSymbols = []
+      newSymbols.forEach(s => {
+        if (this.prices.has(s)) {
+          liveSymbols.push(s)
+        } else {
+          noPriceSymbols.push(s)
+        }
+      })
+      console.log(`[MetaApi] LIVE prices from LP: ${liveSymbols.length}/${newSymbols.length}`)
+      if (noPriceSymbols.length > 0 && noPriceSymbols.length < 20) {
+        console.log(`[MetaApi] No live ticks yet for:`, noPriceSymbols.join(', '))
+      }
+    }, 10000)
   }
 
   // Read latest price from SDK's terminal state (instant, no API call)
@@ -365,7 +387,11 @@ class MetaApiService {
       }
     }
 
-    return FALLBACK_PRICES[symbol] || null
+    // Only fall back to static prices when LP is NOT connected
+    if (!this.isConnected) {
+      return FALLBACK_PRICES[symbol] || null
+    }
+    return null
   }
 
   getAllPrices() {
@@ -428,20 +454,33 @@ class MetaApiService {
       Object.assign(prices, cryptoPrices)
     }
 
-    // For forex/metals: read from SDK terminal state (no API calls!)
+    // For forex/metals: read ONLY live cache (from PriceListener) or SDK terminal state.
+    // NEVER mix fallback prices when LP is connected — that causes price jumps.
     forexSymbols.forEach(symbol => {
-      const price = this.getPrice(symbol)
-      if (price) {
-        prices[symbol] = price
+      const cached = this.prices.get(symbol)
+      if (cached) {
+        prices[symbol] = cached
+        return
+      }
+      if (this.isConnected && this.connection?.terminalState) {
+        const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
+        const sdkPrice = this.connection.terminalState.price(metaSymbol)
+        if (sdkPrice && sdkPrice.bid && sdkPrice.ask) {
+          const priceData = { bid: sdkPrice.bid, ask: sdkPrice.ask, time: Date.now() }
+          this.prices.set(symbol, priceData)
+          prices[symbol] = priceData
+        }
       }
     })
 
-    // Fill remaining missing with fallback
-    symbols.forEach(symbol => {
-      if (!prices[symbol] && FALLBACK_PRICES[symbol]) {
-        prices[symbol] = { ...FALLBACK_PRICES[symbol], time: now, fallback: true }
-      }
-    })
+    // Only use fallback when MetaAPI is NOT connected at all
+    if (!this.isConnected) {
+      symbols.forEach(symbol => {
+        if (!prices[symbol] && FALLBACK_PRICES[symbol]) {
+          prices[symbol] = { ...FALLBACK_PRICES[symbol], time: now, fallback: true }
+        }
+      })
+    }
 
     return prices
   }

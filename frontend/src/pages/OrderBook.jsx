@@ -12,7 +12,7 @@ import {
 
   LayoutDashboard, 
 
-  User,
+  User,  
 
   Wallet,
 

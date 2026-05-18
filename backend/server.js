@@ -72,7 +72,8 @@ import tradeEngine from './services/tradeEngine.js'
 
 import propTradingEngine from './services/propTradingEngine.js'
 
-import infowayService from './services/infowayService.js'
+import metaApiService from './services/metaApiService.js'
+import { SUPPORTED_SYMBOLS, CRYPTO_SYMBOLS } from './services/metaApiService.js'
 
 
 
@@ -122,35 +123,61 @@ const priceCache = new Map()
 
 
 
-// Initialize Infoway WebSocket streaming connection
+// Initialize MetaAPI streaming connection (LP prices)
 
-let infowayConnected = false
+let metaApiConnected = false
 
 
 
-async function initInfowayConnection() {
+async function initMetaApiConnection() {
 
   try {
 
-    console.log('[Infoway] Initializing WebSocket connection...')
+    console.log('[MetaAPI] Initializing connection to LP...')
 
-    infowayConnected = await infowayService.connect()
+    metaApiConnected = await metaApiService.connect()
 
-    
 
-    if (infowayConnected) {
 
-      console.log('[Infoway] Connected! Live tick-by-tick streaming active.')
+    if (metaApiConnected) {
 
-      
+      console.log('[MetaAPI] Connected! Live tick-by-tick streaming from LP active.')
 
-      // Subscribe to tick-by-tick price updates from Infoway
 
-      infowayService.subscribe((symbol, price) => {
+
+      // Clear any stale fallback prices for forex/metals — keep only crypto (Binance).
+
+      // After this, only LP-streamed prices will fill priceCache for forex/metals.
+
+      const forexSet = new Set(SUPPORTED_SYMBOLS.filter(s => !CRYPTO_SYMBOLS.includes(s)))
+
+      let cleared = 0
+
+      for (const sym of forexSet) {
+
+        if (priceCache.has(sym)) { priceCache.delete(sym); cleared++ }
+
+      }
+
+      console.log(`[MetaAPI] Cleared ${cleared} stale fallback prices. Awaiting live ticks from LP...`)
+
+
+
+      // Subscribe to all supported forex/metal symbols
+
+      const forexSymbols = SUPPORTED_SYMBOLS.filter(s => !CRYPTO_SYMBOLS.includes(s))
+
+      await metaApiService.subscribeToSymbols(forexSymbols)
+
+
+
+      // Subscribe to tick-by-tick price updates from MetaAPI
+
+      metaApiService.subscribe((symbol, price) => {
 
         priceCache.set(symbol, price)
 
-        
+
 
         // Broadcast to frontend Socket.IO subscribers immediately (tick-by-tick)
 
@@ -172,13 +199,13 @@ async function initInfowayConnection() {
 
     } else {
 
-      console.log('[Infoway] Connection failed. Prices will use fallback values.')
+      console.log('[MetaAPI] Connection failed. Prices will use fallback values.')
 
     }
 
   } catch (error) {
 
-    console.error('[Infoway] Connection error:', error.message)
+    console.error('[MetaAPI] Connection error:', error.message)
 
   }
 
@@ -190,39 +217,17 @@ async function initInfowayConnection() {
 
 async function streamPrices() {
 
-  // Sync all Infoway prices into priceCache
+  // Fetch all prices from MetaAPI (forex from LP, crypto from Binance)
 
-  const allPrices = infowayService.getAllPrices()
+  // When LP is connected, fetchBatchPrices returns ONLY live data (no fallback mixing)
+
+  const allPrices = await metaApiService.fetchBatchPrices(SUPPORTED_SYMBOLS)
 
   Object.entries(allPrices).forEach(([symbol, price]) => {
 
     if (price && price.bid) {
 
-      // If not connected to Infoway, simulate small price movements
-
-      if (!infowayConnected) {
-
-        const variation = (Math.random() - 0.5) * 0.0002 * price.bid
-
-        const newBid = price.bid + variation
-
-        const spread = price.ask - price.bid
-
-        priceCache.set(symbol, {
-
-          bid: parseFloat(newBid.toFixed(symbol.includes('JPY') ? 3 : 5)),
-
-          ask: parseFloat((newBid + spread).toFixed(symbol.includes('JPY') ? 3 : 5)),
-
-          time: Date.now()
-
-        })
-
-      } else {
-
-        priceCache.set(symbol, price)
-
-      }
+      priceCache.set(symbol, price)
 
     }
 
@@ -248,13 +253,13 @@ async function streamPrices() {
 
 
 
-console.log('Price streaming initialized - Infoway WebSocket')
+console.log('Price streaming initialized - MetaAPI (LP Connection)')
 
 
 
-// Initialize Infoway connection on startup
+// Initialize MetaAPI connection on startup
 
-initInfowayConnection()
+initMetaApiConnection()
 
 
 
