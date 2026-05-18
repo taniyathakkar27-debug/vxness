@@ -273,21 +273,23 @@ class PropTradingEngine {
       charges.commissionValue > 0 &&
       ['PER_LOT', 'PER_TRADE', 'PERCENTAGE'].includes(String(charges.commissionType || 'PER_LOT'))
 
+    // Get contract size based on symbol
+    const contractSize = this.getContractSize(symbol)
+
     // Calculate execution price with spread + commission on ASK for BUY
     let openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
 
     if (commissionEmbeddedInBuyPrice) {
       const ct = String(charges.commissionType || 'PER_LOT')
       const cv = Number(charges.commissionValue)
-      if ((ct === 'PER_LOT' || ct === 'PER_TRADE') && Number.isFinite(cv)) {
-        openPrice += cv
+      if (ct === 'PER_LOT' && Number.isFinite(cv) && contractSize > 0) {
+        openPrice += cv / contractSize
+      } else if (ct === 'PER_TRADE' && Number.isFinite(cv) && quantity > 0 && contractSize > 0) {
+        openPrice += cv / (quantity * contractSize)
       } else if (ct === 'PERCENTAGE' && Number.isFinite(cv)) {
         openPrice += openPrice * (cv / 100)
       }
     }
-
-    // Get contract size based on symbol
-    const contractSize = this.getContractSize(symbol)
     
     // Calculate margin
     const leverage = rules.maxLeverage || 100

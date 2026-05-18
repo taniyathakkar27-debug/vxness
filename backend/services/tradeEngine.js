@@ -522,6 +522,12 @@ class TradeEngine {
 
 
 
+    // Get contract size based on symbol
+
+    const contractSize = this.getContractSize(symbol)
+
+
+
     // Calculate execution price with spread
 
     let openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
@@ -534,9 +540,13 @@ class TradeEngine {
 
       const cv = Number(charges.commissionValue)
 
-      if ((ct === 'PER_LOT' || ct === 'PER_TRADE') && Number.isFinite(cv)) {
+      if (ct === 'PER_LOT' && Number.isFinite(cv) && contractSize > 0) {
 
-        openPrice += cv
+        openPrice += cv / contractSize
+
+      } else if (ct === 'PER_TRADE' && Number.isFinite(cv) && quantity > 0 && contractSize > 0) {
+
+        openPrice += cv / (quantity * contractSize)
 
       } else if (ct === 'PERCENTAGE' && Number.isFinite(cv)) {
 
@@ -545,12 +555,6 @@ class TradeEngine {
       }
 
     }
-
-
-
-    // Get contract size based on symbol
-
-    const contractSize = this.getContractSize(symbol)
 
 
 
