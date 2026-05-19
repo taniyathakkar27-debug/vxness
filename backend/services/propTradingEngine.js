@@ -6,6 +6,7 @@ import User from '../models/User.js'
 import Charges from '../models/Charges.js'
 import { sendTemplateEmail } from '../services/emailService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
+import { commissionPriceDelta, commissionDollarAmount } from '../utils/commissionMath.js'
 
 class PropTradingEngine {
   constructor() {
@@ -236,17 +237,10 @@ class PropTradingEngine {
     }
   }
 
-  // Calculate commission
-  calculateCommission(quantity, price, commissionType, commissionValue, contractSize) {
-    if (commissionType === 'FIXED') {
-      return commissionValue
-    } else if (commissionType === 'PER_LOT') {
-      return quantity * commissionValue
-    } else if (commissionType === 'PERCENTAGE') {
-      const tradeValue = quantity * contractSize * price
-      return tradeValue * (commissionValue / 100)
-    }
-    return 0
+  // Calculate commission — delegates to shared commissionMath so prop and live trade math match.
+  calculateCommission(quantity, price, commissionType, commissionValue, contractSize, symbol = '') {
+    if (commissionType === 'FIXED') return Number(commissionValue) || 0
+    return commissionDollarAmount(symbol, quantity, price, commissionType, commissionValue, contractSize)
   }
 
   // Open a trade for challenge account
@@ -283,15 +277,7 @@ class PropTradingEngine {
       : this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
 
     if (commissionEmbeddedInBuyPrice) {
-      const ct = String(charges.commissionType || 'PER_LOT')
-      const cv = Number(charges.commissionValue)
-      if (ct === 'PER_LOT' && Number.isFinite(cv) && contractSize > 0) {
-        openPrice += cv / contractSize
-      } else if (ct === 'PER_TRADE' && Number.isFinite(cv) && quantity > 0 && contractSize > 0) {
-        openPrice += cv / (quantity * contractSize)
-      } else if (ct === 'PERCENTAGE' && Number.isFinite(cv)) {
-        openPrice += openPrice * (cv / 100)
-      }
+      openPrice += commissionPriceDelta(symbol, charges.commissionValue, charges.commissionType, quantity, openPrice)
     }
     
     // Calculate margin
@@ -303,7 +289,7 @@ class PropTradingEngine {
     const shouldChargeCommission = (side === 'BUY' && charges.commissionOnBuy !== false) || 
                                    (side === 'SELL' && charges.commissionOnSell !== false)
     if (shouldChargeCommission && charges.commissionValue > 0 && !commissionEmbeddedInBuyPrice) {
-      commission = this.calculateCommission(quantity, openPrice, charges.commissionType, charges.commissionValue, contractSize)
+      commission = this.calculateCommission(quantity, openPrice, charges.commissionType, charges.commissionValue, contractSize, symbol)
     }
 
     // Generate trade ID

@@ -62,14 +62,31 @@ export function adjustQuotesForAdminSpread(bid, ask, symbol, spreadEntry) {
   return { bid: b - d, ask: a + d }
 }
 
+// Mirrors backend/utils/commissionMath.js — commission scales per asset class so the markup is visible
+// across all asset classes, matching the spread scaling used in calculateExecutionPrice.
+const INDEX_SYMBOLS = new Set([
+  'US30', 'US500', 'NAS100', 'US100', 'GER40', 'UK100', 'DJ30', 'DAX', 'FTSE', 'SPX', 'NDX',
+  'JPN225', 'AUS200', 'HK50', 'FRA40', 'EU50',
+])
+const COMMODITY_SYMBOLS = new Set([
+  'OIL', 'BRENT', 'WTI', 'NGAS', 'COPPER', 'USOIL', 'UKOIL',
+])
+
+function commissionPerLotDelta(symbol, cv) {
+  const sym = (symbol || '').toUpperCase()
+  if (CRYPTO_SYMBOLS.has(sym) || INDEX_SYMBOLS.has(sym)) return cv
+  const isMetal = sym.includes('XAU') || sym.includes('XAG') || sym.includes('XPT') || sym.includes('XPD')
+  if (isMetal || COMMODITY_SYMBOLS.has(sym) || sym.includes('JPY')) return cv * 0.01
+  return cv * 0.0001
+}
+
 function commissionToPriceDelta(commissionEntry, symbol, bidRef, quantity = 1) {
   const cv = Number(commissionEntry?.commission ?? commissionEntry?.commissionValue)
   if (!commissionEntry || !Number.isFinite(cv) || cv <= 0) return 0
   const ct = commissionEntry.commissionType || 'PER_LOT'
-  const contractSize = getContractSize(symbol)
   const qty = Number(quantity) > 0 ? Number(quantity) : 1
-  if (ct === 'PER_LOT' && contractSize > 0) return cv / contractSize
-  if (ct === 'PER_TRADE' && contractSize > 0) return cv / (qty * contractSize)
+  if (ct === 'PER_LOT') return commissionPerLotDelta(symbol, cv)
+  if (ct === 'PER_TRADE') return commissionPerLotDelta(symbol, cv) / qty
   if (ct === 'PERCENTAGE') return bidRef * (cv / 100)
   return 0
 }

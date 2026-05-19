@@ -6,6 +6,8 @@ import Charges from '../models/Charges.js'
 
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
 
+import { commissionPriceDelta, commissionDollarAmount } from '../utils/commissionMath.js'
+
 import TradeSettings from '../models/TradeSettings.js'
 
 import AdminLog from '../models/AdminLog.js'
@@ -148,29 +150,9 @@ class TradeEngine {
 
   // Calculate commission based on type
 
-  calculateCommission(quantity, openPrice, commissionType, commissionValue, contractSize = this.CONTRACT_SIZE) {
+  calculateCommission(quantity, openPrice, commissionType, commissionValue, contractSize = this.CONTRACT_SIZE, symbol = '') {
 
-    switch (commissionType) {
-
-      case 'PER_LOT':
-
-        return quantity * commissionValue
-
-      case 'PER_TRADE':
-
-        return commissionValue
-
-      case 'PERCENTAGE':
-
-        const tradeValue = quantity * contractSize * openPrice
-
-        return tradeValue * (commissionValue / 100)
-
-      default:
-
-        return 0
-
-    }
+    return commissionDollarAmount(symbol, quantity, openPrice, commissionType, commissionValue, contractSize)
 
   }
 
@@ -519,23 +501,7 @@ class TradeEngine {
 
     if (commissionEmbeddedInBuyPrice) {
 
-      const ct = String(charges.commissionType || 'PER_LOT')
-
-      const cv = Number(charges.commissionValue)
-
-      if (ct === 'PER_LOT' && Number.isFinite(cv) && contractSize > 0) {
-
-        openPrice += cv / contractSize
-
-      } else if (ct === 'PER_TRADE' && Number.isFinite(cv) && quantity > 0 && contractSize > 0) {
-
-        openPrice += cv / (quantity * contractSize)
-
-      } else if (ct === 'PERCENTAGE' && Number.isFinite(cv)) {
-
-        openPrice += openPrice * (cv / 100)
-
-      }
+      openPrice += commissionPriceDelta(symbol, charges.commissionValue, charges.commissionType, quantity, openPrice)
 
     }
 
@@ -603,7 +569,7 @@ class TradeEngine {
 
     if (shouldChargeCommission && charges.commissionValue > 0 && !commissionEmbeddedInBuyPrice) {
 
-      commission = this.calculateCommission(quantity, openPrice, charges.commissionType, charges.commissionValue, contractSize)
+      commission = this.calculateCommission(quantity, openPrice, charges.commissionType, charges.commissionValue, contractSize, symbol)
 
     }
 
@@ -741,7 +707,7 @@ class TradeEngine {
 
     if (charges.commissionOnClose && charges.commissionValue > 0) {
 
-      closeCommission = this.calculateCommission(trade.quantity, closePrice, charges.commissionType, charges.commissionValue, trade.contractSize)
+      closeCommission = this.calculateCommission(trade.quantity, closePrice, charges.commissionType, charges.commissionValue, trade.contractSize, trade.symbol)
 
       console.log(`Commission on close: $${closeCommission}`)
 
