@@ -15,7 +15,8 @@ const DEFAULT_SPREAD_SYMBOLS = [
   'US30', 'US500', 'NAS100',
 ]
 
-// GET /api/charges/spreads — same merged spread as tradeEngine (getChargesForTrade + AccountType minSpread)
+// GET /api/charges/spreads — same merged spread as tradeEngine (getChargesForTrade only).
+// Admin-set Charges are the sole source; AccountType.minSpread is no longer a fallback.
 // Query: accountTypeId, userId, symbols (comma-separated, e.g. from /prices/instruments)
 router.get('/spreads', async (req, res) => {
   try {
@@ -28,21 +29,14 @@ router.get('/spreads', async (req, res) => {
 
     const allCharges = await Charges.find({ isActive: true }).sort({ createdAt: -1 })
 
-    let minSpreadFallback = 0
-    if (accountTypeId) {
-      const at = await AccountType.findById(accountTypeId).select('minSpread')
-      if (at && at.minSpread > 0) minSpreadFallback = at.minSpread
-    }
-
     const atid = accountTypeId || null
     const spreadMap = {}
 
     for (const symbol of symbols) {
       const seg = resolveTradeSegment(symbol)
       const merged = await Charges.getChargesForTrade(userId, symbol, seg, atid, allCharges)
-      let sv = merged.spreadValue > 0 ? merged.spreadValue : 0
+      const sv = merged.spreadValue > 0 ? merged.spreadValue : 0
       const st = merged.spreadType || 'FIXED'
-      if (!sv && minSpreadFallback > 0) sv = minSpreadFallback
       if (sv > 0) {
         spreadMap[normInstrumentKey(symbol)] = {
           spread: sv,
@@ -60,7 +54,7 @@ router.get('/spreads', async (req, res) => {
 })
 
 // GET /api/charges/commissions — same merged commission lookup as tradeEngine.
-// Returns the effective commission for the current account type / user (admin-configured only).
+// Admin-set Charges are the sole source; AccountType.commission is no longer a fallback.
 // Query: accountTypeId, userId, symbols (comma-separated, e.g. from /prices/instruments)
 router.get('/commissions', async (req, res) => {
   try {
@@ -73,21 +67,14 @@ router.get('/commissions', async (req, res) => {
 
     const allCharges = await Charges.find({ isActive: true }).sort({ createdAt: -1 })
 
-    let commissionFallback = 0
-    if (accountTypeId) {
-      const at = await AccountType.findById(accountTypeId).select('commission')
-      if (at && at.commission > 0) commissionFallback = at.commission
-    }
-
     const atid = accountTypeId || null
     const commissionMap = {}
 
     for (const symbol of symbols) {
       const seg = resolveTradeSegment(symbol)
       const merged = await Charges.getChargesForTrade(userId, symbol, seg, atid, allCharges)
-      let cv = merged.commissionValue > 0 ? merged.commissionValue : 0
+      const cv = merged.commissionValue > 0 ? merged.commissionValue : 0
       const ct = merged.commissionType || 'PER_LOT'
-      if (!cv && commissionFallback > 0) cv = commissionFallback
       if (cv > 0) {
         commissionMap[normInstrumentKey(symbol)] = {
           commission: cv,
