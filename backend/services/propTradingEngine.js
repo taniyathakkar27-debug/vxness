@@ -276,8 +276,11 @@ class PropTradingEngine {
     // Get contract size based on symbol
     const contractSize = this.getContractSize(symbol)
 
-    // Calculate execution price with spread + commission on ASK for BUY
-    let openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
+    // Calculate execution price. When admin commission is configured for BUY,
+    // collapse the natural MetaAPI spread by using raw bid as the BUY base.
+    let openPrice = commissionEmbeddedInBuyPrice
+      ? this.calculateExecutionPrice(side, bid, bid, charges.spreadValue, charges.spreadType, symbol)
+      : this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
 
     if (commissionEmbeddedInBuyPrice) {
       const ct = String(charges.commissionType || 'PER_LOT')

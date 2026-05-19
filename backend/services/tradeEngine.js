@@ -528,9 +528,14 @@ class TradeEngine {
 
 
 
-    // Calculate execution price with spread
+    // Calculate execution price with spread.
+    // When admin commission is configured for BUY, collapse the natural MetaAPI spread
+    // by using raw bid as the BUY base (calculateExecutionPrice with ask=bid → bid + spread).
+    // Admin commission is then added as a separate price delta below.
 
-    let openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
+    let openPrice = commissionEmbeddedInBuyPrice
+      ? this.calculateExecutionPrice(side, bid, bid, charges.spreadValue, charges.spreadType, symbol)
+      : this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
 
 
 

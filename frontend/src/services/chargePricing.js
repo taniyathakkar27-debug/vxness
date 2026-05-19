@@ -8,6 +8,15 @@ const CRYPTO_SYMBOLS = new Set([
   'DOTUSD', 'MATICUSD', 'AVAXUSD', 'LINKUSD', 'TRXUSD', 'SHIBUSD',
 ])
 
+// Mirrors backend/services/tradeEngine.js getContractSize
+function getContractSize(symbol) {
+  const sym = (symbol || '').toUpperCase()
+  if (sym === 'XAUUSD') return 100
+  if (sym === 'XAGUSD') return 5000
+  if (['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD'].includes(sym)) return 1
+  return 100000
+}
+
 function spreadToPriceDelta(spreadValue, spreadType, symbol, bid, ask) {
   const sym = (symbol || '').toUpperCase()
   const b = Number(bid)
@@ -53,26 +62,48 @@ export function adjustQuotesForAdminSpread(bid, ask, symbol, spreadEntry) {
   return { bid: b - d, ask: a + d }
 }
 
-/**
- * After admin spread, add commission to the ASK only (BUY price), matching tradeEngine.openTrade:
- * - PER_LOT / PER_TRADE: ask += commission value (e.g. 100 → ask + 100)
- * - PERCENTAGE: ask += ask * (pct / 100)
- */
-export function adjustQuotesForTradingDisplay(bid, ask, symbol, spreadEntry, commissionEntry) {
-  const step = adjustQuotesForAdminSpread(bid, ask, symbol, spreadEntry)
-  let b = step.bid
-  let a = step.ask
-  if (!Number.isFinite(b) || !Number.isFinite(a) || b <= 0 || a <= 0) return step
-
+function commissionToPriceDelta(commissionEntry, symbol, bidRef, quantity = 1) {
   const cv = Number(commissionEntry?.commission ?? commissionEntry?.commissionValue)
-  if (!commissionEntry || !Number.isFinite(cv) || cv <= 0) return step
-
+  if (!commissionEntry || !Number.isFinite(cv) || cv <= 0) return 0
   const ct = commissionEntry.commissionType || 'PER_LOT'
-  if (ct === 'PER_LOT' || ct === 'PER_TRADE') {
-    a += cv
-  } else if (ct === 'PERCENTAGE') {
-    a += a * (cv / 100)
+  const contractSize = getContractSize(symbol)
+  const qty = Number(quantity) > 0 ? Number(quantity) : 1
+  if (ct === 'PER_LOT' && contractSize > 0) return cv / contractSize
+  if (ct === 'PER_TRADE' && contractSize > 0) return cv / (qty * contractSize)
+  if (ct === 'PERCENTAGE') return bidRef * (cv / 100)
+  return 0
+}
+
+/**
+ * Displayed BUY/SELL quotes when admin charges may be configured.
+ * - If admin commission OR admin spread is configured: the natural MetaAPI spread is
+ *   collapsed. bid stays at raw bid, ask = bid + (admin spread delta) + (admin commission delta).
+ *   So $4 commission on XAUUSD (contractSize 100) → ask = bid + 0.04.
+ * - If neither is configured: pass through the raw MetaAPI bid/ask unchanged.
+ */
+export function adjustQuotesForTradingDisplay(bid, ask, symbol, spreadEntry, commissionEntry, quantity = 1) {
+  const b = Number(bid)
+  const aRaw = Number(ask)
+  if (!Number.isFinite(b) || !Number.isFinite(aRaw) || b <= 0 || aRaw <= 0) {
+    return { bid: b, ask: aRaw }
   }
 
-  return { bid: b, ask: a }
+  const spreadRaw = Number(spreadEntry?.spread ?? spreadEntry?.spreadValue)
+  const hasAdminSpread = spreadEntry && Number.isFinite(spreadRaw) && spreadRaw > 0
+  const cv = Number(commissionEntry?.commission ?? commissionEntry?.commissionValue)
+  const hasAdminCommission = commissionEntry && Number.isFinite(cv) && cv > 0
+
+  if (!hasAdminSpread && !hasAdminCommission) {
+    return { bid: b, ask: aRaw }
+  }
+
+  let askMarkup = 0
+  if (hasAdminSpread) {
+    askMarkup += spreadToPriceDelta(spreadRaw, spreadEntry.spreadType || 'FIXED', symbol, b, aRaw)
+  }
+  if (hasAdminCommission) {
+    askMarkup += commissionToPriceDelta(commissionEntry, symbol, b, quantity)
+  }
+
+  return { bid: b, ask: b + askMarkup }
 }
