@@ -9,6 +9,7 @@ class PriceStreamService {
     this.socket = null
     this.prices = {}
     this.subscribers = new Map()
+    this.chargesListeners = new Set()
     this.isConnected = false
     this.reconnectAttempts = 0
     this.maxReconnectAttempts = 10
@@ -51,6 +52,13 @@ class PriceStreamService {
       })
     })
 
+    // Admin pushes chargesUpdated when spread/commission/swap rules change, so user UI refetches immediately.
+    this.socket.on('chargesUpdated', (payload) => {
+      this.chargesListeners.forEach((cb) => {
+        try { cb(payload) } catch (e) { console.error('[PriceStream] charges listener error:', e) }
+      })
+    })
+
     this.socket.on('disconnect', () => {
       console.log('[PriceStream] Disconnected')
       this.isConnected = false
@@ -88,9 +96,15 @@ class PriceStreamService {
   unsubscribe(id) {
     this.subscribers.delete(id)
     // Disconnect if no subscribers
-    if (this.subscribers.size === 0) {
+    if (this.subscribers.size === 0 && this.chargesListeners.size === 0) {
       this.disconnect()
     }
+  }
+
+  onChargesUpdated(callback) {
+    this.chargesListeners.add(callback)
+    if (!this.socket?.connected) this.connect()
+    return () => this.chargesListeners.delete(callback)
   }
 
   getPrice(symbol) {

@@ -7,6 +7,11 @@ const router = express.Router()
 
 const normInstrumentKey = (s) => (s == null || s === '' ? '' : String(s).toUpperCase())
 
+// Pushes 'chargesUpdated' so every connected trading UI refetches spreads/commissions immediately.
+const emitChargesUpdated = (req, payload = {}) => {
+  try { req.app.get('io')?.emit('chargesUpdated', { at: Date.now(), ...payload }) } catch {}
+}
+
 // Default symbol universe (merged with ?symbols= from client instruments list)
 const DEFAULT_SPREAD_SYMBOLS = [
   'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD', 'EURGBP', 'EURJPY', 'GBPJPY',
@@ -190,6 +195,7 @@ router.post('/', async (req, res) => {
       console.log(`Synced spread ${spreadValue} and commission ${commissionValue || 0} to AccountType ${accountTypeId}`)
     }
 
+    emitChargesUpdated(req, { action: 'create', chargeId: String(charge._id) })
     res.json({ success: true, message: 'Charge created', charge })
   } catch (error) {
     console.error('Error creating charge:', error)
@@ -255,6 +261,7 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    emitChargesUpdated(req, { action: 'update', chargeId: String(charge._id) })
     res.json({ success: true, message: 'Charge updated', charge })
   } catch (error) {
     console.error('Error updating charge:', error)
@@ -271,6 +278,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await Charges.findByIdAndDelete(req.params.id)
+    emitChargesUpdated(req, { action: 'delete', chargeId: String(req.params.id) })
     res.json({ success: true, message: 'Charge deleted' })
   } catch (error) {
     console.error('Error deleting charge:', error)

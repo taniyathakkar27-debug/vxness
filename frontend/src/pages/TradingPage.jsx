@@ -474,6 +474,25 @@ const TradingPage = () => {
 
 
 
+  // Live refresh: admin se charge save/update/delete hone par socket event pe instant refetch.
+  useEffect(() => {
+
+    if (kycAllowed !== true) return
+
+    const unsubscribe = priceStreamService.onChargesUpdated(() => {
+
+      fetchAdminSpreads()
+
+      fetchAdminCommissions()
+
+    })
+
+    return unsubscribe
+
+  }, [kycAllowed, fetchAdminSpreads, fetchAdminCommissions])
+
+
+
   // Fetch open trades and account summary when account is loaded
 
   useEffect(() => {
