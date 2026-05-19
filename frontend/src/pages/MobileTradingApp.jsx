@@ -30,6 +30,8 @@ import { useTheme } from '../context/ThemeContext'
 
 import KycTradeRequiredModal from '../components/KycTradeRequiredModal'
 
+import { formatPrice } from '../utils/formatPrice'
+
 
 
 const MobileTradingApp = () => {
@@ -519,7 +521,7 @@ const MobileTradingApp = () => {
 
         pendingData.executedTrades.forEach(trade => {
 
-          showNotification(`${trade.orderType} order executed: ${trade.symbol} ${trade.side} @ ${trade.executionPrice?.toFixed(5)}`, 'success')
+          showNotification(`${trade.orderType} order executed: ${trade.symbol} ${trade.side} @ ${formatPrice(trade.executionPrice, trade.symbol)}`, 'success')
 
         })
 
@@ -1596,7 +1598,7 @@ const MobileTradingApp = () => {
 
                 <div className="text-right">
 
-                  <p className="text-white">{prices.bid?.toFixed(inst.category === 'Forex' ? 5 : 2) || '-'}</p>
+                  <p className="text-white">{formatPrice(prices.bid, inst.symbol)}</p>
 
                   <p className="text-gray-500 text-xs">Spread: {((prices.ask - prices.bid) * (inst.category === 'Forex' ? 10000 : 1)).toFixed(1)}</p>
 
@@ -1740,7 +1742,7 @@ const MobileTradingApp = () => {
 
                 <div className="text-right">
 
-                  <p className="text-red-500 text-sm">{prices.bid?.toFixed(inst.category === 'Forex' ? 5 : 2) || '-'}</p>
+                  <p className="text-red-500 text-sm">{formatPrice(prices.bid, inst.symbol)}</p>
 
                   <p className="text-gray-600 text-xs">Bid</p>
 
@@ -1748,7 +1750,7 @@ const MobileTradingApp = () => {
 
                 <div className="text-right">
 
-                  <p className="text-green-500 text-sm">{prices.ask?.toFixed(inst.category === 'Forex' ? 5 : 2) || '-'}</p>
+                  <p className="text-green-500 text-sm">{formatPrice(prices.ask, inst.symbol)}</p>
 
                   <p className="text-gray-600 text-xs">Ask</p>
 
@@ -1982,7 +1984,7 @@ const MobileTradingApp = () => {
 
                           </div>
 
-                          <p className="text-gray-500 text-xs">{trade.quantity} lots @ {trade.openPrice?.toFixed(5)}</p>
+                          <p className="text-gray-500 text-xs">{trade.quantity} lots @ {formatPrice(trade.openPrice, trade.symbol)}</p>
 
                         </div>
 
@@ -2012,7 +2014,7 @@ const MobileTradingApp = () => {
 
                           </p>
 
-                          <p className="text-gray-500 text-xs">{currentPrice?.toFixed(5) || '-'}</p>
+                          <p className="text-gray-500 text-xs">{formatPrice(currentPrice, trade.symbol)}</p>
 
                         </div>
 
@@ -2042,7 +2044,7 @@ const MobileTradingApp = () => {
 
                             <p className="text-gray-500">Open Price</p>
 
-                            <p className="text-white">{trade.openPrice?.toFixed(5)}</p>
+                            <p className="text-white">{formatPrice(trade.openPrice, trade.symbol)}</p>
 
                           </div>
 
@@ -2050,7 +2052,7 @@ const MobileTradingApp = () => {
 
                             <p className="text-gray-500">Current Price</p>
 
-                            <p className="text-white">{currentPrice?.toFixed(5) || '-'}</p>
+                            <p className="text-white">{formatPrice(currentPrice, trade.symbol)}</p>
 
                           </div>
 
@@ -2090,7 +2092,7 @@ const MobileTradingApp = () => {
 
                             <p className="text-gray-500">Stop Loss</p>
 
-                            <p className={trade.sl || trade.stopLoss ? 'text-red-500' : 'text-gray-600'}>{(trade.sl || trade.stopLoss)?.toFixed(5) || 'Not set'}</p>
+                            <p className={trade.sl || trade.stopLoss ? 'text-red-500' : 'text-gray-600'}>{(trade.sl || trade.stopLoss) ? formatPrice(trade.sl || trade.stopLoss, trade.symbol) : 'Not set'}</p>
 
                           </div>
 
@@ -2098,7 +2100,7 @@ const MobileTradingApp = () => {
 
                             <p className="text-gray-500">Take Profit</p>
 
-                            <p className={trade.tp || trade.takeProfit ? 'text-green-500' : 'text-gray-600'}>{(trade.tp || trade.takeProfit)?.toFixed(5) || 'Not set'}</p>
+                            <p className={trade.tp || trade.takeProfit ? 'text-green-500' : 'text-gray-600'}>{(trade.tp || trade.takeProfit) ? formatPrice(trade.tp || trade.takeProfit, trade.symbol) : 'Not set'}</p>
 
                           </div>
 
@@ -2206,7 +2208,7 @@ const MobileTradingApp = () => {
 
                       <p className="text-gray-500">Entry Price</p>
 
-                      <p className="text-white">{order.pendingPrice?.toFixed(5)}</p>
+                      <p className="text-white">{formatPrice(order.pendingPrice, order.symbol)}</p>
 
                     </div>
 
@@ -2214,7 +2216,7 @@ const MobileTradingApp = () => {
 
                       <p className="text-gray-500">Current</p>
 
-                      <p className="text-white">{currentPrice?.toFixed(5) || '-'}</p>
+                      <p className="text-white">{formatPrice(currentPrice, order.symbol)}</p>
 
                     </div>
 
@@ -2230,7 +2232,7 @@ const MobileTradingApp = () => {
 
                       <p className="text-gray-500">Stop Loss</p>
 
-                      <p className={order.sl || order.stopLoss ? 'text-red-500' : 'text-gray-600'}>{(order.sl || order.stopLoss)?.toFixed(5) || 'Not set'}</p>
+                      <p className={order.sl || order.stopLoss ? 'text-red-500' : 'text-gray-600'}>{(order.sl || order.stopLoss) ? formatPrice(order.sl || order.stopLoss, order.symbol) : 'Not set'}</p>
 
                     </div>
 
@@ -2238,7 +2240,7 @@ const MobileTradingApp = () => {
 
                       <p className="text-gray-500">Take Profit</p>
 
-                      <p className={order.tp || order.takeProfit ? 'text-green-500' : 'text-gray-600'}>{(order.tp || order.takeProfit)?.toFixed(5) || 'Not set'}</p>
+                      <p className={order.tp || order.takeProfit ? 'text-green-500' : 'text-gray-600'}>{(order.tp || order.takeProfit) ? formatPrice(order.tp || order.takeProfit, order.symbol) : 'Not set'}</p>
 
                     </div>
 
@@ -2373,7 +2375,7 @@ const MobileTradingApp = () => {
                         <div className="grid grid-cols-2 gap-2 text-xs mb-1">
                           <div className="flex justify-between">
                             <span className="text-gray-500">Open Price</span>
-                            <span className="text-gray-300">{item.openPrice?.toFixed(5) || '-'}</span>
+                            <span className="text-gray-300">{formatPrice(item.openPrice, item.symbol)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-500">Open Time</span>
@@ -2383,7 +2385,7 @@ const MobileTradingApp = () => {
                         <div className="grid grid-cols-2 gap-2 text-xs mb-1">
                           <div className="flex justify-between">
                             <span className="text-gray-500">Close Price</span>
-                            <span className="text-gray-300">{item.closePrice?.toFixed(5) || '-'}</span>
+                            <span className="text-gray-300">{formatPrice(item.closePrice, item.symbol)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-500">Close Time</span>
@@ -2631,7 +2633,7 @@ const MobileTradingApp = () => {
 
             <p className="text-gray-500 text-[10px]">Bid</p>
 
-            <p className="text-red-500 font-semibold text-sm">{getPrice(activeChartTab).bid?.toFixed(decimals) || '-'}</p>
+            <p className="text-red-500 font-semibold text-sm">{formatPrice(getPrice(activeChartTab).bid, activeChartTab)}</p>
 
           </div>
 
@@ -2681,7 +2683,7 @@ const MobileTradingApp = () => {
 
             <p className="text-gray-500 text-[10px]">Ask</p>
 
-            <p className="text-green-500 font-semibold text-sm">{getPrice(activeChartTab).ask?.toFixed(decimals) || '-'}</p>
+            <p className="text-green-500 font-semibold text-sm">{formatPrice(getPrice(activeChartTab).ask, activeChartTab)}</p>
 
           </div>
 
@@ -3091,7 +3093,7 @@ const MobileTradingApp = () => {
 
                   <p className="text-white text-lg font-bold">
 
-                    {getPrice(selectedInstrument.symbol).bid?.toFixed(selectedInstrument.category === 'Forex' ? 5 : 2) || '-'}
+                    {formatPrice(getPrice(selectedInstrument.symbol).bid, selectedInstrument.symbol)}
 
                   </p>
 
@@ -3111,7 +3113,7 @@ const MobileTradingApp = () => {
 
                   <p className="text-white text-lg font-bold">
 
-                    {getPrice(selectedInstrument.symbol).ask?.toFixed(selectedInstrument.category === 'Forex' ? 5 : 2) || '-'}
+                    {formatPrice(getPrice(selectedInstrument.symbol).ask, selectedInstrument.symbol)}
 
                   </p>
 

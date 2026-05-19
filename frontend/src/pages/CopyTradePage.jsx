@@ -10,6 +10,7 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import { API_URL } from '../config/api'
 import logoImage from '../assets/logo.png'
+import { formatPrice } from '../utils/formatPrice'
 
 const CopyTradePage = () => {
   const navigate = useNavigate()
@@ -774,8 +775,8 @@ const CopyTradePage = () => {
                           <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.symbol}</td>
                           <td className={`px-4 py-3 text-sm ${trade.side === 'BUY' ? 'text-green-500' : 'text-red-500'}`}>{trade.side}</td>
                           <td className="px-4 py-3 text-white text-sm">{trade.followerLotSize}</td>
-                          <td className="px-4 py-3 text-white text-sm">{trade.followerOpenPrice?.toFixed(5)}</td>
-                          <td className="px-4 py-3 text-white text-sm">{trade.followerClosePrice?.toFixed(5) || '-'}</td>
+                          <td className="px-4 py-3 text-white text-sm">{formatPrice(trade.followerOpenPrice, trade.symbol)}</td>
+                          <td className="px-4 py-3 text-white text-sm">{formatPrice(trade.followerClosePrice, trade.symbol)}</td>
                           <td className={`px-4 py-3 text-sm font-medium ${trade.followerPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             ${trade.followerPnl?.toFixed(2) || '0.00'}
                           </td>

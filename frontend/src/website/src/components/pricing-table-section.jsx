@@ -1,6 +1,7 @@
 ﻿
 import { useState, useEffect } from "react"
 import { TrendingUp, TrendingDown } from "lucide-react"
+import { formatPrice } from "../../../utils/formatPrice"
 
 const instruments = [
   { name: "EURUSD", bid: 1.15602, ask: 1.15606, change: -0.30, category: "Forex" },
@@ -95,10 +96,10 @@ export function PricingTableSection() {
                       </div>
                     </td>
                     <td className="py-3 px-3 sm:py-4 sm:px-6 text-right font-mono text-xs sm:text-sm text-foreground">
-                      {instrument.bid.toFixed(instrument.bid > 100 ? 2 : 5)}
+                      {formatPrice(instrument.bid, instrument.name)}
                     </td>
                     <td className="py-3 px-3 sm:py-4 sm:px-6 text-right font-mono text-xs sm:text-sm text-foreground">
-                      {instrument.ask.toFixed(instrument.ask > 100 ? 2 : 5)}
+                      {formatPrice(instrument.ask, instrument.name)}
                     </td>
                     <td className="py-3 px-3 sm:py-4 sm:px-6 text-right">
                       <div className={`inline-flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${

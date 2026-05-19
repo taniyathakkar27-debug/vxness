@@ -1062,7 +1062,7 @@ const TradingPage = () => {
 
               pendingData.executedTrades.forEach(et => {
 
-                setTradeSuccess(`${et.orderType} executed: ${et.symbol} ${et.side} @ ${et.executionPrice?.toFixed(5)}`)
+                setTradeSuccess(`${et.orderType} executed: ${et.symbol} ${et.side} @ ${formatTradePrice(et.symbol, et.executionPrice)}`)
 
               })
 
@@ -3872,11 +3872,11 @@ const TradingPage = () => {
 
                         <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{order.quantity}</td>
 
-                        <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{order.pendingPrice?.toFixed(5)}</td>
+                        <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatTradePrice(order.symbol, order.pendingPrice)}</td>
 
-                        <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{order.stopLoss || '-'}</td>
+                        <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{order.stopLoss ? formatTradePrice(order.symbol, order.stopLoss) : '-'}</td>
 
-                        <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{order.takeProfit || '-'}</td>
+                        <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{order.takeProfit ? formatTradePrice(order.symbol, order.takeProfit) : '-'}</td>
 
                         <td className="py-2 px-3">
 

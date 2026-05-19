@@ -68,6 +68,8 @@ import { API_URL } from '../config/api'
 
 import logoImage from '../assets/logo.png'
 
+import { formatPrice } from '../utils/formatPrice'
+
 
 
 const OrderBook = () => {
@@ -664,9 +666,9 @@ const OrderBook = () => {
 
       trade.quantity,
 
-      trade.openPrice?.toFixed(5),
+      formatPrice(trade.openPrice, trade.symbol),
 
-      trade.closePrice?.toFixed(5) || '-',
+      trade.closePrice ? formatPrice(trade.closePrice, trade.symbol) : '-',
 
       (trade.realizedPnl || calculateFloatingPnl(trade)).toFixed(2),
 
@@ -1266,7 +1268,7 @@ const OrderBook = () => {
 
                               <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.quantity}</td>
 
-                              <td className="py-3 px-4 text-gray-400">{trade.openPrice?.toFixed(5)}</td>
+                              <td className="py-3 px-4 text-gray-400">{formatPrice(trade.openPrice, trade.symbol)}</td>
 
                               <td className="py-3 px-4 text-gray-400 text-xs">
                                 {trade.openedAt || trade.createdAt ? (
@@ -1277,7 +1279,7 @@ const OrderBook = () => {
                                 ) : '-'}
                               </td>
 
-                              <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{currentPrice?.toFixed(5) || '-'}</td>
+                              <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{formatPrice(currentPrice, trade.symbol)}</td>
 
                               <td className="py-3 px-4 text-red-500 text-sm">${(trade.commission || 0).toFixed(2)}</td>
 
@@ -1577,8 +1579,8 @@ const OrderBook = () => {
                                 </div>
                                 {trade.openPrice && (
                                   <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                                    <span>Open: {trade.openPrice?.toFixed(5)}</span>
-                                    {trade.closePrice && <span>Close: {trade.closePrice?.toFixed(5)}</span>}
+                                    <span>Open: {formatPrice(trade.openPrice, trade.symbol)}</span>
+                                    {trade.closePrice && <span>Close: {formatPrice(trade.closePrice, trade.symbol)}</span>}
                                   </div>
                                 )}
                               </div>
@@ -1650,7 +1652,7 @@ const OrderBook = () => {
 
                                   <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.quantity || '-'}</td>
 
-                                  <td className="py-3 px-4 text-gray-400">{trade.openPrice?.toFixed(5) || '-'}</td>
+                                  <td className="py-3 px-4 text-gray-400">{formatPrice(trade.openPrice, trade.symbol)}</td>
 
                                   <td className="py-3 px-4 text-red-500 text-sm">${(trade.commission || 0).toFixed(2)}</td>
 
@@ -1663,7 +1665,7 @@ const OrderBook = () => {
                                     ) : '-'}
                                   </td>
 
-                                  <td className="py-3 px-4 text-gray-400">{trade.closePrice?.toFixed(5) || '-'}</td>
+                                  <td className="py-3 px-4 text-gray-400">{formatPrice(trade.closePrice, trade.symbol)}</td>
 
                                   <td className="py-3 px-4 text-gray-400 text-xs">
                                     {trade.closedAt ? (
@@ -1925,7 +1927,7 @@ const OrderBook = () => {
 
                             <td className={`py-3 px-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{order.quantity}</td>
 
-                            <td className="py-3 px-4 text-gray-400">{order.limitPrice?.toFixed(5) || order.stopPrice?.toFixed(5)}</td>
+                            <td className="py-3 px-4 text-gray-400">{order.limitPrice ? formatPrice(order.limitPrice, order.symbol) : formatPrice(order.stopPrice, order.symbol)}</td>
 
                             <td className="py-3 px-4">
 

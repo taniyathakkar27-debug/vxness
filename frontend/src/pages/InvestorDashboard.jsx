@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { API_URL } from '../config/api'
 import priceStreamService from '../services/priceStream'
+import { formatPrice } from '../utils/formatPrice'
 
 const InvestorDashboard = () => {
   const { accountId } = useParams()
@@ -237,8 +238,8 @@ const InvestorDashboard = () => {
                           </span>
                         </td>
                         <td className="py-4 px-4 text-white">{trade.quantity}</td>
-                        <td className="py-4 px-4 text-gray-400">${trade.openPrice?.toFixed(5)}</td>
-                        <td className="py-4 px-4 text-gray-400">${currentPrice?.toFixed(5)}</td>
+                        <td className="py-4 px-4 text-gray-400">{formatPrice(trade.openPrice, trade.symbol)}</td>
+                        <td className="py-4 px-4 text-gray-400">{formatPrice(currentPrice, trade.symbol)}</td>
                         <td className={`py-4 px-4 font-medium ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                           {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                         </td>
@@ -282,11 +283,11 @@ const InvestorDashboard = () => {
                       </div>
                       <div>
                         <span className="text-gray-500">Open:</span>
-                        <span className="text-gray-300 ml-2">${trade.openPrice?.toFixed(5)}</span>
+                        <span className="text-gray-300 ml-2">{formatPrice(trade.openPrice, trade.symbol)}</span>
                       </div>
                       <div>
                         <span className="text-gray-500">Current:</span>
-                        <span className="text-gray-300 ml-2">${currentPrice?.toFixed(5)}</span>
+                        <span className="text-gray-300 ml-2">{formatPrice(currentPrice, trade.symbol)}</span>
                       </div>
                     </div>
                   </div>
@@ -332,8 +333,8 @@ const InvestorDashboard = () => {
                         </span>
                       </td>
                       <td className="py-4 px-4 text-white">{trade.quantity}</td>
-                      <td className="py-4 px-4 text-gray-400">${trade.openPrice?.toFixed(5)}</td>
-                      <td className="py-4 px-4 text-gray-400">${trade.closePrice?.toFixed(5)}</td>
+                      <td className="py-4 px-4 text-gray-400">{formatPrice(trade.openPrice, trade.symbol)}</td>
+                      <td className="py-4 px-4 text-gray-400">{formatPrice(trade.closePrice, trade.symbol)}</td>
                       <td className={`py-4 px-4 font-medium ${(trade.realizedPnl || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                         {(trade.realizedPnl || 0) >= 0 ? '+' : ''}${(trade.realizedPnl || 0).toFixed(2)}
                       </td>
@@ -381,11 +382,11 @@ const InvestorDashboard = () => {
                     </div>
                     <div>
                       <span className="text-gray-500">Open:</span>
-                      <span className="text-gray-300 ml-2">${trade.openPrice?.toFixed(5)}</span>
+                      <span className="text-gray-300 ml-2">{formatPrice(trade.openPrice, trade.symbol)}</span>
                     </div>
                     <div>
                       <span className="text-gray-500">Close:</span>
-                      <span className="text-gray-300 ml-2">${trade.closePrice?.toFixed(5)}</span>
+                      <span className="text-gray-300 ml-2">{formatPrice(trade.closePrice, trade.symbol)}</span>
                     </div>
                     <div>
                       <span className="text-gray-500">Time:</span>

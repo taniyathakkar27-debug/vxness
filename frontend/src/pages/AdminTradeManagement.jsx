@@ -74,6 +74,8 @@ import priceStreamService from '../services/priceStream'
 
 import { API_URL } from '../config/api'
 
+import { formatPrice } from '../utils/formatPrice'
+
 
 
 
@@ -2183,7 +2185,7 @@ const AdminTradeManagement = () => {
 
 
 
-                      <p className="text-white">${trade.openPrice?.toFixed(5)}</p>
+                      <p className="text-white">{formatPrice(trade.openPrice, trade.symbol)}</p>
 
 
 
@@ -2424,7 +2426,7 @@ const AdminTradeManagement = () => {
 
 
 
-                      <td className="py-4 px-4 text-gray-400">${trade.openPrice?.toFixed(5)}</td>
+                      <td className="py-4 px-4 text-gray-400">{formatPrice(trade.openPrice, trade.symbol)}</td>
 
 
 
@@ -3226,11 +3228,11 @@ const AdminTradeManagement = () => {
 
 
 
-                    <p className="text-red-500">Bid: {marketPrices[createForm.symbol].bid?.toFixed(5)}</p>
+                    <p className="text-red-500">Bid: {formatPrice(marketPrices[createForm.symbol].bid, createForm.symbol)}</p>
 
 
 
-                    <p className="text-green-500">Ask: {marketPrices[createForm.symbol].ask?.toFixed(5)}</p>
+                    <p className="text-green-500">Ask: {formatPrice(marketPrices[createForm.symbol].ask, createForm.symbol)}</p>
 
 
 
