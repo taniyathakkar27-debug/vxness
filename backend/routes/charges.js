@@ -59,51 +59,43 @@ router.get('/spreads', async (req, res) => {
   }
 })
 
-// GET /api/charges/commissions - Per-instrument commission for trading UI (admin-configured only)
+// GET /api/charges/commissions — same merged commission lookup as tradeEngine.
+// Returns the effective commission for the current account type / user (admin-configured only).
+// Query: accountTypeId, userId, symbols (comma-separated, e.g. from /prices/instruments)
 router.get('/commissions', async (req, res) => {
   try {
-    const charges = await Charges.find({ isActive: true, commissionValue: { $gt: 0 } })
-      .sort({ level: 1 })
+    const userId = req.query.userId ? String(req.query.userId) : ''
+    const accountTypeId = req.query.accountTypeId ? String(req.query.accountTypeId) : ''
+    const fromClient = req.query.symbols
+      ? String(req.query.symbols).split(',').map((x) => normInstrumentKey(x.trim())).filter(Boolean)
+      : []
+    const symbols = [...new Set([...fromClient, ...DEFAULT_SPREAD_SYMBOLS])]
 
+    const allCharges = await Charges.find({ isActive: true }).sort({ createdAt: -1 })
+
+    let commissionFallback = 0
+    if (accountTypeId) {
+      const at = await AccountType.findById(accountTypeId).select('commission')
+      if (at && at.commission > 0) commissionFallback = at.commission
+    }
+
+    const atid = accountTypeId || null
     const commissionMap = {}
-    const priorityOrder = { USER: 1, INSTRUMENT: 2, ACCOUNT_TYPE: 3, SEGMENT: 4, GLOBAL: 5 }
 
-    const segmentSymbols = {
-      Forex: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD', 'EURGBP', 'EURJPY', 'GBPJPY'],
-      Metals: ['XAUUSD', 'XAGUSD'],
-      Crypto: ['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BNBUSD', 'SOLUSD', 'ADAUSD', 'DOGEUSD', 'DOTUSD', 'MATICUSD', 'AVAXUSD', 'LINKUSD'],
-      Indices: ['US30', 'US500', 'NAS100'],
-    }
-    const allSymbols = [
-      'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD', 'EURGBP', 'EURJPY', 'GBPJPY',
-      'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD',
-    ]
-
-    const assign = (symbol, charge) => {
-      const existing = commissionMap[symbol]
-      if (!existing || priorityOrder[charge.level] < priorityOrder[existing.level]) {
-        commissionMap[symbol] = {
-          commission: charge.commissionValue,
-          commissionType: charge.commissionType,
-          level: charge.level,
-        }
-      }
-    }
-
-    for (const charge of charges) {
-      if (charge.instrumentSymbol) {
-        const key = normInstrumentKey(charge.instrumentSymbol)
-        if (key) assign(key, charge)
-      } else if (charge.segment) {
-        const symbols = segmentSymbols[charge.segment] || []
-        for (const symbol of symbols) {
-          assign(symbol, charge)
-        }
-      } else if (charge.level === 'GLOBAL') {
-        for (const symbol of allSymbols) {
-          if (!commissionMap[symbol]) {
-            assign(symbol, charge)
-          }
+    for (const symbol of symbols) {
+      const seg = resolveTradeSegment(symbol)
+      const merged = await Charges.getChargesForTrade(userId, symbol, seg, atid, allCharges)
+      let cv = merged.commissionValue > 0 ? merged.commissionValue : 0
+      const ct = merged.commissionType || 'PER_LOT'
+      if (!cv && commissionFallback > 0) cv = commissionFallback
+      if (cv > 0) {
+        commissionMap[normInstrumentKey(symbol)] = {
+          commission: cv,
+          commissionType: ct,
+          commissionOnBuy: merged.commissionOnBuy,
+          commissionOnSell: merged.commissionOnSell,
+          commissionOnClose: merged.commissionOnClose,
+          level: 'RESOLVED',
         }
       }
     }

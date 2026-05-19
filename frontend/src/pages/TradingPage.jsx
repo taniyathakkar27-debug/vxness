@@ -283,7 +283,17 @@ const TradingPage = () => {
 
     try {
 
-      const res = await fetch(`${API_URL}/charges/commissions`)
+      const qs = new URLSearchParams()
+
+      if (accountTypeKeyForCharges) qs.set('accountTypeId', accountTypeKeyForCharges)
+
+      if (user?._id) qs.set('userId', String(user._id))
+
+      if (instrumentsSymbolsParam) qs.set('symbols', instrumentsSymbolsParam)
+
+      const suffix = qs.toString() ? `?${qs.toString()}` : ''
+
+      const res = await fetch(`${API_URL}/charges/commissions${suffix}`)
 
       const data = await res.json()
 
@@ -295,7 +305,7 @@ const TradingPage = () => {
 
     }
 
-  }, [])
+  }, [accountTypeKeyForCharges, user?._id, instrumentsSymbolsParam])
 
 
 

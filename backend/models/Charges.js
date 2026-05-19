@@ -181,9 +181,22 @@ chargesSchema.statics.getChargesForTrade = async function(userId, symbol, segmen
   
   // Priority order for merging
   const priorityOrder = { 'USER': 1, 'INSTRUMENT': 2, 'ACCOUNT_TYPE': 3, 'SEGMENT': 4, 'GLOBAL': 5 }
-  
-  // Sort by priority (most specific first)
-  applicableCharges.sort((a, b) => priorityOrder[a.level] - priorityOrder[b.level])
+
+  // Tie-break: within the same level, prefer charges scoped to this account type
+  // (e.g. INSTRUMENT+accountTypeId beats plain INSTRUMENT). Without this, the order
+  // depends on createdAt and account-type-specific commissions can be silently shadowed.
+  const accountTypeIdStr = accountTypeId?.toString?.()
+  const matchesAccountType = (c) =>
+    c.accountTypeId && accountTypeIdStr && c.accountTypeId.toString() === accountTypeIdStr
+
+  // Sort by priority (most specific first), then by account-type specificity within the same level
+  applicableCharges.sort((a, b) => {
+    const dp = priorityOrder[a.level] - priorityOrder[b.level]
+    if (dp !== 0) return dp
+    const aMatch = matchesAccountType(a) ? 1 : 0
+    const bMatch = matchesAccountType(b) ? 1 : 0
+    return bMatch - aMatch
+  })
   
   // Merge charges - most specific wins for each field
   const result = {
