@@ -32,6 +32,10 @@ class PriceStreamService {
       this.reconnectAttempts = 0
       // Subscribe to price stream
       this.socket.emit('subscribePrices')
+      // Fire charges listeners so UI refetches fresh spreads/commissions after backend redeploy / reconnect.
+      this.chargesListeners.forEach((cb) => {
+        try { cb({ reason: 'reconnect' }) } catch (e) { console.error('[PriceStream] charges reconnect cb error:', e) }
+      })
     })
 
     this.socket.on('priceStream', (data) => {

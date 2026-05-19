@@ -263,7 +263,7 @@ const TradingPage = () => {
 
       const suffix = qs.toString() ? `?${qs.toString()}` : ''
 
-      const res = await fetch(`${API_URL}/charges/spreads${suffix}`)
+      const res = await fetch(`${API_URL}/charges/spreads${suffix}`, { cache: 'no-store' })
 
       const data = await res.json()
 
@@ -293,7 +293,7 @@ const TradingPage = () => {
 
       const suffix = qs.toString() ? `?${qs.toString()}` : ''
 
-      const res = await fetch(`${API_URL}/charges/commissions${suffix}`)
+      const res = await fetch(`${API_URL}/charges/commissions${suffix}`, { cache: 'no-store' })
 
       const data = await res.json()
 

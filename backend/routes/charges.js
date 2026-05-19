@@ -12,6 +12,14 @@ const emitChargesUpdated = (req, payload = {}) => {
   try { req.app.get('io')?.emit('chargesUpdated', { at: Date.now(), ...payload }) } catch {}
 }
 
+// Live trading config — never let Cloudflare/proxies cache a stale response.
+router.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.set('Pragma', 'no-cache')
+  res.set('Expires', '0')
+  next()
+})
+
 // Default symbol universe (merged with ?symbols= from client instruments list)
 const DEFAULT_SPREAD_SYMBOLS = [
   'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD', 'EURGBP', 'EURJPY', 'GBPJPY',
