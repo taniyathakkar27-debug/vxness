@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Search,
   User,
-  Info,
   TrendingUp,
   Moon
 } from 'lucide-react'
@@ -188,29 +187,7 @@ const AdminForexCharges = () => {
     return 'GLOBAL'
   }
 
-  // Commission and Spread can't coexist on the same instrument. Returns the conflicting
-  // charge if found, or null. `currentType` is 'commission' | 'spread'.
-  const findConflictingCharge = (instrumentSymbol, currentType, excludeId = null) => {
-    if (!instrumentSymbol) return null
-    const conflictingField = currentType === 'commission' ? 'spreadValue' : 'commissionValue'
-    return charges.find(c =>
-      c.instrumentSymbol === instrumentSymbol &&
-      Number(c[conflictingField]) > 0 &&
-      c._id !== excludeId
-    ) || null
-  }
-
   const handleSave = async () => {
-    // Block save when commission and spread would collide on the same instrument
-    if (modalType === 'commission' || modalType === 'spread') {
-      const conflict = findConflictingCharge(form.instrumentSymbol, modalType, editingCharge?._id)
-      if (conflict) {
-        const otherType = modalType === 'commission' ? 'Spread' : 'Commission'
-        toast.error(`${form.instrumentSymbol} already has ${otherType} configured. Remove it before adding ${modalType === 'commission' ? 'Commission' : 'Spread'}.`)
-        return
-      }
-    }
-
     try {
       const url = editingCharge
         ? `${API_URL}/charges/${editingCharge._id}`
@@ -421,17 +398,13 @@ const AdminForexCharges = () => {
     </div>
   )
 
-  const activeConflict = (modalType === 'commission' || modalType === 'spread')
-    ? findConflictingCharge(form.instrumentSymbol, modalType, editingCharge?._id)
-    : null
-
   const instrumentSelectEl = (
     <div>
       {forexSubcategoryPills}
       <select
         value={form.instrumentSymbol}
         onChange={handleInstrumentSymbolChange}
-        className={`${instrumentSelectClass} ${activeConflict ? 'border-red-500/60' : ''}`}
+        className={instrumentSelectClass}
       >
         <option value="">All Instruments</option>
         {getInstrumentOptGroups(instruments, form.segment || null, forexSubcategory).map(({ category, items }) => (
@@ -450,16 +423,6 @@ const AdminForexCharges = () => {
           </optgroup>
         ))}
       </select>
-      {activeConflict && (
-        <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
-          <Info size={14} className="text-red-400 mt-0.5 flex-shrink-0" />
-          <p className="text-red-300 text-xs">
-            <span className="font-semibold">{form.instrumentSymbol}</span> already has{' '}
-            <span className="font-semibold">{modalType === 'commission' ? 'Spread' : 'Commission'}</span> configured.
-            Remove it before adding {modalType === 'commission' ? 'Commission' : 'Spread'}.
-          </p>
-        </div>
-      )}
     </div>
   )
 
@@ -862,7 +825,7 @@ const AdminForexCharges = () => {
               
               <div className="flex gap-3 pt-2 border-t border-gray-700/40 mt-2 pt-4">
                 <button onClick={() => setModalType(null)} className="flex-1 py-2.5 bg-dark-700 hover:bg-dark-600 text-white rounded-xl text-sm font-medium border border-gray-700/50 transition-colors">Cancel</button>
-                <button onClick={handleSave} disabled={!!activeConflict} className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
+                <button onClick={handleSave} className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
                   <Save size={14} />
                   Save
                 </button>
@@ -999,7 +962,7 @@ const AdminForexCharges = () => {
               
               <div className="flex gap-3 pt-2 border-t border-gray-700/40 mt-2 pt-4">
                 <button onClick={() => setModalType(null)} className="flex-1 py-2.5 bg-dark-700 hover:bg-dark-600 text-white rounded-xl text-sm font-medium border border-gray-700/50 transition-colors">Cancel</button>
-                <button onClick={handleSave} disabled={!!activeConflict} className="flex-1 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
+                <button onClick={handleSave} className="flex-1 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2">
                   <Save size={14} />
                   Save
                 </button>
