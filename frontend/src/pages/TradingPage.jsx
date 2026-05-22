@@ -261,11 +261,23 @@ const TradingPage = () => {
 
       if (instrumentsSymbolsParam) qs.set('symbols', instrumentsSymbolsParam)
 
+      // Cache buster — guarantees we never see a stale browser/proxy-cached response when admin deletes a charge
+
+      qs.set('_t', String(Date.now()))
+
       const suffix = qs.toString() ? `?${qs.toString()}` : ''
 
-      const res = await fetch(`${API_URL}/charges/spreads${suffix}`, { cache: 'no-store' })
+      const res = await fetch(`${API_URL}/charges/spreads${suffix}`, {
+
+        cache: 'no-store',
+
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+
+      })
 
       const data = await res.json()
+
+      // Always replace (never merge) — keys missing from the new response mean those spreads were deleted
 
       if (data.success) setAdminSpreads(data.spreads || {})
 
@@ -291,9 +303,17 @@ const TradingPage = () => {
 
       if (instrumentsSymbolsParam) qs.set('symbols', instrumentsSymbolsParam)
 
+      qs.set('_t', String(Date.now()))
+
       const suffix = qs.toString() ? `?${qs.toString()}` : ''
 
-      const res = await fetch(`${API_URL}/charges/commissions${suffix}`, { cache: 'no-store' })
+      const res = await fetch(`${API_URL}/charges/commissions${suffix}`, {
+
+        cache: 'no-store',
+
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+
+      })
 
       const data = await res.json()
 
@@ -474,20 +494,94 @@ const TradingPage = () => {
 
 
 
-  // Live refresh: admin se charge save/update/delete hone par socket event pe instant refetch.
+  // Live refresh: jab admin se koi charge create/update/delete hota hai, socket event aate hi
+  // user trading panel auto-refresh ho jata hai with the latest spread/commission values.
+  // Optimistic clear on delete guarantees the stale entry vanishes immediately, even before refetch.
   useEffect(() => {
 
     if (kycAllowed !== true) return
 
-    const unsubscribe = priceStreamService.onChargesUpdated(() => {
+    const unsubscribe = priceStreamService.onChargesUpdated((payload) => {
+
+      if (payload?.action === 'delete') {
+
+        setAdminSpreads({})
+
+        setAdminCommissions({})
+
+      }
+
+      // Refresh charges + any data that displays/uses them, so the UI is fully in sync.
 
       fetchAdminSpreads()
 
       fetchAdminCommissions()
 
+      try { fetchOpenTrades?.() } catch {}
+
+      try { fetchPendingOrders?.() } catch {}
+
+      try { fetchAccountSummary?.() } catch {}
+
+      // Skip the toast on the very first auto-sync that fires when the socket connects (payload.reason === 'reconnect').
+
+      if (payload?.reason !== 'reconnect') {
+
+        const action = payload?.action
+
+        const msg = action === 'delete'
+
+          ? 'Trading charges updated (a charge was removed)'
+
+          : action === 'create'
+
+            ? 'Trading charges updated (a new charge was added)'
+
+            : 'Trading charges updated'
+
+        toast.success(msg, { id: 'charges-updated', duration: 2500 })
+
+      }
+
     })
 
     return unsubscribe
+
+  }, [kycAllowed, fetchAdminSpreads, fetchAdminCommissions])
+
+
+
+  // Safety net: refetch charges when the tab regains focus / becomes visible.
+
+  // Covers cases where a socket event was missed (network blip, suspended tab, etc).
+
+  useEffect(() => {
+
+    if (kycAllowed !== true) return
+
+    const handleVisible = () => {
+
+      if (document.visibilityState === 'visible') {
+
+        fetchAdminSpreads()
+
+        fetchAdminCommissions()
+
+      }
+
+    }
+
+    window.addEventListener('focus', handleVisible)
+
+    document.addEventListener('visibilitychange', handleVisible)
+
+    return () => {
+
+      window.removeEventListener('focus', handleVisible)
+
+      document.removeEventListener('visibilitychange', handleVisible)
+
+    }
 
   }, [kycAllowed, fetchAdminSpreads, fetchAdminCommissions])
 
@@ -2861,7 +2955,11 @@ const TradingPage = () => {
 
               <span className={`ml-3 text-xs ${accountType === 'challenge' ? 'text-yellow-500' : 'text-teal-400'}`}>
 
-                {accountType === 'challenge' ? 'Challenge' : 'Standard'} - {account?.accountId}
+                {accountType === 'challenge'
+
+                  ? 'Challenge'
+
+                  : (account?.accountTypeId?.name || account?.accountTypeId?.displayName || 'Account')} - {account?.accountId}
 
               </span>
 
@@ -4867,7 +4965,7 @@ const TradingPage = () => {
 
           <div className="flex-1" />
 
-          {!isMobile && <span className="text-gray-400 shrink-0">Standard - {account?.accountId}</span>}
+          {!isMobile && <span className="text-gray-400 shrink-0">{accountType === 'challenge' ? 'Challenge' : (account?.accountTypeId?.name || 'Account')} - {account?.accountId}</span>}
 
           <span className="text-green-500 ml-2 sm:ml-3 shrink-0 flex items-center gap-1">
 

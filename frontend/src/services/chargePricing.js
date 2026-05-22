@@ -17,6 +17,8 @@ function getContractSize(symbol) {
   return 100000
 }
 
+// Spread value is interpreted in POINTS (smallest visible digit of the price), matching
+// MT4/MT5 convention. e.g. EURUSD (5 decimals) → 1 point = 0.00001, so spread=2 → +0.00002.
 function spreadToPriceDelta(spreadValue, spreadType, symbol, bid, ask) {
   const sym = (symbol || '').toUpperCase()
   const b = Number(bid)
@@ -29,10 +31,10 @@ function spreadToPriceDelta(spreadValue, spreadType, symbol, bid, ask) {
   const isJPYPair = sym.includes('JPY')
   const isMetal = sym.includes('XAU') || sym.includes('XAG') || sym.includes('XPT') || sym.includes('XPD')
   const isCrypto = CRYPTO_SYMBOLS.has(sym)
-  if (isCrypto) return spreadValue
-  if (isMetal) return spreadValue * 0.01
-  if (isJPYPair) return spreadValue * 0.01
-  return spreadValue * 0.0001
+  if (isCrypto) return spreadValue * 0.01       // crypto (e.g. BTCUSD 2 dec): 1 point = 0.01
+  if (isMetal) return spreadValue * 0.01        // metals (2 dec): 1 point = 0.01
+  if (isJPYPair) return spreadValue * 0.001     // JPY forex (3 dec): 1 point = 0.001
+  return spreadValue * 0.00001                  // standard forex (5 dec): 1 point = 0.00001
 }
 
 /**

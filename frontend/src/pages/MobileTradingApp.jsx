@@ -1294,7 +1294,7 @@ const MobileTradingApp = () => {
 
                 <p className="text-white font-medium text-sm">{selectedAccount.accountId}</p>
 
-                <p className="text-gray-400 text-xs">{selectedAccount.accountType || 'Standard'}</p>
+                <p className="text-gray-400 text-xs">{selectedAccount.accountTypeId?.name || selectedAccount.accountType || 'Account'}</p>
 
               </div>
 

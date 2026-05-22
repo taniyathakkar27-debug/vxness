@@ -17,7 +17,24 @@ import {
 } from 'lucide-react'
 import { API_URL } from '../config/api'
 
-const INSTRUMENT_SEGMENT_ORDER = ['Forex', 'Metals', 'Crypto', 'Indices', 'Commodities']
+const INSTRUMENT_SEGMENT_ORDER = ['Forex', 'Metals', 'Crypto', 'Commodities']
+
+const FOREX_MAJOR_PAIRS = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD']
+const FOREX_MAJOR_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'NZD', 'CAD']
+const FOREX_SUBCATEGORY_ORDER = ['Major', 'Minor', 'Exotic']
+
+function classifyForexPair(symbol) {
+  const clean = String(symbol || '').replace(/[\/\-_]/g, '').toUpperCase()
+  if (FOREX_MAJOR_PAIRS.includes(clean)) return 'Major'
+  if (clean.length === 6) {
+    const base = clean.substring(0, 3)
+    const quote = clean.substring(3, 6)
+    if (FOREX_MAJOR_CURRENCIES.includes(base) && FOREX_MAJOR_CURRENCIES.includes(quote)) {
+      return 'Minor'
+    }
+  }
+  return 'Exotic'
+}
 
 function sortCategories(categories) {
   return [...categories].sort((a, b) => {
@@ -27,19 +44,44 @@ function sortCategories(categories) {
   })
 }
 
-function getInstrumentOptGroups(instruments, segmentFilter) {
+function getInstrumentOptGroups(instruments, segmentFilter, forexSubcategoryFilter = 'all') {
   if (!instruments?.length) return []
   const cats = segmentFilter
     ? [segmentFilter].filter((c) => instruments.some((i) => i.category === c))
     : sortCategories([...new Set(instruments.map((i) => i.category))])
-  return cats
-    .map((category) => ({
-      category,
-      items: instruments
-        .filter((i) => i.category === category)
-        .sort((a, b) => a.symbol.localeCompare(b.symbol))
-    }))
-    .filter((g) => g.items.length > 0)
+
+  const groups = []
+  for (const category of cats) {
+    const items = instruments
+      .filter((i) => i.category === category)
+      .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    if (items.length === 0) continue
+
+    if (category === 'Forex') {
+      const buckets = { Major: [], Minor: [], Exotic: [] }
+      for (const item of items) {
+        buckets[classifyForexPair(item.symbol)].push(item)
+      }
+      // Keep Major sorted in the canonical pair order, then alphabetical for others
+      buckets.Major.sort((a, b) => {
+        const ia = FOREX_MAJOR_PAIRS.indexOf(a.symbol.replace(/[\/\-_]/g, '').toUpperCase())
+        const ib = FOREX_MAJOR_PAIRS.indexOf(b.symbol.replace(/[\/\-_]/g, '').toUpperCase())
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib)
+      })
+
+      const subsToShow = forexSubcategoryFilter && forexSubcategoryFilter !== 'all'
+        ? [forexSubcategoryFilter]
+        : FOREX_SUBCATEGORY_ORDER
+      for (const sub of subsToShow) {
+        if (buckets[sub]?.length > 0) {
+          groups.push({ category: `Forex — ${sub}`, items: buckets[sub] })
+        }
+      }
+    } else {
+      groups.push({ category, items })
+    }
+  }
+  return groups
 }
 
 const AdminForexCharges = () => {
@@ -54,6 +96,9 @@ const AdminForexCharges = () => {
   const [showUserDropdown, setShowUserDropdown] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
   const [selectedAccountType, setSelectedAccountType] = useState(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [forexSubcategory, setForexSubcategory] = useState('Major') // 'Major' | 'Minor' | 'Exotic'
   const [form, setForm] = useState({
     level: 'SEGMENT',
     segment: 'Forex',
@@ -77,6 +122,12 @@ const AdminForexCharges = () => {
     fetchAccountTypes()
     fetchInstruments()
   }, [])
+
+  useEffect(() => {
+    if (form.segment === 'Forex' && !['Major', 'Minor', 'Exotic'].includes(forexSubcategory)) {
+      setForexSubcategory('Major')
+    }
+  }, [form.segment])
 
   const fetchInstruments = async () => {
     try {
@@ -137,9 +188,31 @@ const AdminForexCharges = () => {
     return 'GLOBAL'
   }
 
+  // Commission and Spread can't coexist on the same instrument. Returns the conflicting
+  // charge if found, or null. `currentType` is 'commission' | 'spread'.
+  const findConflictingCharge = (instrumentSymbol, currentType, excludeId = null) => {
+    if (!instrumentSymbol) return null
+    const conflictingField = currentType === 'commission' ? 'spreadValue' : 'commissionValue'
+    return charges.find(c =>
+      c.instrumentSymbol === instrumentSymbol &&
+      Number(c[conflictingField]) > 0 &&
+      c._id !== excludeId
+    ) || null
+  }
+
   const handleSave = async () => {
+    // Block save when commission and spread would collide on the same instrument
+    if (modalType === 'commission' || modalType === 'spread') {
+      const conflict = findConflictingCharge(form.instrumentSymbol, modalType, editingCharge?._id)
+      if (conflict) {
+        const otherType = modalType === 'commission' ? 'Spread' : 'Commission'
+        toast.error(`${form.instrumentSymbol} already has ${otherType} configured. Remove it before adding ${modalType === 'commission' ? 'Commission' : 'Spread'}.`)
+        return
+      }
+    }
+
     try {
-      const url = editingCharge 
+      const url = editingCharge
         ? `${API_URL}/charges/${editingCharge._id}`
         : `${API_URL}/charges`
       const method = editingCharge ? 'PUT' : 'POST'
@@ -173,10 +246,15 @@ const AdminForexCharges = () => {
     }
   }
 
-  const handleDelete = async (chargeId) => {
-    if (!confirm('Are you sure you want to delete this charge?')) return
+  const handleDelete = (chargeId) => {
+    setDeleteConfirmId(chargeId)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return
+    setDeleting(true)
     try {
-      const res = await fetch(`${API_URL}/charges/${chargeId}`, { method: 'DELETE' })
+      const res = await fetch(`${API_URL}/charges/${deleteConfirmId}`, { method: 'DELETE' })
       const data = await res.json()
       if (data.success) {
         toast.success('Charge deleted!')
@@ -187,6 +265,8 @@ const AdminForexCharges = () => {
     } catch (error) {
       toast.error('Error deleting charge')
     }
+    setDeleting(false)
+    setDeleteConfirmId(null)
   }
 
   const openEditModal = (charge, type) => {
@@ -219,6 +299,12 @@ const AdminForexCharges = () => {
     } else {
       setSelectedAccountType(null)
     }
+    // Auto-select Forex sub-category so the editing instrument stays visible in the dropdown
+    if (charge.segment === 'Forex' && charge.instrumentSymbol) {
+      setForexSubcategory(classifyForexPair(charge.instrumentSymbol))
+    } else {
+      setForexSubcategory('Major')
+    }
     setModalType(type)
   }
 
@@ -242,6 +328,7 @@ const AdminForexCharges = () => {
     setSelectedUser(null)
     setSelectedAccountType(null)
     setUserSearch('')
+    setForexSubcategory('Major')
   }
 
   const selectUser = (user) => {
@@ -278,30 +365,113 @@ const AdminForexCharges = () => {
     }))
   }
 
-  const instrumentSelectEl = (
-    <select
-      value={form.instrumentSymbol}
-      onChange={handleInstrumentSymbolChange}
-      className={instrumentSelectClass}
-    >
-      <option value="">All Instruments</option>
-      {getInstrumentOptGroups(instruments, form.segment || null).map(({ category, items }) => (
-        <optgroup key={category} label={category}>
-          {items.map((inst) => {
-            const label =
-              inst.name && String(inst.name).trim() && inst.name !== inst.symbol
-                ? `${inst.symbol} (${inst.name})`
-                : inst.symbol
-            return (
-              <option key={inst.symbol} value={inst.symbol}>
-                {label}
-              </option>
-            )
-          })}
-        </optgroup>
-      ))}
-    </select>
+  const handleSubcategoryChange = (sub) => {
+    setForexSubcategory(sub)
+    // If the currently selected instrument no longer belongs to the chosen sub-bucket, clear it
+    if (form.instrumentSymbol) {
+      const inst = instruments.find((i) => i.symbol === form.instrumentSymbol)
+      if (inst?.category === 'Forex' && classifyForexPair(form.instrumentSymbol) !== sub) {
+        setForm((prev) => ({
+          ...prev,
+          instrumentSymbol: '',
+          level: prev.accountTypeId ? 'ACCOUNT_TYPE' : prev.segment ? 'SEGMENT' : 'GLOBAL'
+        }))
+      }
+    }
+  }
+
+  const FOREX_SUB_PILLS = [
+    {
+      key: 'Major',
+      label: 'Major',
+      active: 'bg-gradient-to-r from-emerald-500 to-green-600 text-white border-emerald-400 shadow-lg shadow-emerald-500/30',
+      inactive: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 hover:text-emerald-300'
+    },
+    {
+      key: 'Minor',
+      label: 'Minor',
+      active: 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-400 shadow-lg shadow-amber-500/30',
+      inactive: 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 hover:text-amber-300'
+    },
+    {
+      key: 'Exotic',
+      label: 'Exotic',
+      active: 'bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white border-fuchsia-400 shadow-lg shadow-fuchsia-500/30',
+      inactive: 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30 hover:bg-fuchsia-500/20 hover:text-fuchsia-300'
+    }
+  ]
+
+  const forexSubcategoryPills = form.segment === 'Forex' && (
+    <div className="flex flex-wrap gap-2 mb-2">
+      {FOREX_SUB_PILLS.map(({ key, label, active, inactive }) => {
+        const isActive = forexSubcategory === key
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => handleSubcategoryChange(key)}
+            className={`px-4 py-1.5 text-xs rounded-lg border font-semibold transition-all ${
+              isActive ? active : inactive
+            }`}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
   )
+
+  const activeConflict = (modalType === 'commission' || modalType === 'spread')
+    ? findConflictingCharge(form.instrumentSymbol, modalType, editingCharge?._id)
+    : null
+
+  const instrumentSelectEl = (
+    <div>
+      {forexSubcategoryPills}
+      <select
+        value={form.instrumentSymbol}
+        onChange={handleInstrumentSymbolChange}
+        className={`${instrumentSelectClass} ${activeConflict ? 'border-red-500/60' : ''}`}
+      >
+        <option value="">All Instruments</option>
+        {getInstrumentOptGroups(instruments, form.segment || null, forexSubcategory).map(({ category, items }) => (
+          <optgroup key={category} label={category}>
+            {items.map((inst) => {
+              const label =
+                inst.name && String(inst.name).trim() && inst.name !== inst.symbol
+                  ? `${inst.symbol} (${inst.name})`
+                  : inst.symbol
+              return (
+                <option key={inst.symbol} value={inst.symbol}>
+                  {label}
+                </option>
+              )
+            })}
+          </optgroup>
+        ))}
+      </select>
+      {activeConflict && (
+        <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+          <Info size={14} className="text-red-400 mt-0.5 flex-shrink-0" />
+          <p className="text-red-300 text-xs">
+            <span className="font-semibold">{form.instrumentSymbol}</span> already has{' '}
+            <span className="font-semibold">{modalType === 'commission' ? 'Spread' : 'Commission'}</span> configured.
+            Remove it before adding {modalType === 'commission' ? 'Commission' : 'Spread'}.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+
+  const getSegmentBadgeClass = (segment) => {
+    switch (segment) {
+      case 'Forex': return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+      case 'Metals': return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+      case 'Crypto': return 'bg-orange-500/15 text-orange-300 border-orange-500/30'
+      case 'Commodities': return 'bg-teal-500/15 text-teal-300 border-teal-500/30'
+      default: return 'bg-gray-600/30 text-gray-300 border-gray-600/40'
+    }
+  }
 
   const getLevelLabel = (charge) => {
     if (charge.level === 'USER') {
@@ -311,11 +481,41 @@ const AdminForexCharges = () => {
       return `${userName} - ${charge.instrumentSymbol || 'All Instruments'}`
     }
     if (charge.level === 'INSTRUMENT') {
-      return charge.segment ? `${charge.instrumentSymbol} · ${charge.segment}` : charge.instrumentSymbol
+      return charge.instrumentSymbol
     }
     if (charge.level === 'SEGMENT') return charge.segment
     if (charge.level === 'GLOBAL') return 'Global'
     return charge.level
+  }
+
+  const getAccountTypeName = (charge) => {
+    const at = charge.accountTypeId
+    if (!at) return 'Global'
+    if (typeof at === 'object') return at.name || 'Global'
+    const found = accountTypes.find(a => String(a._id) === String(at))
+    return found?.name || 'Global'
+  }
+
+  // Deterministic color per account-type name so admins can scan by color at a glance.
+  const ACCOUNT_TYPE_PALETTE = [
+    'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
+    'bg-pink-500/10 text-pink-300 border-pink-500/30',
+    'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
+    'bg-rose-500/10 text-rose-300 border-rose-500/30',
+    'bg-lime-500/10 text-lime-300 border-lime-500/30',
+    'bg-purple-500/10 text-purple-300 border-purple-500/30',
+    'bg-teal-500/10 text-teal-300 border-teal-500/30',
+    'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
+  ]
+
+  const getAccountTypeBadgeClass = (name) => {
+    if (!name || name === 'Global') return 'bg-gray-600/20 text-gray-400 border-gray-500/30'
+    let hash = 0
+    for (let i = 0; i < name.length; i++) {
+      hash = ((hash << 5) - hash) + name.charCodeAt(i)
+      hash |= 0
+    }
+    return ACCOUNT_TYPE_PALETTE[Math.abs(hash) % ACCOUNT_TYPE_PALETTE.length]
   }
 
   return (
@@ -326,17 +526,17 @@ const AdminForexCharges = () => {
         <div className="bg-dark-800 rounded-xl border border-gray-800">
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
-                <DollarSign size={20} className="text-white" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-emerald-500/25 to-emerald-600/10 border border-emerald-500/30">
+                <DollarSign size={20} className="text-emerald-400" />
               </div>
               <div>
                 <h2 className="text-white font-semibold">Commission</h2>
                 <p className="text-gray-500 text-sm">Trading fees per lot/trade</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => { resetForm(); setEditingCharge(null); setModalType('commission') }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg font-medium shadow-lg shadow-emerald-500/20 transition-all"
             >
               <Plus size={16} />
               <span>Add Commission</span>
@@ -349,17 +549,32 @@ const AdminForexCharges = () => {
               <p className="text-gray-500 text-center py-4">No commission charges configured</p>
             ) : (
               <div className="space-y-2">
+                <div className="flex items-center justify-between px-3 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                  <div className="flex items-center gap-4 pl-1">
+                    <span className="min-w-[72px] text-center">Segment</span>
+                    <span className="min-w-[80px] text-center">Symbol</span>
+                    <span className="min-w-[110px] text-center">Account Type</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span>Value</span>
+                    <span className="min-w-[64px] text-right">Actions</span>
+                  </div>
+                </div>
                 {charges.filter(c => c.commissionValue > 0).map((charge) => (
                   <div key={charge._id} className="flex items-center justify-between p-3 bg-dark-700 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className="px-2 py-0.5 bg-gray-600 text-gray-300 text-xs rounded">{charge.level}</span>
-                      <span className="text-white">{getLevelLabel(charge)}</span>
+                    <div className="flex items-center gap-4 pl-1">
+                      <span className={`inline-flex items-center justify-center min-w-[72px] px-2 py-1 text-[10px] font-semibold tracking-wide rounded-md border ${getSegmentBadgeClass(charge.segment)}`}>{charge.segment || charge.level}</span>
+                      <span className="px-2.5 py-0.5 text-sm font-medium text-white border border-gray-600/60 rounded-md bg-dark-800/40">{getLevelLabel(charge)}</span>
+                      <span className={`inline-flex items-center justify-center gap-1 min-w-[110px] px-2 py-1 text-[10px] font-semibold tracking-wide rounded-md border ${getAccountTypeBadgeClass(getAccountTypeName(charge))}`} title="Account Type">
+                        <User size={10} />
+                        <span className="truncate">{getAccountTypeName(charge)}</span>
+                      </span>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-white font-medium">${charge.commissionValue} <span className="text-gray-500 text-sm">({charge.commissionType})</span></span>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => openEditModal(charge, 'commission')} className="p-1.5 hover:bg-dark-600 rounded text-gray-400 hover:text-white"><Edit size={14} /></button>
-                        <button onClick={() => handleDelete(charge._id)} className="p-1.5 hover:bg-dark-600 rounded text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
+                        <button onClick={() => openEditModal(charge, 'commission')} className="p-1.5 rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 transition-colors" title="Edit"><Edit size={14} /></button>
+                        <button onClick={() => handleDelete(charge._id)} className="p-1.5 rounded-md border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors" title="Delete"><Trash2 size={14} /></button>
                       </div>
                     </div>
                   </div>
@@ -373,17 +588,17 @@ const AdminForexCharges = () => {
         <div className="bg-dark-800 rounded-xl border border-gray-800">
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
-                <TrendingUp size={20} className="text-white" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-sky-500/25 to-sky-600/10 border border-sky-500/30">
+                <TrendingUp size={20} className="text-sky-400" />
               </div>
               <div>
                 <h2 className="text-white font-semibold">Spread</h2>
                 <p className="text-gray-500 text-sm">Bid/Ask price difference</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => { resetForm(); setEditingCharge(null); setModalType('spread') }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white rounded-lg font-medium shadow-lg shadow-sky-500/20 transition-all"
             >
               <Plus size={16} />
               <span>Add Spread</span>
@@ -396,17 +611,32 @@ const AdminForexCharges = () => {
               <p className="text-gray-500 text-center py-4">No spread charges configured</p>
             ) : (
               <div className="space-y-2">
+                <div className="flex items-center justify-between px-3 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                  <div className="flex items-center gap-4 pl-1">
+                    <span className="min-w-[72px] text-center">Segment</span>
+                    <span className="min-w-[80px] text-center">Symbol</span>
+                    <span className="min-w-[110px] text-center">Account Type</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span>Value</span>
+                    <span className="min-w-[64px] text-right">Actions</span>
+                  </div>
+                </div>
                 {charges.filter(c => c.spreadValue > 0).map((charge) => (
                   <div key={charge._id} className="flex items-center justify-between p-3 bg-dark-700 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className="px-2 py-0.5 bg-gray-600 text-gray-300 text-xs rounded">{charge.level}</span>
-                      <span className="text-white">{getLevelLabel(charge)}</span>
+                    <div className="flex items-center gap-4 pl-1">
+                      <span className={`inline-flex items-center justify-center min-w-[72px] px-2 py-1 text-[10px] font-semibold tracking-wide rounded-md border ${getSegmentBadgeClass(charge.segment)}`}>{charge.segment || charge.level}</span>
+                      <span className="px-2.5 py-0.5 text-sm font-medium text-white border border-gray-600/60 rounded-md bg-dark-800/40">{getLevelLabel(charge)}</span>
+                      <span className={`inline-flex items-center justify-center gap-1 min-w-[110px] px-2 py-1 text-[10px] font-semibold tracking-wide rounded-md border ${getAccountTypeBadgeClass(getAccountTypeName(charge))}`} title="Account Type">
+                        <User size={10} />
+                        <span className="truncate">{getAccountTypeName(charge)}</span>
+                      </span>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-white font-medium">{charge.spreadValue} <span className="text-gray-500 text-sm">({charge.spreadType})</span></span>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => openEditModal(charge, 'spread')} className="p-1.5 hover:bg-dark-600 rounded text-gray-400 hover:text-white"><Edit size={14} /></button>
-                        <button onClick={() => handleDelete(charge._id)} className="p-1.5 hover:bg-dark-600 rounded text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
+                        <button onClick={() => openEditModal(charge, 'spread')} className="p-1.5 rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 transition-colors" title="Edit"><Edit size={14} /></button>
+                        <button onClick={() => handleDelete(charge._id)} className="p-1.5 rounded-md border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors" title="Delete"><Trash2 size={14} /></button>
                       </div>
                     </div>
                   </div>
@@ -420,17 +650,17 @@ const AdminForexCharges = () => {
         <div className="bg-dark-800 rounded-xl border border-gray-800">
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
-                <Moon size={20} className="text-white" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br from-violet-500/25 to-violet-600/10 border border-violet-500/30">
+                <Moon size={20} className="text-violet-400" />
               </div>
               <div>
                 <h2 className="text-white font-semibold">Swap</h2>
                 <p className="text-gray-500 text-sm">Overnight holding fees</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => { resetForm(); setEditingCharge(null); setModalType('swap') }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-lg font-medium shadow-lg shadow-violet-500/20 transition-all"
             >
               <Plus size={16} />
               <span>Add Swap</span>
@@ -443,17 +673,32 @@ const AdminForexCharges = () => {
               <p className="text-gray-500 text-center py-4">No swap charges configured</p>
             ) : (
               <div className="space-y-2">
+                <div className="flex items-center justify-between px-3 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                  <div className="flex items-center gap-4 pl-1">
+                    <span className="min-w-[72px] text-center">Segment</span>
+                    <span className="min-w-[80px] text-center">Symbol</span>
+                    <span className="min-w-[110px] text-center">Account Type</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span>Value</span>
+                    <span className="min-w-[64px] text-right">Actions</span>
+                  </div>
+                </div>
                 {charges.filter(c => c.swapLong !== 0 || c.swapShort !== 0).map((charge) => (
                   <div key={charge._id} className="flex items-center justify-between p-3 bg-dark-700 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <span className="px-2 py-0.5 bg-gray-600 text-gray-300 text-xs rounded">{charge.level}</span>
-                      <span className="text-white">{getLevelLabel(charge)}</span>
+                    <div className="flex items-center gap-4 pl-1">
+                      <span className={`inline-flex items-center justify-center min-w-[72px] px-2 py-1 text-[10px] font-semibold tracking-wide rounded-md border ${getSegmentBadgeClass(charge.segment)}`}>{charge.segment || charge.level}</span>
+                      <span className="px-2.5 py-0.5 text-sm font-medium text-white border border-gray-600/60 rounded-md bg-dark-800/40">{getLevelLabel(charge)}</span>
+                      <span className={`inline-flex items-center justify-center gap-1 min-w-[110px] px-2 py-1 text-[10px] font-semibold tracking-wide rounded-md border ${getAccountTypeBadgeClass(getAccountTypeName(charge))}`} title="Account Type">
+                        <User size={10} />
+                        <span className="truncate">{getAccountTypeName(charge)}</span>
+                      </span>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-white font-medium">Long: {charge.swapLong} | Short: {charge.swapShort}</span>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => openEditModal(charge, 'swap')} className="p-1.5 hover:bg-dark-600 rounded text-gray-400 hover:text-white"><Edit size={14} /></button>
-                        <button onClick={() => handleDelete(charge._id)} className="p-1.5 hover:bg-dark-600 rounded text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
+                        <button onClick={() => openEditModal(charge, 'swap')} className="p-1.5 rounded-md border border-sky-500/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300 transition-colors" title="Edit"><Edit size={14} /></button>
+                        <button onClick={() => handleDelete(charge._id)} className="p-1.5 rounded-md border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors" title="Delete"><Trash2 size={14} /></button>
                       </div>
                     </div>
                   </div>
@@ -466,13 +711,25 @@ const AdminForexCharges = () => {
 
       {/* COMMISSION MODAL - Cascading Hierarchy */}
       {modalType === 'commission' && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-xl w-full max-w-lg border border-gray-700 max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b border-gray-700 flex items-center justify-between sticky top-0 bg-dark-800">
-              <h2 className="text-lg font-semibold text-white">{editingCharge ? 'Edit Commission' : 'Add Commission'}</h2>
-              <button onClick={() => setModalType(null)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-lg max-h-[90vh] bg-gradient-to-b from-dark-800 to-dark-900 rounded-2xl border border-gray-700/60 shadow-2xl shadow-emerald-500/10 overflow-hidden flex flex-col">
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-500/60 to-transparent" />
+            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-40 bg-emerald-500/15 blur-3xl pointer-events-none" />
+            <div className="relative px-5 py-4 border-b border-gray-700/60 flex items-center justify-between bg-dark-800/60 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/25 to-emerald-600/10 border border-emerald-500/30 flex items-center justify-center">
+                  <DollarSign size={18} className="text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white leading-tight">{editingCharge ? 'Edit Commission' : 'Add Commission'}</h2>
+                  <p className="text-gray-500 text-xs">Configure trading fee per lot or trade</p>
+                </div>
+              </div>
+              <button onClick={() => setModalType(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-700 transition-colors">
+                <X size={18} />
+              </button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="relative p-5 space-y-4 overflow-y-auto">
               {/* Step 1: Account Type */}
               <div>
                 <label className="block text-gray-400 text-xs mb-1">1. Account Type <span className="text-gray-600">(optional)</span></label>
@@ -498,11 +755,9 @@ const AdminForexCharges = () => {
                     : (segment ? 'SEGMENT' : 'GLOBAL')
                   setForm({ ...form, segment, instrumentSymbol: '', level })
                 }} className="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white text-sm">
-                  <option value="">All Segments</option>
                   <option value="Forex">Forex</option>
                   <option value="Metals">Metals</option>
                   <option value="Crypto">Crypto</option>
-                  <option value="Indices">Indices</option>
                   <option value="Commodities">Commodities</option>
                 </select>
               </div>
@@ -605,9 +860,12 @@ const AdminForexCharges = () => {
                 </div>
               </div>
               
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setModalType(null)} className="flex-1 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg text-sm">Cancel</button>
-                <button onClick={handleSave} className="flex-1 py-2 bg-white text-black hover:bg-gray-200 rounded-lg text-sm font-medium">Save</button>
+              <div className="flex gap-3 pt-2 border-t border-gray-700/40 mt-2 pt-4">
+                <button onClick={() => setModalType(null)} className="flex-1 py-2.5 bg-dark-700 hover:bg-dark-600 text-white rounded-xl text-sm font-medium border border-gray-700/50 transition-colors">Cancel</button>
+                <button onClick={handleSave} disabled={!!activeConflict} className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
+                  <Save size={14} />
+                  Save
+                </button>
               </div>
             </div>
           </div>
@@ -616,13 +874,25 @@ const AdminForexCharges = () => {
 
       {/* SPREAD MODAL - Account Type first, then Instrument selection */}
       {modalType === 'spread' && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-xl w-full max-w-lg border border-gray-700 max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b border-gray-700 flex items-center justify-between sticky top-0 bg-dark-800">
-              <h2 className="text-lg font-semibold text-white">{editingCharge ? 'Edit Spread' : 'Add Spread'}</h2>
-              <button onClick={() => setModalType(null)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-lg max-h-[90vh] bg-gradient-to-b from-dark-800 to-dark-900 rounded-2xl border border-gray-700/60 shadow-2xl shadow-sky-500/10 overflow-hidden flex flex-col">
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-sky-500/60 to-transparent" />
+            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-40 bg-sky-500/15 blur-3xl pointer-events-none" />
+            <div className="relative px-5 py-4 border-b border-gray-700/60 flex items-center justify-between bg-dark-800/60 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500/25 to-sky-600/10 border border-sky-500/30 flex items-center justify-center">
+                  <TrendingUp size={18} className="text-sky-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white leading-tight">{editingCharge ? 'Edit Spread' : 'Add Spread'}</h2>
+                  <p className="text-gray-500 text-xs">Set the Bid/Ask price difference</p>
+                </div>
+              </div>
+              <button onClick={() => setModalType(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-700 transition-colors">
+                <X size={18} />
+              </button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="relative p-5 space-y-4 overflow-y-auto">
               {/* Step 1: Account Type */}
               <div>
                 <label className="block text-gray-400 text-xs mb-1">1. Account Type <span className="text-gray-600">(optional)</span></label>
@@ -642,11 +912,9 @@ const AdminForexCharges = () => {
               <div>
                 <label className="block text-gray-400 text-xs mb-1">2. Segment <span className="text-gray-600">(optional)</span></label>
                 <select value={form.segment} onChange={(e) => setForm({ ...form, segment: e.target.value, instrumentSymbol: '' })} className="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white text-sm">
-                  <option value="">All Segments</option>
                   <option value="Forex">Forex</option>
                   <option value="Metals">Metals</option>
                   <option value="Crypto">Crypto</option>
-                  <option value="Indices">Indices</option>
                   <option value="Commodities">Commodities</option>
                 </select>
               </div>
@@ -729,9 +997,12 @@ const AdminForexCharges = () => {
               
               <p className="text-gray-500 text-xs">Forex: pips (e.g., 1.5) | Gold: cents (e.g., 50) | Crypto: USD (e.g., 10)</p>
               
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setModalType(null)} className="flex-1 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg text-sm">Cancel</button>
-                <button onClick={handleSave} className="flex-1 py-2 bg-white text-black hover:bg-gray-200 rounded-lg text-sm font-medium">Save</button>
+              <div className="flex gap-3 pt-2 border-t border-gray-700/40 mt-2 pt-4">
+                <button onClick={() => setModalType(null)} className="flex-1 py-2.5 bg-dark-700 hover:bg-dark-600 text-white rounded-xl text-sm font-medium border border-gray-700/50 transition-colors">Cancel</button>
+                <button onClick={handleSave} disabled={!!activeConflict} className="flex-1 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
+                  <Save size={14} />
+                  Save
+                </button>
               </div>
             </div>
           </div>
@@ -740,13 +1011,25 @@ const AdminForexCharges = () => {
 
       {/* SWAP MODAL - Cascading Hierarchy */}
       {modalType === 'swap' && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-xl w-full max-w-lg border border-gray-700 max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b border-gray-700 flex items-center justify-between sticky top-0 bg-dark-800">
-              <h2 className="text-lg font-semibold text-white">{editingCharge ? 'Edit Swap' : 'Add Swap'}</h2>
-              <button onClick={() => setModalType(null)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-lg max-h-[90vh] bg-gradient-to-b from-dark-800 to-dark-900 rounded-2xl border border-gray-700/60 shadow-2xl shadow-violet-500/10 overflow-hidden flex flex-col">
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-violet-500/60 to-transparent" />
+            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-40 bg-violet-500/15 blur-3xl pointer-events-none" />
+            <div className="relative px-5 py-4 border-b border-gray-700/60 flex items-center justify-between bg-dark-800/60 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/25 to-violet-600/10 border border-violet-500/30 flex items-center justify-center">
+                  <Moon size={18} className="text-violet-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white leading-tight">{editingCharge ? 'Edit Swap' : 'Add Swap'}</h2>
+                  <p className="text-gray-500 text-xs">Set overnight holding fees (long / short)</p>
+                </div>
+              </div>
+              <button onClick={() => setModalType(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-700 transition-colors">
+                <X size={18} />
+              </button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="relative p-5 space-y-4 overflow-y-auto">
               {/* Step 1: Account Type */}
               <div>
                 <label className="block text-gray-400 text-xs mb-1">1. Account Type <span className="text-gray-600">(optional)</span></label>
@@ -766,11 +1049,9 @@ const AdminForexCharges = () => {
               <div>
                 <label className="block text-gray-400 text-xs mb-1">2. Segment <span className="text-gray-600">(optional)</span></label>
                 <select value={form.segment} onChange={(e) => setForm({ ...form, segment: e.target.value, instrumentSymbol: '' })} className="w-full px-3 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white text-sm">
-                  <option value="">All Segments</option>
                   <option value="Forex">Forex</option>
                   <option value="Metals">Metals</option>
                   <option value="Crypto">Crypto</option>
-                  <option value="Indices">Indices</option>
                   <option value="Commodities">Commodities</option>
                 </select>
               </div>
@@ -850,9 +1131,76 @@ const AdminForexCharges = () => {
               
               <p className="text-gray-500 text-xs">Overnight fees charged for holding positions (negative = charge, positive = credit)</p>
               
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => setModalType(null)} className="flex-1 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-lg text-sm">Cancel</button>
-                <button onClick={handleSave} className="flex-1 py-2 bg-white text-black hover:bg-gray-200 rounded-lg text-sm font-medium">Save</button>
+              <div className="flex gap-3 pt-2 border-t border-gray-700/40 mt-2 pt-4">
+                <button onClick={() => setModalType(null)} className="flex-1 py-2.5 bg-dark-700 hover:bg-dark-600 text-white rounded-xl text-sm font-medium border border-gray-700/50 transition-colors">Cancel</button>
+                <button onClick={handleSave} className="flex-1 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-violet-500/20 transition-all flex items-center justify-center gap-2">
+                  <Save size={14} />
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteConfirmId && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => !deleting && setDeleteConfirmId(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md bg-gradient-to-b from-dark-800 to-dark-900 rounded-2xl border border-gray-700/60 shadow-2xl shadow-red-500/10 overflow-hidden"
+          >
+            {/* Decorative top glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-red-500/20 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative p-6">
+              {/* Icon */}
+              <div className="flex justify-center mb-4">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-red-500/30 rounded-full blur-xl" />
+                  <div className="relative w-16 h-16 bg-gradient-to-br from-red-500/20 to-red-600/10 border border-red-500/30 rounded-full flex items-center justify-center">
+                    <Trash2 size={28} className="text-red-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Title + message */}
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-semibold text-white mb-2">Delete this charge?</h3>
+                <p className="text-gray-400 text-sm">
+                  This action cannot be undone. The charge configuration will be permanently removed.
+                </p>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 bg-dark-700 hover:bg-dark-600 text-white rounded-xl text-sm font-medium transition-colors border border-gray-700/50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deleting ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} />
+                      Delete
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

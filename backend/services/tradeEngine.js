@@ -66,15 +66,15 @@ class TradeEngine {
 
     } else {
 
-      // FIXED spread - value is in PIPS, need to convert to price
+      // FIXED spread - value is in POINTS (smallest visible digit), matching MT4/MT5 convention.
 
-      // For JPY pairs: 1 pip = 0.01
+      // For standard forex (5 decimals): 1 point = 0.00001
 
-      // For other forex pairs: 1 pip = 0.0001
+      // For JPY pairs (3 decimals): 1 point = 0.001
 
-      // For metals (XAUUSD): 1 pip = 0.01
+      // For metals (2 decimals): 1 point = 0.01
 
-      // For crypto: spread is in USD directly
+      // For crypto (2 decimals): 1 point = 0.01
 
       const isJPYPair = symbol.includes('JPY')
 
@@ -82,31 +82,23 @@ class TradeEngine {
 
       const isCrypto = ['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD'].includes(symbol)
 
-      
+
 
       if (isCrypto) {
 
-        // Crypto: spread is in USD
-
-        spread = spreadValue
+        spread = spreadValue * 0.01
 
       } else if (isMetal) {
-
-        // Metals: 1 pip = 0.01 (cents)
 
         spread = spreadValue * 0.01
 
       } else if (isJPYPair) {
 
-        // JPY pairs: 1 pip = 0.01
-
-        spread = spreadValue * 0.01
+        spread = spreadValue * 0.001
 
       } else {
 
-        // Standard forex pairs: 1 pip = 0.0001
-
-        spread = spreadValue * 0.0001
+        spread = spreadValue * 0.00001
 
       }
 

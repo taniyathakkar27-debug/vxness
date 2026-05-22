@@ -5,6 +5,18 @@ function normSymbol(s) {
   return String(s).toUpperCase().trim()
 }
 
+// Robust ID equality — handles populated objects ({_id, name}), bare ObjectIds, and strings.
+function sameId(a, b) {
+  const norm = (v) => {
+    if (v == null || v === '') return ''
+    if (typeof v === 'object' && v._id != null) return String(v._id)
+    return String(v)
+  }
+  const aa = norm(a)
+  const bb = norm(b)
+  return aa !== '' && bb !== '' && aa === bb
+}
+
 const chargesSchema = new mongoose.Schema({
   // Hierarchy level - higher priority overrides lower
   // Priority: USER > INSTRUMENT > SEGMENT > ACCOUNT_TYPE > GLOBAL
@@ -110,23 +122,23 @@ chargesSchema.statics.getChargesForTrade = async function(userId, symbol, segmen
   let applicableCharges = allCharges.filter(charge => {
     // USER level - must match userId
     if (charge.level === 'USER') {
-      if (!charge.userId || charge.userId.toString() !== userId?.toString()) return false
+      if (!charge.userId || !sameId(charge.userId, userId)) return false
       // If instrument is specified, must match
       if (charge.instrumentSymbol && normSymbol(charge.instrumentSymbol) !== symNorm) return false
       return true
     }
-    
+
     // INSTRUMENT level - must match symbol
     if (charge.level === 'INSTRUMENT') {
       if (normSymbol(charge.instrumentSymbol) !== symNorm) return false
       // If accountTypeId is specified, must match
-      if (charge.accountTypeId && charge.accountTypeId.toString() !== accountTypeId?.toString()) return false
+      if (charge.accountTypeId && !sameId(charge.accountTypeId, accountTypeId)) return false
       return true
     }
-    
+
     // ACCOUNT_TYPE level - must match accountTypeId
     if (charge.level === 'ACCOUNT_TYPE') {
-      if (!charge.accountTypeId || charge.accountTypeId.toString() !== accountTypeId?.toString()) return false
+      if (!charge.accountTypeId || !sameId(charge.accountTypeId, accountTypeId)) return false
       // If segment is specified, must match
       if (charge.segment && charge.segment !== segment) return false
       return true
@@ -185,9 +197,7 @@ chargesSchema.statics.getChargesForTrade = async function(userId, symbol, segmen
   // Tie-break: within the same level, prefer charges scoped to this account type
   // (e.g. INSTRUMENT+accountTypeId beats plain INSTRUMENT). Without this, the order
   // depends on createdAt and account-type-specific commissions can be silently shadowed.
-  const accountTypeIdStr = accountTypeId?.toString?.()
-  const matchesAccountType = (c) =>
-    c.accountTypeId && accountTypeIdStr && c.accountTypeId.toString() === accountTypeIdStr
+  const matchesAccountType = (c) => sameId(c.accountTypeId, accountTypeId)
 
   // Sort by priority (most specific first), then by account-type specificity within the same level
   applicableCharges.sort((a, b) => {
@@ -247,8 +257,8 @@ chargesSchema.statics.getChargesForTrade = async function(userId, symbol, segmen
     }
   }
   
-  console.log(`Final charges: spread=${result.spreadValue}, commission=${result.commissionValue}, swapLong=${result.swapLong}, swapShort=${result.swapShort}`)
-  
+  console.log(`Final charges for ${symbol} (accountTypeId=${accountTypeId ? String(accountTypeId) : '∅'}): spread=${result.spreadValue}, commission=${result.commissionValue}, swapLong=${result.swapLong}, swapShort=${result.swapShort}`)
+
   return result
 }
 
