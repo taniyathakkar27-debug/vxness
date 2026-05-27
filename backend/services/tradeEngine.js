@@ -8,6 +8,8 @@ import { resolveTradeSegment } from '../utils/tradeSegment.js'
 
 import { commissionPriceDelta, commissionDollarAmount } from '../utils/commissionMath.js'
 
+import { pipSize, contractSize as symbolContractSize, isCrypto as symbolIsCrypto } from '../utils/symbolMeta.js'
+
 import TradeSettings from '../models/TradeSettings.js'
 
 import AdminLog from '../models/AdminLog.js'
@@ -26,39 +28,31 @@ class TradeEngine {
 
 
 
-  // Get contract size based on symbol type
+  // Contract size per symbol — sourced from utils/symbolMeta.js (single source of truth).
 
   getContractSize(symbol) {
 
-    // Metals - 100 oz for gold, 5000 oz for silver
-
-    if (symbol === 'XAUUSD') return 100
-
-    if (symbol === 'XAGUSD') return 5000
-
-    // Crypto - 1 unit
-
-    if (['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD'].includes(symbol)) return 1
-
-    // Forex - standard 100,000
-
-    return 100000
+    return symbolContractSize(symbol)
 
   }
 
 
 
-  // Calculate execution price with spread
+  // Calculate execution price with admin spread applied.
 
-  // For FIXED spread: value is in PIPS (needs conversion based on symbol)
+  // FIXED: spreadValue is in admin units per asset class — pips for forex, cents for metals/commodities,
 
-  // For PERCENTAGE spread: value is percentage of price difference
+  //        dollars for crypto/indices. The per-unit price delta is pipSize(symbol) from symbolMeta.js,
+
+  //        matching the commission scaling so the two settings produce comparable markups.
+
+  // PERCENTAGE: spreadValue is a percent of the raw (ask - bid) market spread.
 
   calculateExecutionPrice(side, bid, ask, spreadValue, spreadType, symbol = '') {
 
     let spread = 0
 
-    
+
 
     if (spreadType === 'PERCENTAGE') {
 
@@ -66,45 +60,11 @@ class TradeEngine {
 
     } else {
 
-      // FIXED spread - value is in POINTS (smallest visible digit), matching MT4/MT5 convention.
-
-      // For standard forex (5 decimals): 1 point = 0.00001
-
-      // For JPY pairs (3 decimals): 1 point = 0.001
-
-      // For metals (2 decimals): 1 point = 0.01
-
-      // For crypto (2 decimals): 1 point = 0.01
-
-      const isJPYPair = symbol.includes('JPY')
-
-      const isMetal = ['XAUUSD', 'XAGUSD'].includes(symbol)
-
-      const isCrypto = ['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD'].includes(symbol)
-
-
-
-      if (isCrypto) {
-
-        spread = spreadValue * 0.01
-
-      } else if (isMetal) {
-
-        spread = spreadValue * 0.01
-
-      } else if (isJPYPair) {
-
-        spread = spreadValue * 0.001
-
-      } else {
-
-        spread = spreadValue * 0.00001
-
-      }
+      spread = (Number(spreadValue) || 0) * pipSize(symbol)
 
     }
 
-    
+
 
     if (side === 'BUY') {
 
@@ -390,7 +350,7 @@ class TradeEngine {
 
     // Crypto markets are always open
 
-    if (['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD', 'BNBUSD', 'SOLUSD', 'ADAUSD', 'DOGEUSD', 'DOTUSD', 'MATICUSD', 'AVAXUSD', 'LINKUSD'].includes(symbol)) {
+    if (symbolIsCrypto(symbol)) {
 
       return true
 
@@ -481,7 +441,7 @@ class TradeEngine {
 
 
     // Calculate execution price with spread.
-    // When admin commission is configured for BUY, collapse the natural MetaAPI spread
+    // When admin commission is configured for BUY, collapse the natural LP spread
     // by using raw bid as the BUY base (calculateExecutionPrice with ask=bid → bid + spread).
     // Admin commission is then added as a separate price delta below.
 

@@ -1,40 +1,73 @@
 /**
- * Mirrors backend/services/tradeEngine.js calculateExecutionPrice spread math
- * so UI bid/ask match execution prices (raw feed + admin spread).
+ * Mirrors backend/utils/symbolMeta.js + commissionMath.js so the trading UI's bid/ask
+ * match the price the backend will actually execute at.
+ *
+ * Admin enters spread and commission in the same per-asset unit:
+ *   forex non-JPY → pips (0.0001),  forex JPY → pips (0.01),
+ *   metals/commodities → cents (0.01),  crypto/indices → dollars (1).
  */
 
 const CRYPTO_SYMBOLS = new Set([
   'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD', 'BNBUSD', 'SOLUSD', 'ADAUSD', 'DOGEUSD',
-  'DOTUSD', 'MATICUSD', 'AVAXUSD', 'LINKUSD', 'TRXUSD', 'SHIBUSD',
+  'DOTUSD', 'MATICUSD', 'AVAXUSD', 'LINKUSD', 'TRXUSD', 'SHIBUSD', 'TONUSD', 'HBARUSD',
+  'XLMUSD', 'ALGOUSD', 'VETUSD', 'ICPUSD', 'FILUSD', 'ETCUSD', 'XMRUSD', 'EOSUSD',
+  'AAVEUSD', 'MKRUSD', 'COMPUSD', 'SNXUSD', 'YFIUSD', 'SUSHIUSD', 'NEARUSD', 'FTMUSD',
+  'SANDUSD', 'MANAUSD', 'AXSUSD', 'GALAUSD', 'APEUSD', 'GMTUSD', 'OPUSD', 'ARBUSD',
+  'PEPEUSD', 'ATOMUSD', 'UNIUSD',
 ])
 
-// Mirrors backend/services/tradeEngine.js getContractSize
+const COMMODITY_SYMBOLS = new Set([
+  'USOIL', 'UKOIL', 'BRENT', 'WTI', 'NGAS', 'COPPER',
+])
+
+const INDEX_SYMBOLS = new Set([
+  'US30', 'US500', 'NAS100', 'US100', 'GER40', 'UK100', 'DJ30', 'DAX', 'FTSE', 'SPX', 'NDX',
+  'JPN225', 'AUS200', 'HK50', 'FRA40', 'EU50', 'USTEC', 'DE30', 'SPX500',
+])
+
+function classify(symbol) {
+  const s = String(symbol || '').toUpperCase()
+  if (!s) return 'forex'
+  if (CRYPTO_SYMBOLS.has(s)) return 'crypto'
+  if (COMMODITY_SYMBOLS.has(s)) return 'commodity'
+  if (INDEX_SYMBOLS.has(s)) return 'index'
+  if (s.startsWith('XAU') || s.startsWith('XAG') || s.startsWith('XPT') || s.startsWith('XPD')) return 'metal'
+  if (s.includes('JPY')) return 'jpy'
+  return 'forex'
+}
+
+function pipSize(symbol) {
+  const s = String(symbol || '').toUpperCase()
+  if (!s) return 0.00001
+  const cls = classify(symbol)
+  if (cls === 'index') return 1
+  if (cls === 'crypto') return 0.01
+  if (cls === 'commodity') return 0.01
+  if (s === 'XAUUSD' || s === 'XPTUSD' || s === 'XPDUSD') return 0.01
+  if (s === 'XAGUSD') return 0.001
+  if (cls === 'jpy') return 0.001
+  return 0.00001
+}
+
 function getContractSize(symbol) {
-  const sym = (symbol || '').toUpperCase()
-  if (sym === 'XAUUSD') return 100
-  if (sym === 'XAGUSD') return 5000
-  if (['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD'].includes(sym)) return 1
+  const s = String(symbol || '').toUpperCase()
+  if (s === 'XAUUSD') return 100
+  if (s === 'XAGUSD') return 5000
+  if (s === 'XPTUSD' || s === 'XPDUSD') return 100
+  if (COMMODITY_SYMBOLS.has(s)) return 1000
+  if (CRYPTO_SYMBOLS.has(s)) return 1
+  if (INDEX_SYMBOLS.has(s)) return 1
   return 100000
 }
 
-// Spread value is interpreted in POINTS (smallest visible digit of the price), matching
-// MT4/MT5 convention. e.g. EURUSD (5 decimals) → 1 point = 0.00001, so spread=2 → +0.00002.
 function spreadToPriceDelta(spreadValue, spreadType, symbol, bid, ask) {
-  const sym = (symbol || '').toUpperCase()
-  const b = Number(bid)
-  const a = Number(ask)
   if (!Number.isFinite(spreadValue) || spreadValue <= 0) return 0
   if (spreadType === 'PERCENTAGE') {
-    if (!Number.isFinite(a - b)) return 0
-    return (a - b) * (spreadValue / 100)
+    const range = Number(ask) - Number(bid)
+    if (!Number.isFinite(range)) return 0
+    return range * (spreadValue / 100)
   }
-  const isJPYPair = sym.includes('JPY')
-  const isMetal = sym.includes('XAU') || sym.includes('XAG') || sym.includes('XPT') || sym.includes('XPD')
-  const isCrypto = CRYPTO_SYMBOLS.has(sym)
-  if (isCrypto) return spreadValue * 0.01       // crypto (e.g. BTCUSD 2 dec): 1 point = 0.01
-  if (isMetal) return spreadValue * 0.01        // metals (2 dec): 1 point = 0.01
-  if (isJPYPair) return spreadValue * 0.001     // JPY forex (3 dec): 1 point = 0.001
-  return spreadValue * 0.00001                  // standard forex (5 dec): 1 point = 0.00001
+  return spreadValue * pipSize(symbol)
 }
 
 /**
@@ -64,22 +97,9 @@ export function adjustQuotesForAdminSpread(bid, ask, symbol, spreadEntry) {
   return { bid: b - d, ask: a + d }
 }
 
-// Mirrors backend/utils/commissionMath.js — commission scales per asset class so the markup is visible
-// across all asset classes, matching the spread scaling used in calculateExecutionPrice.
-const INDEX_SYMBOLS = new Set([
-  'US30', 'US500', 'NAS100', 'US100', 'GER40', 'UK100', 'DJ30', 'DAX', 'FTSE', 'SPX', 'NDX',
-  'JPN225', 'AUS200', 'HK50', 'FRA40', 'EU50',
-])
-const COMMODITY_SYMBOLS = new Set([
-  'OIL', 'BRENT', 'WTI', 'NGAS', 'COPPER', 'USOIL', 'UKOIL',
-])
-
 function commissionPerLotDelta(symbol, cv) {
-  const sym = (symbol || '').toUpperCase()
-  if (CRYPTO_SYMBOLS.has(sym) || INDEX_SYMBOLS.has(sym)) return cv
-  const isMetal = sym.includes('XAU') || sym.includes('XAG') || sym.includes('XPT') || sym.includes('XPD')
-  if (isMetal || COMMODITY_SYMBOLS.has(sym) || sym.includes('JPY')) return cv * 0.01
-  return cv * 0.0001
+  if (!Number.isFinite(cv) || cv <= 0) return 0
+  return cv * pipSize(symbol)
 }
 
 function commissionToPriceDelta(commissionEntry, symbol, bidRef, quantity = 1) {
@@ -95,10 +115,10 @@ function commissionToPriceDelta(commissionEntry, symbol, bidRef, quantity = 1) {
 
 /**
  * Displayed BUY/SELL quotes when admin charges may be configured.
- * - If admin commission OR admin spread is configured: the natural MetaAPI spread is
- *   collapsed. bid stays at raw bid, ask = bid + (admin spread delta) + (admin commission delta).
- *   So $4 commission on XAUUSD (contractSize 100) → ask = bid + 0.04.
- * - If neither is configured: pass through the raw MetaAPI bid/ask unchanged.
+ * - If admin commission OR admin spread is configured: the natural LP spread is collapsed.
+ *   bid stays at raw bid, ask = bid + (admin spread delta) + (admin commission delta).
+ *   So $4 commission on XAUUSD → ask = bid + 0.04.
+ * - If neither is configured: pass through the raw bid/ask unchanged.
  */
 export function adjustQuotesForTradingDisplay(bid, ask, symbol, spreadEntry, commissionEntry, quantity = 1) {
   const b = Number(bid)
@@ -126,3 +146,5 @@ export function adjustQuotesForTradingDisplay(bid, ask, symbol, spreadEntry, com
 
   return { bid: b, ask: b + askMarkup }
 }
+
+export { classify, pipSize, getContractSize }

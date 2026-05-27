@@ -7,6 +7,7 @@ import Charges from '../models/Charges.js'
 import { sendTemplateEmail } from '../services/emailService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
 import { commissionPriceDelta, commissionDollarAmount } from '../utils/commissionMath.js'
+import { pipSize, contractSize as symbolContractSize } from '../utils/symbolMeta.js'
 
 class PropTradingEngine {
   constructor() {
@@ -205,31 +206,16 @@ class PropTradingEngine {
     return { valid: true, account, challenge }
   }
 
-  // Calculate execution price with spread
-  // For FIXED spread: value is in PIPS (needs conversion based on symbol)
-  // For PERCENTAGE spread: value is percentage of price difference
+  // Mirrors tradeEngine.calculateExecutionPrice — admin spread units scaled by symbolMeta.pipSize.
   calculateExecutionPrice(side, bid, ask, spreadValue, spreadType, symbol = '') {
     let spread = 0
-    
+
     if (spreadType === 'PERCENTAGE') {
       spread = (ask - bid) * (spreadValue / 100)
     } else {
-      // FIXED spread - value is in PIPS, need to convert to price
-      const isJPYPair = symbol.includes('JPY')
-      const isMetal = ['XAUUSD', 'XAGUSD'].includes(symbol)
-      const isCrypto = ['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD'].includes(symbol)
-      
-      if (isCrypto) {
-        spread = spreadValue || 0
-      } else if (isMetal) {
-        spread = (spreadValue || 0) * 0.01
-      } else if (isJPYPair) {
-        spread = (spreadValue || 0) * 0.01
-      } else {
-        spread = (spreadValue || 0) * 0.0001
-      }
+      spread = (Number(spreadValue) || 0) * pipSize(symbol)
     }
-    
+
     if (side === 'BUY') {
       return ask + spread
     } else {
@@ -271,7 +257,7 @@ class PropTradingEngine {
     const contractSize = this.getContractSize(symbol)
 
     // Calculate execution price. When admin commission is configured for BUY,
-    // collapse the natural MetaAPI spread by using raw bid as the BUY base.
+    // collapse the natural LP spread by using raw bid as the BUY base.
     let openPrice = commissionEmbeddedInBuyPrice
       ? this.calculateExecutionPrice(side, bid, bid, charges.spreadValue, charges.spreadType, symbol)
       : this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
@@ -329,12 +315,9 @@ class PropTradingEngine {
     return trade
   }
 
-  // Get contract size based on symbol
+  // Contract size per symbol — sourced from utils/symbolMeta.js (single source of truth).
   getContractSize(symbol) {
-    if (symbol === 'XAUUSD') return 100
-    if (symbol === 'XAGUSD') return 5000
-    if (['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD'].includes(symbol)) return 1
-    return 100000
+    return symbolContractSize(symbol)
   }
 
   // Validate trade close request

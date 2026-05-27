@@ -1,50 +1,14 @@
 // Commission math shared by tradeEngine and propTradingEngine.
-// Admin enters commissionValue as an asset-class-scaled number that mirrors how spread is scaled,
-// so a $5 commission produces a visible price markup on every instrument (not 0.001 like cv/contractSize would).
-//
-// Per-lot price delta scaling by asset class:
-//   crypto/indices   -> cv          (USD / index point)
-//   metals/JPY/cmdty -> cv * 0.01   (cents)
-//   other forex      -> cv * 0.0001 (pips)
+// Admin enters commissionValue in the same per-asset unit used for spread:
+//   forex non-JPY → pips,   forex JPY → pips (3-dec),   metals/commodities → cents,   crypto/indices → dollars.
+// Backed by symbolMeta.pipSize so spread and commission scale identically per asset class.
 
-const CRYPTO_SYMBOLS = new Set([
-  'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'BCHUSD', 'BNBUSD', 'SOLUSD', 'ADAUSD', 'DOGEUSD',
-  'DOTUSD', 'MATICUSD', 'AVAXUSD', 'LINKUSD', 'TRXUSD', 'SHIBUSD',
-])
-
-const INDEX_SYMBOLS = new Set([
-  'US30', 'US500', 'NAS100', 'US100', 'GER40', 'UK100', 'DJ30', 'DAX', 'FTSE', 'SPX', 'NDX',
-  'JPN225', 'AUS200', 'HK50', 'FRA40', 'EU50',
-])
-
-const COMMODITY_SYMBOLS = new Set([
-  'OIL', 'BRENT', 'WTI', 'NGAS', 'COPPER', 'USOIL', 'UKOIL',
-])
-
-function classify(symbol) {
-  const sym = (symbol || '').toUpperCase()
-  if (CRYPTO_SYMBOLS.has(sym)) return 'crypto'
-  if (INDEX_SYMBOLS.has(sym)) return 'index'
-  if (COMMODITY_SYMBOLS.has(sym)) return 'commodity'
-  if (sym.includes('XAU') || sym.includes('XAG') || sym.includes('XPT') || sym.includes('XPD')) return 'metal'
-  if (sym.includes('JPY')) return 'jpy'
-  return 'forex'
-}
+import { pipSize } from './symbolMeta.js'
 
 export function commissionPerLotDelta(symbol, commissionValue) {
   const cv = Number(commissionValue)
   if (!Number.isFinite(cv) || cv <= 0) return 0
-  switch (classify(symbol)) {
-    case 'crypto':
-    case 'index':
-      return cv
-    case 'metal':
-    case 'jpy':
-    case 'commodity':
-      return cv * 0.01
-    default:
-      return cv * 0.0001
-  }
+  return cv * pipSize(symbol)
 }
 
 // Price delta to ADD to BUY execution price (embeds commission into the fill).

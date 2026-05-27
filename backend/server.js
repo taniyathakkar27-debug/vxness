@@ -72,8 +72,8 @@ import tradeEngine from './services/tradeEngine.js'
 
 import propTradingEngine from './services/propTradingEngine.js'
 
-import metaApiService from './services/metaApiService.js'
-import { SUPPORTED_SYMBOLS, CRYPTO_SYMBOLS } from './services/metaApiService.js'
+import infowayService from './services/infowayService.js'
+import { SUPPORTED_SYMBOLS, CRYPTO_SYMBOLS } from './services/infowayService.js'
 
 
 
@@ -123,57 +123,31 @@ const priceCache = new Map()
 
 
 
-// Initialize MetaAPI streaming connection (LP prices)
+// Initialize Infoway WebSocket streaming connection
 
-let metaApiConnected = false
+let infowayConnected = false
 
 
 
-async function initMetaApiConnection() {
+async function initInfowayConnection() {
 
   try {
 
-    console.log('[MetaAPI] Initializing connection to LP...')
+    console.log('[Infoway] Initializing WebSocket connection...')
 
-    metaApiConnected = await metaApiService.connect()
-
-
-
-    if (metaApiConnected) {
-
-      console.log('[MetaAPI] Connected! Live tick-by-tick streaming from LP active.')
+    infowayConnected = await infowayService.connect()
 
 
 
-      // Clear any stale fallback prices for forex/metals — keep only crypto (Binance).
+    if (infowayConnected) {
 
-      // After this, only LP-streamed prices will fill priceCache for forex/metals.
-
-      const forexSet = new Set(SUPPORTED_SYMBOLS.filter(s => !CRYPTO_SYMBOLS.includes(s)))
-
-      let cleared = 0
-
-      for (const sym of forexSet) {
-
-        if (priceCache.has(sym)) { priceCache.delete(sym); cleared++ }
-
-      }
-
-      console.log(`[MetaAPI] Cleared ${cleared} stale fallback prices. Awaiting live ticks from LP...`)
+      console.log('[Infoway] Connected! Live tick-by-tick streaming active.')
 
 
 
-      // Subscribe to all supported forex/metal symbols
+      // Subscribe to tick-by-tick price updates from Infoway
 
-      const forexSymbols = SUPPORTED_SYMBOLS.filter(s => !CRYPTO_SYMBOLS.includes(s))
-
-      await metaApiService.subscribeToSymbols(forexSymbols)
-
-
-
-      // Subscribe to tick-by-tick price updates from MetaAPI
-
-      metaApiService.subscribe((symbol, price) => {
+      infowayService.subscribe((symbol, price) => {
 
         priceCache.set(symbol, price)
 
@@ -199,13 +173,13 @@ async function initMetaApiConnection() {
 
     } else {
 
-      console.log('[MetaAPI] Connection failed. Prices will use fallback values.')
+      console.log('[Infoway] Connection failed. Prices will use fallback values.')
 
     }
 
   } catch (error) {
 
-    console.error('[MetaAPI] Connection error:', error.message)
+    console.error('[Infoway] Connection error:', error.message)
 
   }
 
@@ -217,11 +191,9 @@ async function initMetaApiConnection() {
 
 async function streamPrices() {
 
-  // Fetch all prices from MetaAPI (forex from LP, crypto from Binance)
+  // Sync all Infoway prices (forex + crypto via WebSocket) into priceCache
 
-  // When LP is connected, fetchBatchPrices returns ONLY live data (no fallback mixing)
-
-  const allPrices = await metaApiService.fetchBatchPrices(SUPPORTED_SYMBOLS)
+  const allPrices = infowayService.getAllPrices()
 
   Object.entries(allPrices).forEach(([symbol, price]) => {
 
@@ -253,21 +225,21 @@ async function streamPrices() {
 
 
 
-console.log('Price streaming initialized - MetaAPI (LP Connection)')
+console.log('Price streaming initialized - Infoway WebSocket')
 
 
 
-// Initialize MetaAPI connection on startup
+// Initialize Infoway connection on startup
 
-initMetaApiConnection()
+initInfowayConnection()
 
 
 
-// Fetch crypto prices immediately on startup
+// Fetch initial prices after WebSocket warm-up
 
 setTimeout(async () => {
 
-  console.log('[Prices] Fetching initial crypto prices...')
+  console.log('[Prices] Syncing initial prices...')
 
   await streamPrices()
 
@@ -277,7 +249,7 @@ setTimeout(async () => {
 
 
 
-// Crypto prices from Binance every 2s, forex/metals come via SDK streaming
+// Periodic snapshot broadcast (per-tick callbacks already push live; this is a safety net)
 
 setInterval(streamPrices, 2000)
 

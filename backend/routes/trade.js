@@ -9,12 +9,13 @@ import propTradingEngine from '../services/propTradingEngine.js'
 import copyTradingEngine from '../services/copyTradingEngine.js'
 import ibEngine from '../services/ibEngineNew.js'
 import MasterTrader from '../models/MasterTrader.js'
-import metaApiService from '../services/metaApiService.js'
+import infowayService from '../services/infowayService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
+import { commissionDollarAmount } from '../utils/commissionMath.js'
 
 // Get price from cache (populated by background streamPrices in server.js)
 function getFreshPrice(symbol) {
-  const price = metaApiService.getPrice(symbol)
+  const price = infowayService.getPrice(symbol)
   return price || null
 }
 
@@ -275,17 +276,17 @@ router.post('/close', async (req, res) => {
         null
       )
       
-      // Calculate commission on close if enabled
+      // Calculate commission on close (asset-class-scaled via commissionMath, same as open)
       let closeCommission = 0
       if (charges.commissionOnClose && charges.commissionValue > 0) {
-        if (charges.commissionType === 'FIXED') {
-          closeCommission = charges.commissionValue
-        } else if (charges.commissionType === 'PER_LOT') {
-          closeCommission = tradeToClose.quantity * charges.commissionValue
-        } else if (charges.commissionType === 'PERCENTAGE') {
-          const tradeValue = tradeToClose.quantity * tradeToClose.contractSize * closePrice
-          closeCommission = tradeValue * (charges.commissionValue / 100)
-        }
+        closeCommission = commissionDollarAmount(
+          tradeToClose.symbol,
+          tradeToClose.quantity,
+          closePrice,
+          charges.commissionType,
+          charges.commissionValue,
+          tradeToClose.contractSize
+        )
       }
       
       // Calculate final PnL (subtract swap and close commission)
@@ -473,7 +474,7 @@ router.get('/netting/:tradingAccountId', async (req, res) => {
     const symbols = [...new Set(openTrades.map(t => t.symbol))]
     const currentPrices = {}
     for (const symbol of symbols) {
-      const price = metaApiService.getPrice(symbol)
+      const price = infowayService.getPrice(symbol)
       if (price) {
         currentPrices[symbol] = price
       }
