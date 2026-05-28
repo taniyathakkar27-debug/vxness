@@ -72,8 +72,8 @@ import tradeEngine from './services/tradeEngine.js'
 
 import propTradingEngine from './services/propTradingEngine.js'
 
-import infowayService from './services/infowayService.js'
-import { SUPPORTED_SYMBOLS, CRYPTO_SYMBOLS } from './services/infowayService.js'
+import metaApiService from './services/metaApiService.js'
+import { SUPPORTED_SYMBOLS, CRYPTO_SYMBOLS } from './services/metaApiService.js'
 
 
 
@@ -123,31 +123,31 @@ const priceCache = new Map()
 
 
 
-// Initialize Infoway WebSocket streaming connection
+// Initialize MetaApi WebSocket streaming connection
 
-let infowayConnected = false
+let metaApiConnected = false
 
 
 
-async function initInfowayConnection() {
+async function initMetaApiConnection() {
 
   try {
 
-    console.log('[Infoway] Initializing WebSocket connection...')
+    console.log('[MetaApi] Initializing WebSocket connection...')
 
-    infowayConnected = await infowayService.connect()
-
-
-
-    if (infowayConnected) {
-
-      console.log('[Infoway] Connected! Live tick-by-tick streaming active.')
+    metaApiConnected = await metaApiService.connect()
 
 
 
-      // Subscribe to tick-by-tick price updates from Infoway
+    if (metaApiConnected) {
 
-      infowayService.subscribe((symbol, price) => {
+      console.log('[MetaApi] Connected! Live tick-by-tick streaming active.')
+
+
+
+      // Subscribe to tick-by-tick price updates from MetaApi
+
+      metaApiService.subscribe((symbol, price) => {
 
         priceCache.set(symbol, price)
 
@@ -173,13 +173,13 @@ async function initInfowayConnection() {
 
     } else {
 
-      console.log('[Infoway] Connection failed. Prices will use fallback values.')
+      console.log('[MetaApi] Connection failed. Prices will use fallback values.')
 
     }
 
   } catch (error) {
 
-    console.error('[Infoway] Connection error:', error.message)
+    console.error('[MetaApi] Connection error:', error.message)
 
   }
 
@@ -191,9 +191,9 @@ async function initInfowayConnection() {
 
 async function streamPrices() {
 
-  // Sync all Infoway prices (forex + crypto via WebSocket) into priceCache
+  // Sync all MetaApi prices (forex + crypto via WebSocket) into priceCache
 
-  const allPrices = infowayService.getAllPrices()
+  const allPrices = metaApiService.getAllPrices()
 
   Object.entries(allPrices).forEach(([symbol, price]) => {
 
@@ -225,13 +225,13 @@ async function streamPrices() {
 
 
 
-console.log('Price streaming initialized - Infoway WebSocket')
+console.log('Price streaming initialized - MetaApi WebSocket')
 
 
 
-// Initialize Infoway connection on startup
+// Initialize MetaApi connection on startup
 
-initInfowayConnection()
+initMetaApiConnection()
 
 
 
