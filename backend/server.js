@@ -42,6 +42,8 @@ import chargesRoutes from './routes/charges.js'
 
 import pricesRoutes from './routes/prices.js'
 
+import chartsRoutes from './routes/charts.js'
+
 import earningsRoutes from './routes/earnings.js'
 
 import supportRoutes from './routes/support.js'
@@ -538,6 +540,8 @@ app.use('/api/prop', propTradingRoutes)
 app.use('/api/charges', chargesRoutes)
 
 app.use('/api/prices', pricesRoutes)
+
+app.use('/api/charts', chartsRoutes)
 
 app.use('/api/earnings', earningsRoutes)
 

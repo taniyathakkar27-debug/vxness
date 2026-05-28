@@ -16,6 +16,8 @@ import { API_URL } from '../config/api'
 
 import { adjustQuotesForTradingDisplay } from '../services/chargePricing'
 
+import TradingViewChart from '../components/TradingViewChart'
+
 
 
 const TradingPage = () => {
@@ -3365,21 +3367,18 @@ const TradingPage = () => {
 
 
 
-          {/* Chart - Always visible TradingView Advanced Chart with Side Toolbar */}
+          {/* Chart — TradingView Charting Library with custom datafeed bound to MetaApi
+              so candles + last price match the broker feed shown in the order panel. */}
 
           <div className={`flex-1 min-h-0 relative ${isDarkMode ? 'bg-[#0d0d0d]' : 'bg-white'}`}>
 
-            <iframe
+            <TradingViewChart
 
-              key={`${selectedInstrument.symbol}-${isDarkMode}-${isMobile}`}
+              symbol={selectedInstrument.symbol}
 
-              src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${getSymbolForTradingView(selectedInstrument.symbol)}&interval=5&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=1&saveimage=1&toolbarbg=${isDarkMode ? '0d0d0d' : 'ffffff'}&studies=[]&theme=${isDarkMode ? 'dark' : 'light'}&style=1&timezone=Etc%2FUTC&withdateranges=1&showpopupbutton=1&studies_overrides={}&overrides={}&enabled_features=["left_toolbar","header_widget","drawing_templates"]&disabled_features=["hide_left_toolbar_by_default"]&locale=en&utm_source=localhost&utm_medium=widget_new&utm_campaign=chart&hide_side_toolbar=0&allow_symbol_change=1&details=1&calendar=0&hotlist=0`}
+              interval="5"
 
-              style={{ width: '100%', height: '100%', border: 'none' }}
-
-              allowFullScreen
-
-              title="TradingView Chart"
+              theme={isDarkMode ? 'dark' : 'light'}
 
             />
 

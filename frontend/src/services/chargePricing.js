@@ -43,8 +43,7 @@ function pipSize(symbol) {
   if (cls === 'index') return 1
   if (cls === 'crypto') return 0.01
   if (cls === 'commodity') return 0.01
-  if (s === 'XAUUSD' || s === 'XPTUSD' || s === 'XPDUSD') return 0.01
-  if (s === 'XAGUSD') return 0.001
+  if (cls === 'metal') return 0.01
   if (cls === 'jpy') return 0.001
   return 0.00001
 }

@@ -53,8 +53,7 @@ export function pipSize(symbol) {
   if (cls === 'index') return 1
   if (cls === 'crypto') return 0.01                                 // 2-dec display
   if (cls === 'commodity') return 0.01                              // 2-dec display
-  if (s === 'XAUUSD' || s === 'XPTUSD' || s === 'XPDUSD') return 0.01 // 2-dec display
-  if (s === 'XAGUSD') return 0.001                                  // 3-dec display
+  if (cls === 'metal') return 0.01                                  // all metals = cents
   if (cls === 'jpy') return 0.001                                   // 3-dec display
   return 0.00001                                                     // 5-dec forex
 }

@@ -418,6 +418,17 @@ class MetaApiService {
     return () => this.subscribers.delete(callback)
   }
 
+  // Historical OHLC bars for the chart's UDF datafeed.
+  // timeframe: '1m'|'5m'|'15m'|'30m'|'1h'|'4h'|'1d'|'1w'|'1mn'
+  // startTime: Date (inclusive end of the window — MetaApi returns bars BEFORE this time)
+  // limit: max bars to return (MetaApi cap is ~1000 per call)
+  async getCandles(symbol, timeframe, startTime, limit = 500) {
+    if (!this.account) throw new Error('MetaApi account not initialized')
+    const metaSymbol = META_API_SYMBOL_MAP[symbol] || symbol
+    const candles = await this.account.getHistoricalCandles(metaSymbol, timeframe, startTime, limit)
+    return Array.isArray(candles) ? candles : []
+  }
+
   // Fetch crypto prices from Binance (MetaAPI doesn't cover crypto well)
   async fetchCryptoPrices(cryptoSymbols) {
     const prices = {}
