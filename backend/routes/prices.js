@@ -185,8 +185,7 @@ function getInstrumentName(symbol) {
 // Helper to get digits for symbol
 function getDigits(symbol) {
   if (symbol.includes('JPY')) return 3
-  if (symbol === 'XAUUSD') return 2
-  if (symbol === 'XAGUSD') return 3
+  if (symbol === 'XAUUSD' || symbol === 'XAGUSD') return 2
   if (infowayService.isCrypto(symbol)) return 2
   return 5
 }

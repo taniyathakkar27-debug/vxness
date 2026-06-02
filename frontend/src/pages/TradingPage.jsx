@@ -3586,9 +3586,7 @@ const TradingPage = () => {
 
                         if (trade.symbol.includes('JPY')) return price.toFixed(3)
 
-                        if (['BTCUSD', 'ETHUSD', 'XAUUSD'].includes(trade.symbol)) return price.toFixed(2)
-
-                        if (['XAGUSD'].includes(trade.symbol)) return price.toFixed(4)
+                        if (['BTCUSD', 'ETHUSD', 'XAUUSD', 'XAGUSD'].includes(trade.symbol)) return price.toFixed(2)
 
                         return price.toFixed(5)
 
@@ -3894,9 +3892,7 @@ const TradingPage = () => {
 
                         if (trade.symbol.includes('JPY')) return price.toFixed(3)
 
-                        if (['BTCUSD', 'ETHUSD', 'XAUUSD'].includes(trade.symbol)) return price.toFixed(2)
-
-                        if (['XAGUSD'].includes(trade.symbol)) return price.toFixed(4)
+                        if (['BTCUSD', 'ETHUSD', 'XAUUSD', 'XAGUSD'].includes(trade.symbol)) return price.toFixed(2)
 
                         return price.toFixed(5)
 

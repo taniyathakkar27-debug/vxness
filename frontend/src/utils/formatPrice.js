@@ -6,8 +6,7 @@ const INDICES = new Set([
 export const formatPrice = (price, symbol) => {
   if (price === null || price === undefined || isNaN(price)) return '-'
   if (symbol?.includes('JPY')) return price.toFixed(3)
-  if (['BTCUSD', 'ETHUSD', 'XAUUSD'].includes(symbol)) return price.toFixed(2)
-  if (symbol === 'XAGUSD') return price.toFixed(4)
+  if (['BTCUSD', 'ETHUSD', 'XAUUSD', 'XAGUSD'].includes(symbol)) return price.toFixed(2)
   if (INDICES.has(symbol)) return price.toFixed(2)
   return price.toFixed(5)
 }
