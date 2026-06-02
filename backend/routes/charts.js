@@ -1,5 +1,5 @@
 import express from 'express'
-import metaApiService, { SUPPORTED_SYMBOLS } from '../services/metaApiService.js'
+import infowayService, { SUPPORTED_SYMBOLS } from '../services/infowayService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
 import { pipSize } from '../utils/symbolMeta.js'
 
@@ -9,9 +9,9 @@ const router = express.Router()
 // Spec: https://www.tradingview.com/charting-library-docs/latest/connecting_data/UDF/
 //
 // The Charting Library calls these endpoints via the frontend datafeed adapter.
-// Bars come from MetaApi historical candles, real-time ticks ride the existing Socket.IO stream.
+// Bars come from Infoway historical klines, real-time ticks ride the existing Socket.IO stream.
 
-// Map TradingView resolution → MetaApi timeframe string
+// Map TradingView resolution → Infoway timeframe string (mirrors keys in infowayService.TF_TO_INFOWAY)
 const RES_TO_TIMEFRAME = {
   '1': '1m', '5': '5m', '15': '15m', '30': '30m',
   '60': '1h', '240': '4h',
@@ -139,7 +139,7 @@ router.get('/history', async (req, res) => {
       return res.json({ s: 'error', errmsg: 'Missing "to" parameter' })
     }
 
-    // MetaApi returns at most ~1000 bars and walks BACKWARD from startTime.
+    // Infoway returns at most ~1000 bars and walks BACKWARD from startTime.
     // countback (when present) is the authoritative bar count; otherwise derive from window.
     const secondsPerBar = RES_TO_SECONDS[resolution]
     const windowBars = Number.isFinite(from) && secondsPerBar
@@ -148,13 +148,13 @@ router.get('/history', async (req, res) => {
     const limit = Math.min(1000, Math.max(50, countback || windowBars))
 
     const startTime = new Date(to * 1000)
-    const candles = await metaApiService.getCandles(symbol, timeframe, startTime, limit)
+    const candles = await infowayService.getCandles(symbol, timeframe, startTime, limit)
 
     if (!candles.length) {
       return res.json({ s: 'no_data', nextTime: from ? from - secondsPerBar : undefined })
     }
 
-    // MetaApi returns candles with field .time (Date); sort ascending and drop bars before `from`
+    // Infoway returns candles with field .time (Date); sort ascending and drop bars before `from`
     const sorted = candles
       .map(c => ({
         t: Math.floor(new Date(c.time).getTime() / 1000),
@@ -188,7 +188,7 @@ router.get('/quotes', (req, res) => {
   const symbols = String(req.query.symbols || '').split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
   const data = symbols.map(raw => {
     const symbol = raw.includes(':') ? raw.split(':')[1] : raw
-    const price = metaApiService.getPrice(symbol)
+    const price = infowayService.getPrice(symbol)
     if (!price) {
       return { s: 'error', n: raw, v: {} }
     }

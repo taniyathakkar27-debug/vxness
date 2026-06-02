@@ -15,7 +15,6 @@
     "express": "^4.21.0",
     "f": "^1.4.0",
     "jsonwebtoken": "^9.0.2",
-    "metaapi.cloud-sdk": "^29.3.3",
     "mongoose": "^8.7.0",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
