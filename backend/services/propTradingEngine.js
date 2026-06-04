@@ -6,7 +6,7 @@ import User from '../models/User.js'
 import Charges from '../models/Charges.js'
 import { sendTemplateEmail } from '../services/emailService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
-import { commissionPriceDelta, commissionDollarAmount } from '../utils/commissionMath.js'
+import { commissionDollarAmount } from '../utils/commissionMath.js'
 import { pipSize, contractSize as symbolContractSize } from '../utils/symbolMeta.js'
 
 class PropTradingEngine {
@@ -248,33 +248,22 @@ class PropTradingEngine {
     // Get charges for this trade (use default charges for challenge accounts)
     const charges = await Charges.getChargesForTrade(userId, symbol, resolvedSegment, null)
     
-    const commissionEmbeddedInBuyPrice =
-      side === 'BUY' &&
-      charges.commissionValue > 0 &&
-      ['PER_LOT', 'PER_TRADE', 'PERCENTAGE'].includes(String(charges.commissionType || 'PER_LOT'))
-
     // Get contract size based on symbol
     const contractSize = this.getContractSize(symbol)
 
-    // Calculate execution price. When admin commission is configured for BUY,
-    // collapse the natural LP spread by using raw bid as the BUY base.
-    let openPrice = commissionEmbeddedInBuyPrice
-      ? this.calculateExecutionPrice(side, bid, bid, charges.spreadValue, charges.spreadType, symbol)
-      : this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
+    // Execution price = LP price + admin spread. Commission is charged separately
+    // (see trade.commission below) so users see the $ amount in the Charges column.
+    const openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
 
-    if (commissionEmbeddedInBuyPrice) {
-      openPrice += commissionPriceDelta(symbol, charges.commissionValue, charges.commissionType, quantity, openPrice)
-    }
-    
     // Calculate margin
     const leverage = rules.maxLeverage || 100
     const marginRequired = (quantity * contractSize * openPrice) / leverage
 
     // Calculate commission on open
     let commission = 0
-    const shouldChargeCommission = (side === 'BUY' && charges.commissionOnBuy !== false) || 
+    const shouldChargeCommission = (side === 'BUY' && charges.commissionOnBuy !== false) ||
                                    (side === 'SELL' && charges.commissionOnSell !== false)
-    if (shouldChargeCommission && charges.commissionValue > 0 && !commissionEmbeddedInBuyPrice) {
+    if (shouldChargeCommission && charges.commissionValue > 0) {
       commission = this.calculateCommission(quantity, openPrice, charges.commissionType, charges.commissionValue, contractSize, symbol)
     }
 

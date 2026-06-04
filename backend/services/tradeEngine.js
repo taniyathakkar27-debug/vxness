@@ -6,7 +6,7 @@ import Charges from '../models/Charges.js'
 
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
 
-import { commissionPriceDelta, commissionDollarAmount } from '../utils/commissionMath.js'
+import { commissionDollarAmount } from '../utils/commissionMath.js'
 
 import { pipSize, contractSize as symbolContractSize, isCrypto as symbolIsCrypto } from '../utils/symbolMeta.js'
 
@@ -422,40 +422,16 @@ class TradeEngine {
 
 
 
-    // BUY: add admin commission value onto ASK-based execution price (matches trading UI)
-
-    const commissionEmbeddedInBuyPrice =
-
-      side === 'BUY' &&
-
-      charges.commissionValue > 0 &&
-
-      ['PER_LOT', 'PER_TRADE', 'PERCENTAGE'].includes(String(charges.commissionType || 'PER_LOT'))
-
-
-
     // Get contract size based on symbol
 
     const contractSize = this.getContractSize(symbol)
 
 
 
-    // Calculate execution price with spread.
-    // When admin commission is configured for BUY, collapse the natural LP spread
-    // by using raw bid as the BUY base (calculateExecutionPrice with ask=bid → bid + spread).
-    // Admin commission is then added as a separate price delta below.
+    // Execution price = LP price + admin spread. Commission is charged separately
+    // (see trade.commission below) so users see the $ amount in the Charges column.
 
-    let openPrice = commissionEmbeddedInBuyPrice
-      ? this.calculateExecutionPrice(side, bid, bid, charges.spreadValue, charges.spreadType, symbol)
-      : this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
-
-
-
-    if (commissionEmbeddedInBuyPrice) {
-
-      openPrice += commissionPriceDelta(symbol, charges.commissionValue, charges.commissionType, quantity, openPrice)
-
-    }
+    const openPrice = this.calculateExecutionPrice(side, bid, ask, charges.spreadValue, charges.spreadType, symbol)
 
 
 
@@ -519,13 +495,13 @@ class TradeEngine {
 
     
 
-    if (shouldChargeCommission && charges.commissionValue > 0 && !commissionEmbeddedInBuyPrice) {
+    if (shouldChargeCommission && charges.commissionValue > 0) {
 
       commission = this.calculateCommission(quantity, openPrice, charges.commissionType, charges.commissionValue, contractSize, symbol)
 
     }
 
-    console.log(`Commission calculated: $${commission} (embeddedInBuyPrice=${commissionEmbeddedInBuyPrice}, side=${side}, commissionOnBuy=${charges.commissionOnBuy}, commissionOnSell=${charges.commissionOnSell})`)
+    console.log(`Commission calculated: $${commission} (side=${side}, commissionOnBuy=${charges.commissionOnBuy}, commissionOnSell=${charges.commissionOnSell})`)
 
 
 

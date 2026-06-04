@@ -96,30 +96,14 @@ export function adjustQuotesForAdminSpread(bid, ask, symbol, spreadEntry) {
   return { bid: b - d, ask: a + d }
 }
 
-function commissionPerLotDelta(symbol, cv) {
-  if (!Number.isFinite(cv) || cv <= 0) return 0
-  return cv * pipSize(symbol)
-}
-
-function commissionToPriceDelta(commissionEntry, symbol, bidRef, quantity = 1) {
-  const cv = Number(commissionEntry?.commission ?? commissionEntry?.commissionValue)
-  if (!commissionEntry || !Number.isFinite(cv) || cv <= 0) return 0
-  const ct = commissionEntry.commissionType || 'PER_LOT'
-  const qty = Number(quantity) > 0 ? Number(quantity) : 1
-  if (ct === 'PER_LOT') return commissionPerLotDelta(symbol, cv)
-  if (ct === 'PER_TRADE') return commissionPerLotDelta(symbol, cv) / qty
-  if (ct === 'PERCENTAGE') return bidRef * (cv / 100)
-  return 0
-}
-
 /**
  * Displayed BUY/SELL quotes when admin charges may be configured.
- * - If admin commission OR admin spread is configured: the natural LP spread is collapsed.
- *   bid stays at raw bid, ask = bid + (admin spread delta) + (admin commission delta).
- *   So $4 commission on XAUUSD → ask = bid + 0.04.
- * - If neither is configured: pass through the raw bid/ask unchanged.
+ * - If admin spread is configured: collapse the natural LP spread and show ask = bid + spread delta.
+ * - If admin spread is NOT configured: pass through raw bid/ask unchanged.
+ * Admin commission is NOT folded into the displayed ask anymore — backend charges it as a
+ * separate dollar amount on trade open and surfaces it in the Positions table's Charges column.
  */
-export function adjustQuotesForTradingDisplay(bid, ask, symbol, spreadEntry, commissionEntry, quantity = 1) {
+export function adjustQuotesForTradingDisplay(bid, ask, symbol, spreadEntry, _commissionEntry, _quantity = 1) {
   const b = Number(bid)
   const aRaw = Number(ask)
   if (!Number.isFinite(b) || !Number.isFinite(aRaw) || b <= 0 || aRaw <= 0) {
@@ -128,21 +112,12 @@ export function adjustQuotesForTradingDisplay(bid, ask, symbol, spreadEntry, com
 
   const spreadRaw = Number(spreadEntry?.spread ?? spreadEntry?.spreadValue)
   const hasAdminSpread = spreadEntry && Number.isFinite(spreadRaw) && spreadRaw > 0
-  const cv = Number(commissionEntry?.commission ?? commissionEntry?.commissionValue)
-  const hasAdminCommission = commissionEntry && Number.isFinite(cv) && cv > 0
 
-  if (!hasAdminSpread && !hasAdminCommission) {
+  if (!hasAdminSpread) {
     return { bid: b, ask: aRaw }
   }
 
-  let askMarkup = 0
-  if (hasAdminSpread) {
-    askMarkup += spreadToPriceDelta(spreadRaw, spreadEntry.spreadType || 'FIXED', symbol, b, aRaw)
-  }
-  if (hasAdminCommission) {
-    askMarkup += commissionToPriceDelta(commissionEntry, symbol, b, quantity)
-  }
-
+  const askMarkup = spreadToPriceDelta(spreadRaw, spreadEntry.spreadType || 'FIXED', symbol, b, aRaw)
   return { bid: b, ask: b + askMarkup }
 }
 
