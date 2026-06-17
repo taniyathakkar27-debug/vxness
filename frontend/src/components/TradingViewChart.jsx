@@ -9,7 +9,7 @@
 // Trade-off: candles come from TradingView's own data providers (e.g. OANDA /
 // BINANCE), so the chart price can differ slightly from the order panel, which
 // is fed by Infoway. This is accepted to guarantee the chart always renders.
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const WIDGET_SRC = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
 
@@ -59,11 +59,13 @@ function toTradingViewSymbol(rawSymbol) {
 
 export default function TradingViewChart({ symbol = 'XAUUSD', interval = '5', theme = 'dark' }) {
   const containerRef = useRef(null)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
+    setFailed(false)
     // Reset any previous widget (symbol/interval/theme changed).
     container.innerHTML = ''
 
@@ -77,6 +79,8 @@ export default function TradingViewChart({ symbol = 'XAUUSD', interval = '5', th
     script.src = WIDGET_SRC
     script.type = 'text/javascript'
     script.async = true
+    // If the external widget script is blocked/unreachable, show a fallback.
+    script.onerror = () => setFailed(true)
     script.innerHTML = JSON.stringify({
       autosize: true,
       symbol: toTradingViewSymbol(symbol),
@@ -97,11 +101,32 @@ export default function TradingViewChart({ symbol = 'XAUUSD', interval = '5', th
     }
   }, [symbol, interval, theme])
 
+  // Absolute-fill the (relative) parent so the widget always gets a concrete
+  // pixel height — otherwise autosize can collapse the chart to 0px.
   return (
-    <div
-      ref={containerRef}
-      className="tradingview-widget-container"
-      style={{ width: '100%', height: '100%' }}
-    />
+    <div style={{ position: 'absolute', inset: 0 }}>
+      <div
+        ref={containerRef}
+        className="tradingview-widget-container"
+        style={{ width: '100%', height: '100%' }}
+      />
+      {failed && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: theme === 'dark' ? '#9ca3af' : '#6b7280',
+            fontSize: 14,
+            textAlign: 'center',
+            padding: 16,
+          }}
+        >
+          Chart could not load. Please check your connection or disable any ad/script blocker, then refresh.
+        </div>
+      )}
+    </div>
   )
 }
