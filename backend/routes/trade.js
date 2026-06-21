@@ -12,6 +12,7 @@ import MasterTrader from '../models/MasterTrader.js'
 import infowayService from '../services/infowayService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
 import { commissionDollarAmount } from '../utils/commissionMath.js'
+import { isMarketOpen } from '../utils/marketHours.js'
 
 // Get price from cache (populated by background streamPrices in server.js)
 function getFreshPrice(symbol) {
@@ -103,9 +104,21 @@ router.post('/open', async (req, res) => {
     // Validate order type
     const validOrderTypes = ['MARKET', 'BUY_LIMIT', 'BUY_STOP', 'SELL_LIMIT', 'SELL_STOP']
     if (!validOrderTypes.includes(orderType)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid order type' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order type'
+      })
+    }
+
+    // Weekend market-closed guard: block NEW orders on instruments whose market is
+    // closed on weekends (forex/metals/commodities/indices). Crypto stays open 24/7.
+    // This is server-side enforcement so the rule can't be bypassed by calling the API
+    // directly. (Closing existing trades and SL/TP auto-close are unaffected.)
+    if (!isMarketOpen(symbol)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Market is closed on weekends for this instrument. Trading will resume when the market reopens.',
+        code: 'MARKET_CLOSED_WEEKEND'
       })
     }
 

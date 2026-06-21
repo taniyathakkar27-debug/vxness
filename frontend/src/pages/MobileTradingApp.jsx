@@ -32,6 +32,8 @@ import KycTradeRequiredModal from '../components/KycTradeRequiredModal'
 
 import { formatPrice } from '../utils/formatPrice'
 
+import { isMarketOpen, marketClosedReason } from '../utils/marketHours'
+
 
 
 const MobileTradingApp = () => {
@@ -53,6 +55,15 @@ const MobileTradingApp = () => {
   const [showOrderPanel, setShowOrderPanel] = useState(false)
 
   const [selectedInstrument, setSelectedInstrument] = useState(null)
+
+  // Ticks every 30s so the weekend market-open check re-evaluates around the
+  // Saturday/Sunday (UTC) boundary even when no price ticks are arriving.
+  const [marketClock, setMarketClock] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setMarketClock(new Date()), 30000)
+    return () => clearInterval(id)
+  }, [])
 
   const [user, setUser] = useState(null)
 
@@ -755,13 +766,23 @@ const MobileTradingApp = () => {
 
     if (!selectedAccount || !selectedInstrument || isExecuting) return
 
+    // Weekend market-closed guard (crypto stays open 24/7)
+
+    if (!isMarketOpen(selectedInstrument.symbol)) {
+
+      showNotification('Market is closed on weekends for this instrument. Trading will resume when the market reopens.', 'error')
+
+      return
+
+    }
+
     setIsExecuting(true)
 
 
 
     const prices = livePrices[selectedInstrument.symbol] || {}
 
-    
+
 
     // Check if market data is available
 
@@ -2691,6 +2712,18 @@ const MobileTradingApp = () => {
 
         
 
+        {!isMarketOpen(activeChartTab, marketClock) && (
+
+          <div className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/40 text-yellow-500 text-xs">
+
+            <Clock className="w-4 h-4 flex-shrink-0" />
+
+            <span>{marketClosedReason(activeChartTab, marketClock) || 'Market is closed.'} Buy/Sell is disabled until it reopens.</span>
+
+          </div>
+
+        )}
+
         <div className="flex gap-2 px-3 pb-2">
 
           <button
@@ -2700,6 +2733,14 @@ const MobileTradingApp = () => {
               if (!selectedAccount || !user) {
 
                 showNotification('Please select an account first', 'error')
+
+                return
+
+              }
+
+              if (!isMarketOpen(activeChartTab)) {
+
+                showNotification('Market is closed on weekends for this instrument.', 'error')
 
                 return
 
@@ -2777,7 +2818,7 @@ const MobileTradingApp = () => {
 
             }}
 
-            disabled={isExecuting || !selectedAccount}
+            disabled={isExecuting || !selectedAccount || !isMarketOpen(activeChartTab, marketClock)}
 
             className="flex-1 py-3 bg-red-500 text-white font-semibold rounded-xl disabled:opacity-50"
 
@@ -2794,6 +2835,14 @@ const MobileTradingApp = () => {
               if (!selectedAccount || !user) {
 
                 showNotification('Please select an account first', 'error')
+
+                return
+
+              }
+
+              if (!isMarketOpen(activeChartTab)) {
+
+                showNotification('Market is closed on weekends for this instrument.', 'error')
 
                 return
 
@@ -2871,7 +2920,7 @@ const MobileTradingApp = () => {
 
             }}
 
-            disabled={isExecuting || !selectedAccount}
+            disabled={isExecuting || !selectedAccount || !isMarketOpen(activeChartTab, marketClock)}
 
             className="flex-1 py-3 bg-blue-500 text-white font-semibold rounded-xl disabled:opacity-50"
 
@@ -3037,6 +3086,20 @@ const MobileTradingApp = () => {
 
 
 
+              {!isMarketOpen(selectedInstrument.symbol, marketClock) && (
+
+                <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/40 text-yellow-500 text-xs">
+
+                  <Clock className="w-4 h-4 flex-shrink-0" />
+
+                  <span>{marketClosedReason(selectedInstrument.symbol, marketClock) || 'Market is closed.'} Buy/Sell is disabled until it reopens.</span>
+
+                </div>
+
+              )}
+
+
+
               {/* Leverage Selector */}
 
               <div className="flex items-center justify-between bg-dark-700 rounded-lg px-4 py-2 mb-4">
@@ -3083,9 +3146,9 @@ const MobileTradingApp = () => {
 
                   onClick={() => executeOrder('SELL')}
 
-                  disabled={isExecuting}
+                  disabled={isExecuting || !isMarketOpen(selectedInstrument.symbol, marketClock)}
 
-                  className="flex-1 py-3 bg-red-600 rounded-xl disabled:opacity-50"
+                  className="flex-1 py-3 bg-red-600 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
 
                 >
 
@@ -3103,9 +3166,9 @@ const MobileTradingApp = () => {
 
                   onClick={() => executeOrder('BUY')}
 
-                  disabled={isExecuting}
+                  disabled={isExecuting || !isMarketOpen(selectedInstrument.symbol, marketClock)}
 
-                  className="flex-1 py-3 bg-blue-600 rounded-xl disabled:opacity-50"
+                  className="flex-1 py-3 bg-blue-600 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
 
                 >
 
@@ -3367,13 +3430,13 @@ const MobileTradingApp = () => {
 
                     onClick={() => executeOrder('SELL')}
 
-                    disabled={isExecuting}
+                    disabled={isExecuting || !isMarketOpen(selectedInstrument.symbol, marketClock)}
 
-                    className="flex-1 py-4 bg-red-500 text-white font-semibold rounded-xl disabled:opacity-50"
+                    className="flex-1 py-4 bg-red-500 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
 
                   >
 
-                    {isExecuting ? 'Executing...' : 'SELL'}
+                    {isExecuting ? 'Executing...' : (!isMarketOpen(selectedInstrument.symbol, marketClock) ? 'Closed' : 'SELL')}
 
                   </button>
 
@@ -3381,13 +3444,13 @@ const MobileTradingApp = () => {
 
                     onClick={() => executeOrder('BUY')}
 
-                    disabled={isExecuting}
+                    disabled={isExecuting || !isMarketOpen(selectedInstrument.symbol, marketClock)}
 
-                    className="flex-1 py-4 bg-blue-500 text-white font-semibold rounded-xl disabled:opacity-50"
+                    className="flex-1 py-4 bg-blue-500 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
 
                   >
 
-                    {isExecuting ? 'Executing...' : 'BUY'}
+                    {isExecuting ? 'Executing...' : (!isMarketOpen(selectedInstrument.symbol, marketClock) ? 'Closed' : 'BUY')}
 
                   </button>
 
@@ -3399,13 +3462,13 @@ const MobileTradingApp = () => {
 
                   onClick={executeOrder}
 
-                  disabled={isExecuting}
+                  disabled={isExecuting || !isMarketOpen(selectedInstrument.symbol, marketClock)}
 
-                  className={`w-full py-4 font-semibold rounded-xl disabled:opacity-50 ${
+                  className={`w-full py-4 font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed ${
 
-                    pendingOrderType.includes('BUY') 
+                    pendingOrderType.includes('BUY')
 
-                      ? 'bg-blue-600 text-white' 
+                      ? 'bg-blue-600 text-white'
 
                       : 'bg-red-600 text-white'
 
@@ -3413,7 +3476,7 @@ const MobileTradingApp = () => {
 
                 >
 
-                  {isExecuting ? 'Placing...' : `Place ${pendingOrderType.replace('_', ' ')}`}
+                  {isExecuting ? 'Placing...' : (!isMarketOpen(selectedInstrument.symbol, marketClock) ? 'Market Closed (Weekend)' : `Place ${pendingOrderType.replace('_', ' ')}`)}
 
                 </button>
 

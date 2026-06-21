@@ -16,6 +16,8 @@ import { API_URL } from '../config/api'
 
 import { adjustQuotesForTradingDisplay } from '../services/chargePricing'
 
+import { isMarketOpen, marketClosedReason } from '../utils/marketHours'
+
 import TradingViewChart from '../components/TradingViewChart'
 
 
@@ -65,6 +67,20 @@ const TradingPage = () => {
   const [oneClickTrading, setOneClickTrading] = useState(false)
 
   const [selectedSide, setSelectedSide] = useState('BUY') // BUY or SELL
+
+  // Ticks every 30s so the weekend market-open check re-evaluates around the
+  // Saturday/Sunday (UTC) boundary even when no price ticks are arriving.
+  const [marketClock, setMarketClock] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setMarketClock(new Date()), 30000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Whether the currently selected instrument can be traded right now.
+  // Crypto is always open; forex/metals/commodities/indices are closed on weekends.
+  const marketOpen = isMarketOpen(selectedInstrument?.symbol, marketClock)
+  const marketClosedMsg = marketClosedReason(selectedInstrument?.symbol, marketClock)
 
   const [openTabs, setOpenTabs] = useState([{ symbol: 'XAUUSD', name: 'CFDs on Gold (US$ / OZ)', bid: 0, ask: 0, spread: 0 }])
 
@@ -1639,7 +1655,17 @@ const TradingPage = () => {
 
     }
 
-    
+    // Weekend market-closed guard (crypto stays open 24/7)
+
+    if (!isMarketOpen(selectedInstrument?.symbol)) {
+
+      setTradeError('Market is closed on weekends for this instrument. Trading will resume when the market reopens.')
+
+      return
+
+    }
+
+
 
     setIsExecutingTrade(true)
 
@@ -1809,7 +1835,17 @@ const TradingPage = () => {
 
     }
 
-    
+    // Weekend market-closed guard (crypto stays open 24/7)
+
+    if (!isMarketOpen(selectedInstrument?.symbol)) {
+
+      setTradeError('Market is closed on weekends for this instrument. Trading will resume when the market reopens.')
+
+      return
+
+    }
+
+
 
     setIsExecutingTrade(true)
 
@@ -3454,9 +3490,11 @@ const TradingPage = () => {
 
                           onClick={() => executeMarketOrder('SELL')}
 
-                          disabled={isExecutingTrade}
+                          disabled={isExecutingTrade || !marketOpen}
 
-                          className="w-8 h-8 rounded-full bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors disabled:opacity-50"
+                          title={!marketOpen ? (marketClosedMsg || 'Market closed') : ''}
+
+                          className="w-8 h-8 rounded-full bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 
                         >
 
@@ -3480,9 +3518,11 @@ const TradingPage = () => {
 
                           onClick={() => executeMarketOrder('BUY')}
 
-                          disabled={isExecutingTrade}
+                          disabled={isExecutingTrade || !marketOpen}
 
-                          className="w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-bold hover:bg-blue-600 transition-colors disabled:opacity-50"
+                          title={!marketOpen ? (marketClosedMsg || 'Market closed') : ''}
+
+                          className="w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-bold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 
                         >
 
@@ -4140,6 +4180,22 @@ const TradingPage = () => {
 
 
 
+                  {/* Weekend market-closed notice (crypto stays open 24/7) */}
+
+                  {!marketOpen && (
+
+                    <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded bg-yellow-500/10 border border-yellow-500/40 text-yellow-500 text-xs">
+
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+
+                      <span>{marketClosedMsg || 'Market is closed.'} Buy/Sell is disabled until it reopens.</span>
+
+                    </div>
+
+                  )}
+
+
+
                   {/* One-Click Buy/Sell Buttons (prices include admin spread like execution) */}
 
                   {(() => {
@@ -4156,11 +4212,13 @@ const TradingPage = () => {
 
                   <div className="flex gap-2 mb-3">
 
-                    <button 
+                    <button
 
                       onClick={() => executeMarketOrder('SELL')}
 
-                      disabled={isExecutingTrade}
+                      disabled={isExecutingTrade || !marketOpen}
+
+                      title={!marketOpen ? (marketClosedMsg || 'Market closed') : ''}
 
                       className="flex-1 rounded py-3 text-center transition-colors bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
 
@@ -4176,11 +4234,13 @@ const TradingPage = () => {
 
                     </button>
 
-                    <button 
+                    <button
 
                       onClick={() => executeMarketOrder('BUY')}
 
-                      disabled={isExecutingTrade}
+                      disabled={isExecutingTrade || !marketOpen}
+
+                      title={!marketOpen ? (marketClosedMsg || 'Market closed') : ''}
 
                       className="flex-1 rounded py-3 text-center transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
 
@@ -4554,15 +4614,17 @@ const TradingPage = () => {
 
                 <div className={`p-3 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
 
-                  <button 
+                  <button
 
                     onClick={() => executeMarketOrder(selectedSide)}
 
-                    disabled={isExecutingTrade}
+                    disabled={isExecutingTrade || !marketOpen}
+
+                    title={!marketOpen ? (marketClosedMsg || 'Market closed') : ''}
 
                     className={`w-full py-3 rounded font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
 
-                      selectedSide === 'BUY' 
+                      selectedSide === 'BUY'
 
                         ? 'bg-blue-600/20 border border-blue-600 hover:bg-blue-600/30 text-blue-400'
 
@@ -4572,7 +4634,7 @@ const TradingPage = () => {
 
                   >
 
-                    {isExecutingTrade ? 'Executing...' : `Open ${selectedSide} Order`}
+                    {isExecutingTrade ? 'Executing...' : (!marketOpen ? 'Market Closed (Weekend)' : `Open ${selectedSide} Order`)}
 
                   </button>
 
@@ -4900,17 +4962,19 @@ const TradingPage = () => {
 
                 <div className={`p-3 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
 
-                  <button 
+                  <button
 
                     onClick={executePendingOrder}
 
-                    disabled={isExecutingTrade}
+                    disabled={isExecutingTrade || !marketOpen}
+
+                    title={!marketOpen ? (marketClosedMsg || 'Market closed') : ''}
 
                     className="w-full bg-blue-600/20 border border-blue-600 hover:bg-blue-600/30 text-blue-400 py-3 rounded font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 
                   >
 
-                    {isExecutingTrade ? 'Placing...' : `Place ${pendingOrderType}`}
+                    {isExecutingTrade ? 'Placing...' : (!marketOpen ? 'Market Closed (Weekend)' : `Place ${pendingOrderType}`)}
 
                   </button>
 

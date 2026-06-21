@@ -197,11 +197,20 @@ function getContractSize(symbol) {
   return 100000
 }
 
+// GET /api/prices/status - Live/frozen state of the Infoway price feed (MUST be before /:symbol)
+router.get('/status', (req, res) => {
+  try {
+    res.json({ success: true, status: infowayService.getFeedStatus() })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
 // GET /api/prices/:symbol - Get single symbol price
 router.get('/:symbol', async (req, res) => {
   try {
     const { symbol } = req.params
-    
+
     // Check if symbol is supported
     if (!SYMBOL_MAP[symbol]) {
       return res.status(404).json({ success: false, message: `Symbol ${symbol} not supported` })

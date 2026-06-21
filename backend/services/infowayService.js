@@ -1,9 +1,22 @@
 import WebSocket from 'ws'
 import dotenv from 'dotenv'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 dotenv.config()
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 const INFOWAY_API_KEY = process.env.INFOWAY_API_KEY
+
+// Last-known prices are persisted here so that, if the Infoway feed is down or the
+// API key has expired at startup, the service can serve the last traded prices
+// (frozen) instead of falling back to generic static defaults.
+const PRICE_CACHE_DIR = path.join(__dirname, '..', 'data')
+const PRICE_CACHE_FILE = path.join(PRICE_CACHE_DIR, 'lastPrices.json')
+const PRICE_PERSIST_INTERVAL_MS = 30_000
 
 // WebSocket URLs — same pattern that was working pre-MetaApi switch
 const WS_FOREX_URL = `wss://data.infoway.io/ws?business=common&apikey=${INFOWAY_API_KEY}`
@@ -229,12 +242,19 @@ class InfowayService {
     this.cryptoReconnectAttempts = 0
     this.forexReconnectTimer = null
     this.cryptoReconnectTimer = null
+    this.persistInterval = null
+    this.lastTickAt = 0
     this.shutdown = false
+
+    // Seed the cache with the last persisted prices so quotes are available
+    // immediately on startup — even before the first live tick, and even if the
+    // API key has expired (prices stay frozen at their last traded value).
+    this.loadPersistedPrices()
   }
 
   async connect() {
     if (!INFOWAY_API_KEY) {
-      console.error('[Infoway] No INFOWAY_API_KEY configured')
+      console.error('[Infoway] No INFOWAY_API_KEY configured — serving last persisted (frozen) prices')
       return false
     }
     this.shutdown = false
@@ -242,8 +262,47 @@ class InfowayService {
     await Promise.allSettled([this.connectForex(), this.connectCrypto()])
     this.startHeartbeat()
     this.startWatchdog()
+    this.startPersistence()
     console.log('[Infoway] Service started (self-healing enabled)')
     return true
+  }
+
+  // ---- Last-price persistence (keeps prices frozen across restarts) ----
+  loadPersistedPrices() {
+    try {
+      if (!fs.existsSync(PRICE_CACHE_FILE)) return
+      const raw = fs.readFileSync(PRICE_CACHE_FILE, 'utf8')
+      const saved = JSON.parse(raw)
+      if (saved && typeof saved === 'object' && saved.prices) {
+        Object.entries(saved.prices).forEach(([symbol, price]) => {
+          if (price && typeof price.bid === 'number' && typeof price.ask === 'number') {
+            this.prices.set(symbol, price)
+          }
+        })
+        console.log(`[Infoway] Loaded ${this.prices.size} persisted (frozen) prices from disk`)
+      }
+    } catch (e) {
+      console.error('[Infoway] Failed to load persisted prices:', e.message)
+    }
+  }
+
+  persistPrices() {
+    try {
+      if (this.prices.size === 0) return
+      if (!fs.existsSync(PRICE_CACHE_DIR)) fs.mkdirSync(PRICE_CACHE_DIR, { recursive: true })
+      const payload = {
+        savedAt: Date.now(),
+        prices: Object.fromEntries(this.prices),
+      }
+      fs.writeFileSync(PRICE_CACHE_FILE, JSON.stringify(payload), 'utf8')
+    } catch (e) {
+      console.error('[Infoway] Failed to persist prices:', e.message)
+    }
+  }
+
+  startPersistence() {
+    if (this.persistInterval) clearInterval(this.persistInterval)
+    this.persistInterval = setInterval(() => this.persistPrices(), PRICE_PERSIST_INTERVAL_MS)
   }
 
   connectForex() {
@@ -406,6 +465,7 @@ class InfowayService {
             ask: parseFloat(askPrice),
             time: msg.data.t || Date.now()
           }
+          this.lastTickAt = Date.now()
           this.prices.set(symbol, priceData)
           this.subscribers.forEach(callback => {
             try { callback(symbol, priceData) } catch (e) {}
@@ -475,6 +535,24 @@ class InfowayService {
     const cryptoOk = this.cryptoWs?.readyState === WebSocket.OPEN &&
       this.cryptoLastMessageAt && (now - this.cryptoLastMessageAt) < STALE_MS
     return { forex: !!forexOk, crypto: !!cryptoOk }
+  }
+
+  // Feed status for the frontend. `live` = receiving fresh ticks. When the API key
+  // expires / feed drops, `live` becomes false and the cached prices are "frozen".
+  getFeedStatus() {
+    const now = Date.now()
+    const health = this.isHealthy()
+    const live = health.forex || health.crypto
+    return {
+      live,
+      frozen: !live && this.prices.size > 0,
+      apiKeyConfigured: !!INFOWAY_API_KEY,
+      lastTickAt: this.lastTickAt || null,
+      ageMs: this.lastTickAt ? now - this.lastTickAt : null,
+      forex: health.forex,
+      crypto: health.crypto,
+      symbols: this.prices.size,
+    }
   }
 
   getPrice(symbol) {
@@ -585,6 +663,8 @@ class InfowayService {
 
   async disconnect() {
     this.shutdown = true
+    this.persistPrices() // flush last-known prices so they stay frozen across the restart
+    if (this.persistInterval) { clearInterval(this.persistInterval); this.persistInterval = null }
     if (this.heartbeatInterval) { clearInterval(this.heartbeatInterval); this.heartbeatInterval = null }
     if (this.watchdogInterval) { clearInterval(this.watchdogInterval); this.watchdogInterval = null }
     if (this.forexReconnectTimer) { clearTimeout(this.forexReconnectTimer); this.forexReconnectTimer = null }
