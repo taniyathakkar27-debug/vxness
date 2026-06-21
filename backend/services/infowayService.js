@@ -156,7 +156,7 @@ const FALLBACK_PRICES = {
   'USDCZK': { bid: 21.90, ask: 21.92 },
   'EURCZK': { bid: 24.79, ask: 24.81 },
 
-  'XAUUSD': { bid: 3245.00, ask: 3245.50 },
+  'XAUUSD': { bid: 4155.40, ask: 4155.90 },
   'XAGUSD': { bid: 32.85, ask: 32.87 },
   'XPTUSD': { bid: 1075.00, ask: 1076.00 },
   'XPDUSD': { bid: 980.00, ask: 981.00 },
