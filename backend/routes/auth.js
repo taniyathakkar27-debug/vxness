@@ -197,8 +197,8 @@ router.post('/signup', async (req, res) => {
       firstName: user.firstName,
       email: user.email,
       platformName: emailSettings?.fromName || 'Trading Platform',
-      loginUrl: 'http://localhost:5173/login',
-      supportEmail: emailSettings?.fromEmail || 'support@example.com',
+      loginUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/user/login` : 'https://vxness.com/user/login',
+      supportEmail: emailSettings?.fromEmail || 'support@vxness.com',
       year: new Date().getFullYear().toString()
     })
 
