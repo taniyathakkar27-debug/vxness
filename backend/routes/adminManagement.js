@@ -52,23 +52,23 @@ const buildAdminAuthResponse = async (admin) => {
 // POST /api/admin-mgmt/login - Admin login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body
+    const { email } = req.body
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' })
+    }
 
     const admin = await Admin.findOne({ email: email.toLowerCase() })
     if (!admin) {
-      return res.status(401).json({ message: 'Invalid credentials' })
+      return res.status(401).json({ message: 'Invalid admin email' })
     }
 
     if (admin.status !== 'ACTIVE') {
       return res.status(403).json({ message: 'Account is suspended or pending' })
     }
 
-    const isMatch = await bcrypt.compare(password, admin.password)
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' })
-    }
-
-    // Credentials OK — do NOT issue a token yet. Require an OTP (2FA) first.
+    // Email belongs to an active admin — send an OTP. Access is gated entirely
+    // by the authorized OTP inbox (no password step).
     const otp = generateOTP()
     const expiryMinutes = getOTPExpiry()
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000)

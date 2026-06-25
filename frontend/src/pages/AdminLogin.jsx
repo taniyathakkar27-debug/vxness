@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
-import { X, Mail, Lock, Eye, EyeOff, KeyRound, ArrowLeft } from 'lucide-react'
+import { X, Mail, KeyRound, ArrowLeft } from 'lucide-react'
 import logo from '../assets/logo.png'
 import { API_URL } from '../config/api'
 
@@ -9,18 +9,9 @@ const AdminLogin = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [step, setStep] = useState('credentials') // 'credentials' | 'otp'
+  const [step, setStep] = useState('email') // 'email' | 'otp'
   const [otp, setOtp] = useState('')
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  })
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
-    setError('')
-  }
+  const [email, setEmail] = useState('')
 
   // Persist session + go to dashboard
   const completeLogin = (data) => {
@@ -30,9 +21,13 @@ const AdminLogin = () => {
     navigate('/admin/dashboard')
   }
 
-  // Step 1: validate credentials -> server sends OTP to authorized admin email
+  // Step 1: submit admin email -> server sends OTP to authorized admin inbox
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!email.trim()) {
+      setError('Please enter the admin email')
+      return
+    }
     setLoading(true)
     setError('')
 
@@ -40,10 +35,7 @@ const AdminLogin = () => {
       const response = await fetch(`${API_URL}/admin-mgmt/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
+        body: JSON.stringify({ email: email.trim() })
       })
 
       const data = await response.json()
@@ -80,7 +72,7 @@ const AdminLogin = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: formData.email,
+          email: email.trim(),
           otp: otp.trim()
         })
       })
@@ -107,7 +99,7 @@ const AdminLogin = () => {
   }
 
   const goBack = () => {
-    setStep('credentials')
+    setStep('email')
     setOtp('')
     setError('')
   }
@@ -140,11 +132,11 @@ const AdminLogin = () => {
           </div>
         </div>
 
-        {step === 'credentials' ? (
+        {step === 'email' ? (
           <>
             {/* Title */}
             <h1 className="text-2xl font-semibold text-white mb-2">Admin Login</h1>
-            <p className="text-gray-500 text-sm mb-6">Enter your admin credentials to continue</p>
+            <p className="text-gray-500 text-sm mb-6">Enter your admin email to receive a login OTP</p>
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -154,31 +146,15 @@ const AdminLogin = () => {
                 <input
                   type="email"
                   name="email"
+                  autoFocus
                   placeholder="Admin email"
-                  value={formData.email}
-                  onChange={handleChange}
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setError('')
+                  }}
                   className="w-full bg-dark-600 border border-gray-700 rounded-lg pl-11 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 transition-colors"
                 />
-              </div>
-
-              {/* Password field */}
-              <div className="relative">
-                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  placeholder="Admin password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="w-full bg-dark-600 border border-gray-700 rounded-lg pl-11 pr-12 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
               </div>
 
               {/* Error message */}
@@ -190,7 +166,7 @@ const AdminLogin = () => {
                 disabled={loading}
                 className="w-full bg-red-500 text-white font-medium py-3 rounded-lg hover:bg-red-600 transition-colors mt-2 disabled:opacity-50"
               >
-                {loading ? 'Sending OTP...' : 'Sign in as Admin'}
+                {loading ? 'Sending OTP...' : 'Send OTP'}
               </button>
             </form>
           </>
