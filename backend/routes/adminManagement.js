@@ -5,10 +5,47 @@ import Admin from '../models/Admin.js'
 import AdminWallet from '../models/AdminWallet.js'
 import AdminWalletTransaction from '../models/AdminWalletTransaction.js'
 import User from '../models/User.js'
+import OTP from '../models/OTP.js'
+import EmailSettings from '../models/EmailSettings.js'
+import { sendTemplateEmail, generateOTP, getOTPExpiry } from '../services/emailService.js'
 
 const router = express.Router()
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
+
+// All admin logins must pass a 2FA OTP. The OTP is always delivered to this
+// single authorized inbox (configurable via env), regardless of which admin
+// account is logging in.
+const ADMIN_OTP_EMAIL = process.env.ADMIN_OTP_EMAIL || 'vikas.mehta2607@gmail.com'
+
+// Build the standard admin auth payload (session token + admin object)
+const buildAdminAuthResponse = async (admin) => {
+  admin.lastLogin = new Date()
+  await admin.save()
+
+  const wallet = await AdminWallet.findOne({ adminId: admin._id })
+  const token = jwt.sign(
+    { adminId: admin._id, role: admin.role, email: admin.email },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  )
+
+  return {
+    success: true,
+    token,
+    admin: {
+      _id: admin._id,
+      email: admin.email,
+      firstName: admin.firstName,
+      lastName: admin.lastName,
+      role: admin.role,
+      urlSlug: admin.urlSlug,
+      brandName: admin.brandName,
+      permissions: admin.permissions,
+      walletBalance: wallet?.balance || 0
+    }
+  }
+}
 
 // ==================== ADMIN AUTH ====================
 
@@ -31,36 +68,79 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' })
     }
 
-    // Update last login
-    admin.lastLogin = new Date()
-    await admin.save()
+    // Credentials OK — do NOT issue a token yet. Require an OTP (2FA) first.
+    const otp = generateOTP()
+    const expiryMinutes = getOTPExpiry()
+    const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000)
 
-    // Get wallet info
-    const wallet = await AdminWallet.findOne({ adminId: admin._id })
+    // Keep a single active login-OTP per admin account.
+    await OTP.deleteMany({ email: admin.email.toLowerCase(), purpose: 'login' })
+    await OTP.create({ email: admin.email.toLowerCase(), otp, purpose: 'login', expiresAt })
 
-    const token = jwt.sign(
-      { adminId: admin._id, role: admin.role, email: admin.email },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    )
+    // The OTP is sent to the authorized admin-2FA inbox, not the login email.
+    const settings = await EmailSettings.findOne()
+    const platformName = settings?.fromName || 'Vxness'
+    const supportEmail = settings?.fromEmail || 'support@vxness.com'
 
-    res.json({
+    const emailResult = await sendTemplateEmail('email_verification', ADMIN_OTP_EMAIL, {
+      otp,
+      firstName: 'Admin',
+      email: ADMIN_OTP_EMAIL,
+      expiryMinutes: expiryMinutes.toString(),
+      platformName,
+      supportEmail,
+      year: new Date().getFullYear().toString()
+    })
+
+    if (!emailResult.success) {
+      // Fail-soft: if SMTP is down, don't lock the admin out — log the OTP to the
+      // server console (server access already implies trust) but still require it.
+      console.warn(`[ADMIN-OTP] Email send failed (${emailResult.message}). OTP for ${admin.email}: ${otp}`)
+    }
+
+    return res.json({
       success: true,
-      token,
-      admin: {
-        _id: admin._id,
-        email: admin.email,
-        firstName: admin.firstName,
-        lastName: admin.lastName,
-        role: admin.role,
-        urlSlug: admin.urlSlug,
-        brandName: admin.brandName,
-        permissions: admin.permissions,
-        walletBalance: wallet?.balance || 0
-      }
+      otpRequired: true,
+      email: admin.email,
+      message: 'A verification OTP has been sent to the authorized admin email'
     })
   } catch (error) {
     res.status(500).json({ message: 'Login failed', error: error.message })
+  }
+})
+
+// POST /api/admin-mgmt/verify-login-otp - Step 2: verify the OTP, then issue session
+router.post('/verify-login-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body
+    if (!email || !otp) {
+      return res.status(400).json({ message: 'Email and OTP are required' })
+    }
+
+    const admin = await Admin.findOne({ email: email.toLowerCase() })
+    if (!admin) {
+      return res.status(401).json({ message: 'Invalid credentials' })
+    }
+    if (admin.status !== 'ACTIVE') {
+      return res.status(403).json({ message: 'Account is suspended or pending' })
+    }
+
+    const otpRecord = await OTP.findOne({ email: email.toLowerCase(), otp, purpose: 'login' })
+    if (!otpRecord) {
+      return res.status(400).json({ message: 'Invalid OTP' })
+    }
+    if (otpRecord.expiresAt < new Date()) {
+      await OTP.deleteOne({ _id: otpRecord._id })
+      return res.status(400).json({ message: 'OTP has expired' })
+    }
+
+    // OTP is valid — consume it and issue the session.
+    await OTP.deleteOne({ _id: otpRecord._id })
+
+    const payload = await buildAdminAuthResponse(admin)
+    res.json(payload)
+  } catch (error) {
+    res.status(500).json({ message: 'OTP verification failed', error: error.message })
   }
 })
 
