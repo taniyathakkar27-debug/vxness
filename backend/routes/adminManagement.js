@@ -18,6 +18,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 // account is logging in.
 const ADMIN_OTP_EMAIL = process.env.ADMIN_OTP_EMAIL || 'vikas.mehta2607@gmail.com'
 
+// Resolve which admin account a login email maps to.
+// ONLY the authorized OTP email (vikas...@gmail.com) is accepted; it maps to the
+// primary super admin. Any other email is rejected as invalid.
+const resolveLoginAdmin = async (rawEmail) => {
+  const normalized = (rawEmail || '').toLowerCase().trim()
+  if (!normalized || normalized !== ADMIN_OTP_EMAIL.toLowerCase()) return null
+  return (await Admin.findOne({ role: 'SUPER_ADMIN' })) || (await Admin.findOne())
+}
+
 // Build the standard admin auth payload (session token + admin object)
 const buildAdminAuthResponse = async (admin) => {
   admin.lastLogin = new Date()
@@ -58,7 +67,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Email is required' })
     }
 
-    const admin = await Admin.findOne({ email: email.toLowerCase() })
+    const admin = await resolveLoginAdmin(email)
     if (!admin) {
       return res.status(401).json({ message: 'Invalid admin email' })
     }
@@ -117,7 +126,7 @@ router.post('/verify-login-otp', async (req, res) => {
       return res.status(400).json({ message: 'Email and OTP are required' })
     }
 
-    const admin = await Admin.findOne({ email: email.toLowerCase() })
+    const admin = await resolveLoginAdmin(email)
     if (!admin) {
       return res.status(401).json({ message: 'Invalid credentials' })
     }
@@ -125,7 +134,7 @@ router.post('/verify-login-otp', async (req, res) => {
       return res.status(403).json({ message: 'Account is suspended or pending' })
     }
 
-    const otpRecord = await OTP.findOne({ email: email.toLowerCase(), otp, purpose: 'login' })
+    const otpRecord = await OTP.findOne({ email: admin.email.toLowerCase(), otp, purpose: 'login' })
     if (!otpRecord) {
       return res.status(400).json({ message: 'Invalid OTP' })
     }
