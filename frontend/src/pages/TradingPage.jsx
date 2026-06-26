@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { Search, Star, X, Plus, Minus, Settings, Home, Wallet, LayoutGrid, BarChart3, Pencil, Trophy, AlertTriangle, Sun, Moon, FileCheck, Clock, Layers, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, Star, X, Plus, Minus, Settings, Home, Wallet, LayoutGrid, BarChart3, Pencil, Trophy, AlertTriangle, Sun, Moon, FileCheck, Clock, Layers } from 'lucide-react'
 
 import metaApiService from '../services/metaApi'
 
@@ -3537,7 +3537,7 @@ const TradingPage = () => {
                     ? (currentPrice - trade.openPrice) * trade.quantity * trade.contractSize
                     : (trade.openPrice - currentPrice) * trade.quantity * trade.contractSize
                   if (!groupsMap[trade.symbol]) {
-                    groupsMap[trade.symbol] = { symbol: trade.symbol, trades: [], longLots: 0, shortLots: 0, netPnl: 0, charges: 0, swap: 0 }
+                    groupsMap[trade.symbol] = { symbol: trade.symbol, trades: [], longLots: 0, shortLots: 0, netPnl: 0, charges: 0, swap: 0, entrySum: 0, qtySum: 0, bid: 0, ask: 0 }
                   }
                   const g = groupsMap[trade.symbol]
                   g.trades.push({ ...trade, currentPrice, pnl })
@@ -3546,6 +3546,10 @@ const TradingPage = () => {
                   g.netPnl += pnl
                   g.charges += (trade.commission || 0)
                   g.swap += (trade.swap || 0)
+                  g.entrySum += trade.openPrice * trade.quantity
+                  g.qtySum += trade.quantity
+                  g.bid = livePrice ? livePrice.bid : inst.bid
+                  g.ask = livePrice ? livePrice.ask : inst.ask
                 })
 
                 const groups = Object.values(groupsMap).sort((a, b) => a.symbol.localeCompare(b.symbol))
@@ -3636,22 +3640,26 @@ const TradingPage = () => {
                           /* NETTED: one row per currency, click to expand its own trades */
                           groups.map(group => {
                             const netLots = group.longLots - group.shortLots
-                            const netDir = netLots > 0 ? 'LONG' : netLots < 0 ? 'SHORT' : 'FLAT'
+                            const netSide = netLots > 0 ? 'BUY' : netLots < 0 ? 'SELL' : 'FLAT'
+                            const avgEntry = group.qtySum ? group.entrySum / group.qtySum : 0
+                            const curPrice = netLots >= 0 ? group.bid : group.ask
                             const isExpanded = expandedNettingSymbols.has(group.symbol)
+                            // Earliest opened trade of this currency, shown in the Time column
+                            const firstTime = group.trades.reduce((min, t) => {
+                              const d = new Date(t.openedAt || t.createdAt)
+                              return (!min || d < min) ? d : min
+                            }, null)
                             return (
                               <Fragment key={group.symbol}>
                                 <tr onClick={() => toggleSymbol(group.symbol)} className={`border-t cursor-pointer ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                                  <td className="py-2 px-3 text-xs text-gray-500">—</td>
+                                  <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{firstTime ? firstTime.toLocaleString() : '—'}</td>
                                   <td className={`py-2 px-3 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                    <div className="flex items-center gap-1.5">
-                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                      <SymbolBadge symbol={group.symbol} count={group.trades.length} />
-                                    </div>
+                                    <SymbolBadge symbol={group.symbol} count={group.trades.length} />
                                   </td>
-                                  <td className={`py-2 px-3 text-xs font-bold ${netDir === 'LONG' ? 'text-blue-400' : netDir === 'SHORT' ? 'text-red-400' : 'text-gray-400'}`}>{netDir}</td>
+                                  <td className={`py-2 px-3 text-xs font-bold ${netSide === 'BUY' ? 'text-blue-400' : netSide === 'SELL' ? 'text-red-400' : 'text-gray-400'}`}>{netSide}</td>
                                   <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{Math.abs(netLots).toFixed(2)}</td>
-                                  <td className="py-2 px-3 text-xs text-gray-500">—</td>
-                                  <td className="py-2 px-3 text-xs text-gray-500">—</td>
+                                  <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(group.symbol, avgEntry)}</td>
+                                  <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(group.symbol, curPrice)}</td>
                                   <td className="py-2 px-3 text-xs text-gray-500">—</td>
                                   <td className="py-2 px-3 text-xs text-gray-500">—</td>
                                   <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${group.charges.toFixed(2)}</td>
