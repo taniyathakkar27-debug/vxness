@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react'
 
 import toast from 'react-hot-toast'
 
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { Search, Star, X, Plus, Minus, Settings, Home, Wallet, LayoutGrid, BarChart3, Pencil, Trophy, AlertTriangle, Sun, Moon, FileCheck, Clock, Layers } from 'lucide-react'
+import { Search, Star, X, Plus, Minus, Settings, Home, Wallet, LayoutGrid, BarChart3, Pencil, Trophy, AlertTriangle, Sun, Moon, FileCheck, Clock, Layers, ChevronDown, ChevronRight } from 'lucide-react'
 
 import metaApiService from '../services/metaApi'
 
@@ -167,6 +167,8 @@ const TradingPage = () => {
   // Positions view: false = one netted row per currency (with trade count badge),
   // true = flat list of every individual trade across all currencies.
   const [nettingShowAllTrades, setNettingShowAllTrades] = useState(false)
+  // Which currency rows are expanded (in netted view) to reveal their own trades
+  const [expandedNettingSymbols, setExpandedNettingSymbols] = useState(() => new Set())
 
   const [isExecutingTrade, setIsExecutingTrade] = useState(false)
 
@@ -3535,17 +3537,18 @@ const TradingPage = () => {
                     ? (currentPrice - trade.openPrice) * trade.quantity * trade.contractSize
                     : (trade.openPrice - currentPrice) * trade.quantity * trade.contractSize
                   if (!groupsMap[trade.symbol]) {
-                    groupsMap[trade.symbol] = { symbol: trade.symbol, trades: [], longLots: 0, shortLots: 0, netPnl: 0 }
+                    groupsMap[trade.symbol] = { symbol: trade.symbol, trades: [], longLots: 0, shortLots: 0, netPnl: 0, charges: 0, swap: 0 }
                   }
                   const g = groupsMap[trade.symbol]
                   g.trades.push({ ...trade, currentPrice, pnl })
                   if (trade.side === 'BUY') g.longLots += trade.quantity
                   else g.shortLots += trade.quantity
                   g.netPnl += pnl
+                  g.charges += (trade.commission || 0)
+                  g.swap += (trade.swap || 0)
                 })
 
                 const groups = Object.values(groupsMap).sort((a, b) => a.symbol.localeCompare(b.symbol))
-                const totalNetPnl = groups.reduce((s, g) => s + g.netPnl, 0)
                 // Flat list of every individual trade (with its currency's total trade-count badge)
                 const allTrades = groups.flatMap(g => g.trades.map(t => ({ ...t, symbolCount: g.trades.length })))
 
@@ -3556,6 +3559,13 @@ const TradingPage = () => {
                   return price.toFixed(5)
                 }
 
+                const toggleSymbol = (symbol) => setExpandedNettingSymbols(prev => {
+                  const next = new Set(prev)
+                  if (next.has(symbol)) next.delete(symbol)
+                  else next.add(symbol)
+                  return next
+                })
+
                 const SymbolBadge = ({ symbol, count }) => (
                   <div className="flex items-center gap-1.5">
                     <span>{symbol}</span>
@@ -3565,22 +3575,9 @@ const TradingPage = () => {
 
                 return (
                   <div className="p-2">
-                    {/* Summary + "show all trades" toggle icon */}
-                    <div className={`mb-3 p-2 rounded flex items-center justify-between gap-3 ${isDarkMode ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
-                      <div className="flex flex-wrap gap-4 text-xs">
-                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-                          Instruments: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>{groups.length}</span>
-                        </span>
-                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-                          Total Trades: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>{openTrades.length}</span>
-                        </span>
-                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-                          Net P/L: <span className={totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-                            {totalNetPnl >= 0 ? '+' : '-'}${Math.abs(totalNetPnl).toFixed(2)}
-                          </span>
-                        </span>
-                      </div>
-                      {groups.length > 0 && (
+                    {/* "Show all trades" toggle */}
+                    {groups.length > 0 && (
+                      <div className="flex justify-end mb-2">
                         <button
                           onClick={() => setNettingShowAllTrades(v => !v)}
                           title={nettingShowAllTrades ? 'Show netted view (one row per currency)' : 'Show all trades of every currency'}
@@ -3589,99 +3586,108 @@ const TradingPage = () => {
                           <Layers size={13} />
                           {nettingShowAllTrades ? 'Netted view' : 'Show all trades'}
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
-                    {/* NETTED VIEW: one row per currency with inline trade-count badge */}
-                    {!nettingShowAllTrades && (
-                      <table className="w-full text-sm">
-                        <thead className={`text-gray-500 border-b sticky top-0 ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
-                          <tr>
-                            <th className="text-left py-2 px-2 font-normal">Symbol</th>
-                            <th className="text-left py-2 px-2 font-normal">Net Dir</th>
-                            <th className="text-left py-2 px-2 font-normal">Net Lots</th>
-                            <th className="text-left py-2 px-2 font-normal">Long</th>
-                            <th className="text-left py-2 px-2 font-normal">Short</th>
-                            <th className="text-left py-2 px-2 font-normal">Net P/L</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {groups.length === 0 ? (
-                            <tr><td colSpan="6" className="text-center py-8 text-gray-500">No open positions</td></tr>
-                          ) : (
-                            groups.map(group => {
-                              const netLots = group.longLots - group.shortLots
-                              const netDir = netLots > 0 ? 'LONG' : netLots < 0 ? 'SHORT' : 'FLAT'
-                              return (
-                                <tr key={group.symbol} className={`border-t ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                                  <td className={`py-2 px-2 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                    <SymbolBadge symbol={group.symbol} count={group.trades.length} />
+                    <table className="w-full text-sm">
+                      <thead className={`text-gray-500 border-b sticky top-0 ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
+                        <tr>
+                          <th className="text-left py-2 px-3 font-normal">Time</th>
+                          <th className="text-left py-2 px-3 font-normal">Symbol</th>
+                          <th className="text-left py-2 px-3 font-normal">Side</th>
+                          <th className="text-left py-2 px-3 font-normal">Lots</th>
+                          <th className="text-left py-2 px-3 font-normal">Entry</th>
+                          <th className="text-left py-2 px-3 font-normal">Current</th>
+                          <th className="text-left py-2 px-3 font-normal">SL</th>
+                          <th className="text-left py-2 px-3 font-normal">TP</th>
+                          <th className="text-left py-2 px-3 font-normal">Charges</th>
+                          <th className="text-left py-2 px-3 font-normal">Swap</th>
+                          <th className="text-left py-2 px-3 font-normal">P/L</th>
+                          <th className="text-left py-2 px-3 font-normal">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groups.length === 0 ? (
+                          <tr><td colSpan="12" className="text-center py-8 text-gray-500">No open positions</td></tr>
+                        ) : nettingShowAllTrades ? (
+                          /* ALL TRADES: flat list of every individual trade */
+                          allTrades.map(trade => (
+                            <tr key={trade._id} className={`border-t ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                              <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{new Date(trade.openedAt || trade.createdAt).toLocaleString()}</td>
+                              <td className={`py-2 px-3 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}><SymbolBadge symbol={trade.symbol} count={trade.symbolCount} /></td>
+                              <td className={`py-2 px-3 text-xs font-medium ${trade.side === 'BUY' ? 'text-blue-400' : 'text-red-400'}`}>{trade.side}</td>
+                              <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.quantity}</td>
+                              <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.openPrice)}</td>
+                              <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.currentPrice)}</td>
+                              <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.stopLoss ? formatPrice(trade.symbol, trade.stopLoss) : '-'}</td>
+                              <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.takeProfit ? formatPrice(trade.symbol, trade.takeProfit) : '-'}</td>
+                              <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${trade.commission?.toFixed(2) || '0.00'}</td>
+                              <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${trade.swap?.toFixed(2) || '0.00'}</td>
+                              <td className={`py-2 px-3 text-xs font-medium ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{trade.pnl >= 0 ? '+' : '-'}${Math.abs(trade.pnl).toFixed(2)}</td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => openModifyModal(trade)} className="p-1.5 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors" title="Modify SL/TP"><Pencil size={12} /></button>
+                                  <button onClick={() => openCloseModal(trade)} className="p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors" title="Close Trade"><X size={12} /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          /* NETTED: one row per currency, click to expand its own trades */
+                          groups.map(group => {
+                            const netLots = group.longLots - group.shortLots
+                            const netDir = netLots > 0 ? 'LONG' : netLots < 0 ? 'SHORT' : 'FLAT'
+                            const isExpanded = expandedNettingSymbols.has(group.symbol)
+                            return (
+                              <Fragment key={group.symbol}>
+                                <tr onClick={() => toggleSymbol(group.symbol)} className={`border-t cursor-pointer ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                  <td className="py-2 px-3 text-xs text-gray-500">—</td>
+                                  <td className={`py-2 px-3 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <div className="flex items-center gap-1.5">
+                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                      <SymbolBadge symbol={group.symbol} count={group.trades.length} />
+                                    </div>
                                   </td>
-                                  <td className={`py-2 px-2 text-xs font-bold ${netDir === 'LONG' ? 'text-blue-400' : netDir === 'SHORT' ? 'text-red-400' : 'text-gray-400'}`}>{netDir}</td>
-                                  <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{Math.abs(netLots).toFixed(2)}</td>
-                                  <td className="py-2 px-2 text-xs text-blue-400">{group.longLots > 0 ? group.longLots.toFixed(2) : '-'}</td>
-                                  <td className="py-2 px-2 text-xs text-red-400">{group.shortLots > 0 ? group.shortLots.toFixed(2) : '-'}</td>
-                                  <td className={`py-2 px-2 text-xs font-medium ${group.netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {group.netPnl >= 0 ? '+' : '-'}${Math.abs(group.netPnl).toFixed(2)}
-                                  </td>
+                                  <td className={`py-2 px-3 text-xs font-bold ${netDir === 'LONG' ? 'text-blue-400' : netDir === 'SHORT' ? 'text-red-400' : 'text-gray-400'}`}>{netDir}</td>
+                                  <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{Math.abs(netLots).toFixed(2)}</td>
+                                  <td className="py-2 px-3 text-xs text-gray-500">—</td>
+                                  <td className="py-2 px-3 text-xs text-gray-500">—</td>
+                                  <td className="py-2 px-3 text-xs text-gray-500">—</td>
+                                  <td className="py-2 px-3 text-xs text-gray-500">—</td>
+                                  <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${group.charges.toFixed(2)}</td>
+                                  <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${group.swap.toFixed(2)}</td>
+                                  <td className={`py-2 px-3 text-xs font-medium ${group.netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{group.netPnl >= 0 ? '+' : '-'}${Math.abs(group.netPnl).toFixed(2)}</td>
+                                  <td className="py-2 px-3"></td>
                                 </tr>
-                              )
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    )}
 
-                    {/* ALL TRADES VIEW: flat list of every individual trade, symbol shows count badge */}
-                    {nettingShowAllTrades && (
-                      <table className="w-full text-sm">
-                        <thead className={`text-gray-500 border-b sticky top-0 ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
-                          <tr>
-                            <th className="text-left py-2 px-2 font-normal">Symbol</th>
-                            <th className="text-left py-2 px-2 font-normal">Side</th>
-                            <th className="text-left py-2 px-2 font-normal">Lots</th>
-                            <th className="text-left py-2 px-2 font-normal">Entry</th>
-                            <th className="text-left py-2 px-2 font-normal">Current</th>
-                            <th className="text-left py-2 px-2 font-normal">SL</th>
-                            <th className="text-left py-2 px-2 font-normal">TP</th>
-                            <th className="text-left py-2 px-2 font-normal">P/L</th>
-                            <th className="text-left py-2 px-2 font-normal">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {allTrades.length === 0 ? (
-                            <tr><td colSpan="9" className="text-center py-8 text-gray-500">No open positions</td></tr>
-                          ) : (
-                            allTrades.map(trade => (
-                              <tr key={trade._id} className={`border-t ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
-                                <td className={`py-2 px-2 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                                  <SymbolBadge symbol={trade.symbol} count={trade.symbolCount} />
-                                </td>
-                                <td className={`py-2 px-2 text-xs font-medium ${trade.side === 'BUY' ? 'text-blue-400' : 'text-red-400'}`}>{trade.side}</td>
-                                <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.quantity}</td>
-                                <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.openPrice)}</td>
-                                <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.currentPrice)}</td>
-                                <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.stopLoss ? formatPrice(trade.symbol, trade.stopLoss) : '-'}</td>
-                                <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.takeProfit ? formatPrice(trade.symbol, trade.takeProfit) : '-'}</td>
-                                <td className={`py-2 px-2 text-xs font-medium ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {trade.pnl >= 0 ? '+' : '-'}${Math.abs(trade.pnl).toFixed(2)}
-                                </td>
-                                <td className="py-2 px-2">
-                                  <div className="flex items-center gap-1">
-                                    <button onClick={() => openModifyModal(trade)} className="p-1.5 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors" title="Modify SL/TP">
-                                      <Pencil size={12} />
-                                    </button>
-                                    <button onClick={() => openCloseModal(trade)} className="p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors" title="Close Trade">
-                                      <X size={12} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    )}
+                                {/* This currency's individual trades (shown on row click) */}
+                                {isExpanded && group.trades.map(trade => (
+                                  <tr key={trade._id} className={`border-t ${isDarkMode ? 'border-gray-800/60 bg-[#0a0a0a] hover:bg-[#1a1a1a]' : 'border-gray-100 bg-gray-50/50 hover:bg-gray-50'}`}>
+                                    <td className="py-2 pl-6 pr-3 text-xs text-gray-500">{new Date(trade.openedAt || trade.createdAt).toLocaleString()}</td>
+                                    <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{trade.symbol}</td>
+                                    <td className={`py-2 px-3 text-xs font-medium ${trade.side === 'BUY' ? 'text-blue-400' : 'text-red-400'}`}>{trade.side}</td>
+                                    <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.quantity}</td>
+                                    <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.openPrice)}</td>
+                                    <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.currentPrice)}</td>
+                                    <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.stopLoss ? formatPrice(trade.symbol, trade.stopLoss) : '-'}</td>
+                                    <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.takeProfit ? formatPrice(trade.symbol, trade.takeProfit) : '-'}</td>
+                                    <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${trade.commission?.toFixed(2) || '0.00'}</td>
+                                    <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${trade.swap?.toFixed(2) || '0.00'}</td>
+                                    <td className={`py-2 px-3 text-xs font-medium ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{trade.pnl >= 0 ? '+' : '-'}${Math.abs(trade.pnl).toFixed(2)}</td>
+                                    <td className="py-2 px-3">
+                                      <div className="flex items-center gap-1">
+                                        <button onClick={(e) => { e.stopPropagation(); openModifyModal(trade) }} className="p-1.5 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors" title="Modify SL/TP"><Pencil size={12} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); openCloseModal(trade) }} className="p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors" title="Close Trade"><X size={12} /></button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </Fragment>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 )
               })()}
