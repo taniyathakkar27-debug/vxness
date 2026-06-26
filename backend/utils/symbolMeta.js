@@ -73,3 +73,50 @@ export function isCrypto(symbol) { return classify(symbol) === 'crypto' }
 export function isMetal(symbol) { return classify(symbol) === 'metal' }
 export function isCommodity(symbol) { return classify(symbol) === 'commodity' }
 export function isIndex(symbol) { return classify(symbol) === 'index' }
+
+// USD value of one unit of a currency, using whatever USD pair is quotable.
+// getPrice(symbol) -> { bid, ask } | null  (e.g. infowayService.getPrice, or a livePrices lookup)
+//   EUR -> uses EURUSD (USD per EUR)
+//   JPY -> uses USDJPY inverse (USD per JPY = 1 / (JPY per USD))
+export function usdValueOf(ccy, getPrice) {
+  const c = String(ccy || '').toUpperCase()
+  if (c === 'USD') return 1
+  if (typeof getPrice !== 'function') return null
+  const direct = getPrice(c + 'USD')               // e.g. EURUSD -> USD per EUR
+  if (direct && direct.bid && direct.ask) return (direct.bid + direct.ask) / 2
+  const inverse = getPrice('USD' + c)              // e.g. USDJPY -> JPY per USD
+  if (inverse && inverse.bid && inverse.ask) return 2 / (inverse.bid + inverse.ask)
+  return null
+}
+
+// Margin required in USD for a position, leverage as a number (e.g. 500 for 1:500).
+// Correctly handles three cases instead of blindly multiplying by price:
+//   USD-quoted (XXXUSD + metals/crypto/commodities/indices): notional = qty * cs * price
+//   USD-base   (USDXXX):                                      notional = qty * cs   (already USD)
+//   cross      (neither side USD, e.g. EURGBP/GBPJPY):        notional = qty * cs * usdValueOf(base)
+export function marginUsd(symbol, quantity, price, leverageNum, getPrice) {
+  const s = String(symbol || '').toUpperCase()
+  const cs = contractSize(s)
+  const lev = Number(leverageNum) || 100
+  const cls = classify(s)
+  let notionalUsd
+
+  if (cls !== 'forex' && cls !== 'jpy') {
+    // metals / crypto / commodities / indices are all USD-quoted
+    notionalUsd = quantity * cs * price
+  } else {
+    const base = s.slice(0, 3)
+    const quote = s.slice(3, 6)
+    if (quote === 'USD') {
+      notionalUsd = quantity * cs * price            // XXXUSD: price = USD per base unit
+    } else if (base === 'USD') {
+      notionalUsd = quantity * cs                     // USDXXX: 1 lot = cs USD already
+    } else {
+      const baseUsd = usdValueOf(base, getPrice)      // cross: convert base -> USD
+      notionalUsd = baseUsd != null
+        ? quantity * cs * baseUsd
+        : quantity * cs * price                       // fallback (approx) if rate unavailable
+    }
+  }
+  return Math.round((notionalUsd / lev) * 100) / 100
+}

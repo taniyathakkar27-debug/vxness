@@ -8,7 +8,9 @@ import { resolveTradeSegment } from '../utils/tradeSegment.js'
 
 import { commissionDollarAmount } from '../utils/commissionMath.js'
 
-import { pipSize, contractSize as symbolContractSize, isCrypto as symbolIsCrypto } from '../utils/symbolMeta.js'
+import { pipSize, contractSize as symbolContractSize, isCrypto as symbolIsCrypto, marginUsd } from '../utils/symbolMeta.js'
+
+import infowayService from './infowayService.js'
 
 import TradeSettings from '../models/TradeSettings.js'
 
@@ -88,9 +90,17 @@ class TradeEngine {
 
   // = (0.01 * 100 * 2650) / 100 = $26.50 margin required
 
-  calculateMargin(quantity, openPrice, leverage, contractSize = this.CONTRACT_SIZE) {
+  calculateMargin(quantity, openPrice, leverage, contractSize = this.CONTRACT_SIZE, symbol = null) {
 
     const leverageNum = parseInt(leverage.toString().replace('1:', '')) || 100
+
+    // Currency-aware margin: only multiplies by price for USD-quoted instruments,
+    // skips it for USD-base pairs (USDJPY/USDCHF/USDCAD) and converts cross pairs
+    // (EURGBP/GBPJPY...) to USD via live rates. Falls back to the legacy formula
+    // when no symbol is supplied.
+    if (symbol) {
+      return marginUsd(symbol, quantity, openPrice, leverageNum, (sym) => infowayService.getPrice(sym))
+    }
 
     const margin = (quantity * contractSize * openPrice) / leverageNum
 
@@ -274,7 +284,7 @@ class TradeEngine {
 
     // Calculate margin required for new trade
 
-    const marginRequired = this.calculateMargin(quantity, openPrice, leverage, contractSize)
+    const marginRequired = this.calculateMargin(quantity, openPrice, leverage, contractSize, symbol)
 
 
 
@@ -459,7 +469,7 @@ class TradeEngine {
 
     const leverage = `1:${selectedLeverage}`
 
-    const marginRequired = this.calculateMargin(quantity, openPrice, leverage, contractSize)
+    const marginRequired = this.calculateMargin(quantity, openPrice, leverage, contractSize, symbol)
 
     
 

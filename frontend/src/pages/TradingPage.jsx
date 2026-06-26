@@ -16,6 +16,8 @@ import { API_URL } from '../config/api'
 
 import { adjustQuotesForTradingDisplay } from '../services/chargePricing'
 
+import { marginUsd as computeMarginUsd } from '../utils/margin'
+
 import { isMarketOpen, marketClosedReason } from '../utils/marketHours'
 
 import TradingViewChart from '../components/TradingViewChart'
@@ -2666,7 +2668,10 @@ const TradingPage = () => {
 
     const lev = parseInt(leverage?.split(':')[1]) || 100
 
-    return ((vol * 100000 * price) / lev).toFixed(2)
+    // Currency-aware margin (USD-quoted / USD-base / cross pairs) using live rates
+    const getQuote = (sym) => livePrices[sym] || instruments.find(i => i.symbol === sym) || null
+
+    return computeMarginUsd(selectedInstrument.symbol, vol, price, lev, getQuote).toFixed(2)
 
   }
 
@@ -3555,6 +3560,8 @@ const TradingPage = () => {
                 const groups = Object.values(groupsMap).sort((a, b) => a.symbol.localeCompare(b.symbol))
                 // Flat list of every individual trade (with its currency's total trade-count badge)
                 const allTrades = groups.flatMap(g => g.trades.map(t => ({ ...t, symbolCount: g.trades.length })))
+                // Combined live P/L across every open trade (shown in the bottom total bar)
+                const totalNetPnl = groups.reduce((s, g) => s + g.netPnl, 0)
 
                 const formatPrice = (symbol, price) => {
                   if (!price) return '-'
@@ -3696,6 +3703,16 @@ const TradingPage = () => {
                         )}
                       </tbody>
                     </table>
+
+                    {/* Combined live P/L of all open positions */}
+                    {groups.length > 0 && (
+                      <div className={`sticky bottom-0 flex items-center justify-end gap-2 mt-1 px-3 py-2 border-t text-xs ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
+                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Total P/L:</span>
+                        <span className={`font-semibold ${totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {totalNetPnl >= 0 ? '+' : '-'}${Math.abs(totalNetPnl).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )
               })()}
@@ -4214,14 +4231,6 @@ const TradingPage = () => {
 
                           const leverageNum = parseInt(leverage.replace('1:', '')) || 100
 
-                          const contractSize = ['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD'].includes(selectedInstrument.symbol) ? 1 
-
-                            : selectedInstrument.symbol === 'XAUUSD' ? 100 
-
-                            : selectedInstrument.symbol === 'XAGUSD' ? 5000 
-
-                            : 100000
-
                           const lpM = livePrices[selectedInstrument.symbol]
 
                           const rbM = lpM?.bid ?? selectedInstrument.bid
@@ -4230,7 +4239,10 @@ const TradingPage = () => {
 
                           const qM = getDisplayQuotes(selectedInstrument.symbol, rbM, raM)
 
-                          const margin = (parseFloat(volume || 0) * contractSize * (qM.ask || 0)) / leverageNum
+                          // Currency-aware margin (USD-quoted / USD-base / cross pairs) using live rates
+                          const getQuote = (sym) => livePrices[sym] || instruments.find(i => i.symbol === sym) || null
+
+                          const margin = computeMarginUsd(selectedInstrument.symbol, parseFloat(volume || 0), qM.ask || 0, leverageNum, getQuote)
 
                           return margin.toFixed(2)
 

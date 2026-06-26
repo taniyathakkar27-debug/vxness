@@ -7,7 +7,8 @@ import Charges from '../models/Charges.js'
 import { sendTemplateEmail } from '../services/emailService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
 import { commissionDollarAmount } from '../utils/commissionMath.js'
-import { pipSize, contractSize as symbolContractSize } from '../utils/symbolMeta.js'
+import { pipSize, contractSize as symbolContractSize, marginUsd } from '../utils/symbolMeta.js'
+import infowayService from './infowayService.js'
 
 class PropTradingEngine {
   constructor() {
@@ -951,8 +952,13 @@ class PropTradingEngine {
   }
 
   calculateMargin(tradeParams, account) {
-    const { quantity, openPrice, leverage = 100, contractSize = 100000 } = tradeParams
-    return (quantity * openPrice * contractSize) / leverage
+    const { quantity, openPrice, leverage = 100, contractSize = 100000, symbol } = tradeParams
+    const leverageNum = parseInt(String(leverage).replace('1:', '')) || 100
+    // Currency-aware (see symbolMeta.marginUsd): correct for USD-quoted, USD-base and cross pairs.
+    if (symbol) {
+      return marginUsd(symbol, quantity, openPrice, leverageNum, (sym) => infowayService.getPrice(sym))
+    }
+    return (quantity * openPrice * contractSize) / leverageNum
   }
 
   // Get challenge account dashboard data
