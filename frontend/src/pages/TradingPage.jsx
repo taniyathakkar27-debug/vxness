@@ -223,6 +223,17 @@ const TradingPage = () => {
 
   const [livePrices, setLivePrices] = useState({}) // Store live prices separately
 
+  // Combined live P/L of all open trades (real-time, shown centered in the bottom status bar)
+  const liveTotalPnl = useMemo(() => openTrades.reduce((sum, trade) => {
+    const lp = livePrices[trade.symbol]
+    const inst = instruments.find(i => i.symbol === trade.symbol) || selectedInstrument
+    const cur = lp ? (trade.side === 'BUY' ? lp.bid : lp.ask) : (trade.side === 'BUY' ? inst.bid : inst.ask)
+    const pnl = trade.side === 'BUY'
+      ? (cur - trade.openPrice) * trade.quantity * trade.contractSize
+      : (trade.openPrice - cur) * trade.quantity * trade.contractSize
+    return sum + pnl
+  }, 0), [openTrades, livePrices, instruments, selectedInstrument])
+
   const [adminCommissions, setAdminCommissions] = useState({}) // Admin commission per symbol (instruments column)
 
   const [adminSpreads, setAdminSpreads] = useState({}) // Admin spread per symbol (Forex Charges → Spread)
@@ -3595,8 +3606,6 @@ const TradingPage = () => {
                 const groups = Object.values(groupsMap).sort((a, b) => a.symbol.localeCompare(b.symbol))
                 // Flat list of every individual trade (with its currency's total trade-count badge)
                 const allTrades = groups.flatMap(g => g.trades.map(t => ({ ...t, symbolCount: g.trades.length })))
-                // Combined live P/L across every open trade (shown in the bottom total bar)
-                const totalNetPnl = groups.reduce((s, g) => s + g.netPnl, 0)
 
                 const formatPrice = (symbol, price) => {
                   if (!price) return '-'
@@ -3738,16 +3747,6 @@ const TradingPage = () => {
                         )}
                       </tbody>
                     </table>
-
-                    {/* Combined live P/L of all open positions */}
-                    {groups.length > 0 && (
-                      <div className={`sticky bottom-0 flex items-center justify-center gap-2 mt-1 px-3 py-2 border-t text-xs ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
-                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Total P/L:</span>
-                        <span className={`font-semibold ${totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {totalNetPnl >= 0 ? '+' : '-'}${Math.abs(totalNetPnl).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 )
               })()}
@@ -4889,7 +4888,9 @@ const TradingPage = () => {
 
           )}
 
-          <div className="flex-1" />
+          <div className="flex-1 flex justify-center">
+            <span className="text-gray-500 shrink-0">P/L: <span className={liveTotalPnl >= 0 ? 'text-green-500' : 'text-red-500'}>{liveTotalPnl >= 0 ? '+' : '-'}${Math.abs(liveTotalPnl).toFixed(2)}</span></span>
+          </div>
 
           {!isMobile && <span className="text-gray-400 shrink-0">{accountType === 'challenge' ? 'Challenge' : (account?.accountTypeId?.name || 'Account')} - {account?.accountId}</span>}
 
