@@ -160,6 +160,33 @@ const TradingPage = () => {
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
 
+  // Height (px) of the positions panel — draggable from its top edge to grow/shrink the chart
+  const [positionsHeight, setPositionsHeight] = useState(() => (window.innerWidth < 768 ? 128 : 176))
+
+  const startPanelResize = (e) => {
+    e.preventDefault()
+    const startY = e.touches ? e.touches[0].clientY : e.clientY
+    const startH = positionsHeight
+    const onMove = (ev) => {
+      const y = ev.touches ? ev.touches[0].clientY : ev.clientY
+      // dragging up (smaller y) grows the panel; clamp so chart + panel stay usable
+      const next = Math.min(Math.max(startH + (startY - y), 90), window.innerHeight - 220)
+      setPositionsHeight(next)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onUp)
+      document.body.style.userSelect = ''
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onUp)
+  }
+
   const [openTrades, setOpenTrades] = useState([])
 
   const [pendingOrders, setPendingOrders] = useState([])
@@ -3406,7 +3433,17 @@ const TradingPage = () => {
 
           {/* Positions Panel */}
 
-          <div className={`${isMobile ? 'h-32' : 'h-44'} border-t flex flex-col shrink-0 ${isDarkMode ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200'}`}>
+          <div style={{ height: `${positionsHeight}px` }} className={`border-t flex flex-col shrink-0 relative ${isDarkMode ? 'bg-[#0d0d0d] border-gray-800' : 'bg-white border-gray-200'}`}>
+
+            {/* Drag handle: pull up/down to resize the chart vs positions panel */}
+            <div
+              onMouseDown={startPanelResize}
+              onTouchStart={startPanelResize}
+              title="Drag to resize"
+              className="absolute -top-1.5 left-0 right-0 h-3 cursor-row-resize z-20 flex items-center justify-center group"
+            >
+              <div className={`w-12 h-1 rounded-full transition-colors ${isDarkMode ? 'bg-gray-700 group-hover:bg-blue-500' : 'bg-gray-300 group-hover:bg-blue-500'}`} />
+            </div>
 
             <div className={`h-10 flex items-center justify-between px-2 sm:px-4 border-b overflow-x-auto ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
 
@@ -3517,8 +3554,6 @@ const TradingPage = () => {
                   </>
 
                 )}
-
-                <span className="text-xs sm:text-sm text-gray-500">P/L: <span className={accountSummary.floatingPnl >= 0 ? 'text-green-500' : 'text-red-500'}>{(accountSummary.floatingPnl || 0) >= 0 ? '+' : '-'}${Math.abs(accountSummary.floatingPnl || 0).toFixed(2)}</span></span>
 
               </div>
 
@@ -3706,7 +3741,7 @@ const TradingPage = () => {
 
                     {/* Combined live P/L of all open positions */}
                     {groups.length > 0 && (
-                      <div className={`sticky bottom-0 flex items-center justify-end gap-2 mt-1 px-3 py-2 border-t text-xs ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
+                      <div className={`sticky bottom-0 flex items-center justify-center gap-2 mt-1 px-3 py-2 border-t text-xs ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
                         <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Total P/L:</span>
                         <span className={`font-semibold ${totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {totalNetPnl >= 0 ? '+' : '-'}${Math.abs(totalNetPnl).toFixed(2)}
