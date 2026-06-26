@@ -164,9 +164,7 @@ const TradingPage = () => {
 
   const [tradeHistory, setTradeHistory] = useState([])
 
-  const [nettingData, setNettingData] = useState({ positions: [], summary: {} })
-
-  // Netting view: false = one netted row per currency (with trade count badge),
+  // Positions view: false = one netted row per currency (with trade count badge),
   // true = flat list of every individual trade across all currencies.
   const [nettingShowAllTrades, setNettingShowAllTrades] = useState(false)
 
@@ -621,8 +619,6 @@ const TradingPage = () => {
 
       fetchTradeHistory()
 
-      fetchNettingData()
-
       fetchAccountSummary()
 
       
@@ -632,8 +628,6 @@ const TradingPage = () => {
       const accountInterval = setInterval(() => {
 
         fetchOpenTrades()
-
-        fetchNettingData()
 
         fetchAccountSummary()
 
@@ -1444,29 +1438,6 @@ const TradingPage = () => {
 
 
   // Fetch netting data (aggregated positions by instrument)
-
-  const fetchNettingData = async () => {
-
-    try {
-
-      const res = await fetch(`${API_URL}/trade/netting/${accountId}`)
-
-      const data = await res.json()
-
-      if (data.success) {
-
-        setNettingData(data.netting || { positions: [], summary: {} })
-
-      }
-
-    } catch (error) {
-
-      console.error('Error fetching netting data:', error)
-
-    }
-
-  }
-
 
 
   // Fetch account summary with current prices
@@ -3438,8 +3409,6 @@ const TradingPage = () => {
 
                   { name: 'Positions', count: openTrades.length },
 
-                  { name: 'Netting', count: new Set(openTrades.map(t => t.symbol)).size },
-
                   { name: 'Pending', count: pendingOrders.length },
 
                   { name: 'History', count: tradeHistory.length },
@@ -3552,175 +3521,7 @@ const TradingPage = () => {
 
             <div className="flex-1 overflow-auto">
 
-              {activePositionTab === 'Positions' && (
-
-              <table className="w-full text-sm">
-
-                <thead className={`text-gray-500 border-b sticky top-0 ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
-
-                  <tr>
-
-                    <th className="text-left py-2 px-3 font-normal">Time</th>
-
-                    <th className="text-left py-2 px-3 font-normal">Symbol</th>
-
-                    <th className="text-left py-2 px-3 font-normal">Side</th>
-
-                    <th className="text-left py-2 px-3 font-normal">Lots</th>
-
-                    <th className="text-left py-2 px-3 font-normal">Entry</th>
-
-                    <th className="text-left py-2 px-3 font-normal">Current</th>
-
-                    <th className="text-left py-2 px-3 font-normal">SL</th>
-
-                    <th className="text-left py-2 px-3 font-normal">TP</th>
-
-                    <th className="text-left py-2 px-3 font-normal">Charges</th>
-
-                    <th className="text-left py-2 px-3 font-normal">Swap</th>
-
-                    <th className="text-left py-2 px-3 font-normal">P/L</th>
-
-                    <th className="text-left py-2 px-3 font-normal">Action</th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {openTrades.length === 0 ? (
-
-                    <tr>
-
-                      <td colSpan="12" className="text-center py-8 text-gray-500">No open positions</td>
-
-                    </tr>
-
-                  ) : (
-
-                    openTrades.map(trade => {
-
-                      // Use livePrices first, fallback to instruments
-
-                      const livePrice = livePrices[trade.symbol]
-
-                      const inst = instruments.find(i => i.symbol === trade.symbol) || selectedInstrument
-
-                      const currentPrice = livePrice 
-
-                        ? (trade.side === 'BUY' ? livePrice.bid : livePrice.ask)
-
-                        : (trade.side === 'BUY' ? inst.bid : inst.ask)
-
-                      const pnl = trade.side === 'BUY' 
-
-                        ? (currentPrice - trade.openPrice) * trade.quantity * trade.contractSize
-
-                        : (trade.openPrice - currentPrice) * trade.quantity * trade.contractSize
-
-                      
-
-                      // Format price based on symbol type
-
-                      const formatPrice = (price) => {
-
-                        if (!price) return '-'
-
-                        if (trade.symbol.includes('JPY')) return price.toFixed(3)
-
-                        if (['BTCUSD', 'ETHUSD', 'XAUUSD', 'XAGUSD'].includes(trade.symbol)) return price.toFixed(2)
-
-                        return price.toFixed(5)
-
-                      }
-
-                      
-
-                      return (
-
-                        <tr key={trade._id} className={`border-t ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
-
-                          <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{new Date(trade.openedAt || trade.createdAt).toLocaleString()}</td>
-
-                          <td className={`py-2 px-3 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.symbol}</td>
-
-                          <td className={`py-2 px-3 text-xs font-medium ${trade.side === 'BUY' ? 'text-blue-400' : 'text-red-400'}`}>{trade.side}</td>
-
-                          <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.quantity}</td>
-
-                          <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.openPrice)}</td>
-
-                          <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(currentPrice)}</td>
-
-                          <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.stopLoss ? formatPrice(trade.stopLoss) : '-'}</td>
-
-                          <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.takeProfit ? formatPrice(trade.takeProfit) : '-'}</td>
-
-                          <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${trade.commission?.toFixed(2) || '0.00'}</td>
-
-                          <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>${trade.swap?.toFixed(2) || '0.00'}</td>
-
-                          <td className={`py-2 px-3 text-xs font-medium ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-
-                            {pnl >= 0 ? '+' : '-'}${Math.abs(pnl).toFixed(2)}
-
-                          </td>
-
-                          <td className="py-2 px-3">
-
-                            <div className="flex items-center gap-1">
-
-                              <button 
-
-                                onClick={() => openModifyModal(trade)}
-
-                                className="p-1.5 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors"
-
-                                title="Modify SL/TP"
-
-                              >
-
-                                <Pencil size={12} />
-
-                              </button>
-
-                              <button 
-
-                                onClick={() => openCloseModal(trade)}
-
-                                className="p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors"
-
-                                title="Close Trade"
-
-                              >
-
-                                <X size={12} />
-
-                              </button>
-
-                            </div>
-
-                          </td>
-
-                        </tr>
-
-                      )
-
-                    })
-
-                  )}
-
-                </tbody>
-
-              </table>
-
-              )}
-
-
-
-              {activePositionTab === 'Netting' && (() => {
+              {activePositionTab === 'Positions' && (() => {
                 // Group all open trades by currency/symbol, computing live P/L the
                 // same way the Positions table does so the two views always agree.
                 const groupsMap = {}
