@@ -3669,7 +3669,7 @@ const TradingPage = () => {
                           allTrades.map(trade => (
                             <tr key={trade._id} className={`border-t ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
                               <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{new Date(trade.openedAt || trade.createdAt).toLocaleString()}</td>
-                              <td className={`py-2 px-3 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}><SymbolBadge symbol={trade.symbol} count={trade.symbolCount} /></td>
+                              <td className={`py-2 px-3 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{trade.symbol}</td>
                               <td className={`py-2 px-3 text-xs font-medium ${trade.side === 'BUY' ? 'text-blue-400' : 'text-red-400'}`}>{trade.side}</td>
                               <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.quantity}</td>
                               <td className={`py-2 px-3 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.openPrice)}</td>
