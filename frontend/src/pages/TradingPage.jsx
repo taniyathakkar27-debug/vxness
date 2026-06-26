@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from 'react'
 
 import toast from 'react-hot-toast'
 
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { Search, Star, X, Plus, Minus, Settings, Home, Wallet, LayoutGrid, BarChart3, Pencil, Trophy, AlertTriangle, Sun, Moon, FileCheck, Clock } from 'lucide-react'
+import { Search, Star, X, Plus, Minus, Settings, Home, Wallet, LayoutGrid, BarChart3, Pencil, Trophy, AlertTriangle, Sun, Moon, FileCheck, Clock, ChevronDown, ChevronRight, Layers } from 'lucide-react'
 
 import metaApiService from '../services/metaApi'
 
@@ -165,6 +165,9 @@ const TradingPage = () => {
   const [tradeHistory, setTradeHistory] = useState([])
 
   const [nettingData, setNettingData] = useState({ positions: [], summary: {} })
+
+  // Netting view: which currency groups are expanded to reveal their individual trades
+  const [expandedNettingSymbols, setExpandedNettingSymbols] = useState(() => new Set())
 
   const [isExecutingTrade, setIsExecutingTrade] = useState(false)
 
@@ -3434,7 +3437,7 @@ const TradingPage = () => {
 
                   { name: 'Positions', count: openTrades.length },
 
-                  { name: 'Netting', count: nettingData.positions?.length || 0 },
+                  { name: 'Netting', count: new Set(openTrades.map(t => t.symbol)).size },
 
                   { name: 'Pending', count: pendingOrders.length },
 
@@ -3716,169 +3719,165 @@ const TradingPage = () => {
 
 
 
-              {activePositionTab === 'Netting' && (
+              {activePositionTab === 'Netting' && (() => {
+                // Group all open trades by currency/symbol, computing live P/L the
+                // same way the Positions table does so the two views always agree.
+                const groupsMap = {}
+                openTrades.forEach(trade => {
+                  const livePrice = livePrices[trade.symbol]
+                  const inst = instruments.find(i => i.symbol === trade.symbol) || selectedInstrument
+                  const currentPrice = livePrice
+                    ? (trade.side === 'BUY' ? livePrice.bid : livePrice.ask)
+                    : (trade.side === 'BUY' ? inst.bid : inst.ask)
+                  const pnl = trade.side === 'BUY'
+                    ? (currentPrice - trade.openPrice) * trade.quantity * trade.contractSize
+                    : (trade.openPrice - currentPrice) * trade.quantity * trade.contractSize
+                  if (!groupsMap[trade.symbol]) {
+                    groupsMap[trade.symbol] = { symbol: trade.symbol, trades: [], longLots: 0, shortLots: 0, netPnl: 0 }
+                  }
+                  const g = groupsMap[trade.symbol]
+                  g.trades.push({ ...trade, currentPrice, pnl })
+                  if (trade.side === 'BUY') g.longLots += trade.quantity
+                  else g.shortLots += trade.quantity
+                  g.netPnl += pnl
+                })
 
-              <div className="p-2">
+                const groups = Object.values(groupsMap).sort((a, b) => a.symbol.localeCompare(b.symbol))
+                const allExpanded = groups.length > 0 && groups.every(g => expandedNettingSymbols.has(g.symbol))
 
-                {/* Netting Summary */}
+                const toggleSymbol = (symbol) => setExpandedNettingSymbols(prev => {
+                  const next = new Set(prev)
+                  if (next.has(symbol)) next.delete(symbol)
+                  else next.add(symbol)
+                  return next
+                })
+                const toggleAll = () => setExpandedNettingSymbols(allExpanded ? new Set() : new Set(groups.map(g => g.symbol)))
 
-                {nettingData.summary && (
+                const formatPrice = (symbol, price) => {
+                  if (!price) return '-'
+                  if (symbol.includes('JPY')) return price.toFixed(3)
+                  if (['BTCUSD', 'ETHUSD', 'XAUUSD', 'XAGUSD'].includes(symbol)) return price.toFixed(2)
+                  return price.toFixed(5)
+                }
 
-                  <div className={`mb-3 p-2 rounded ${isDarkMode ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
+                const totalNetPnl = groups.reduce((s, g) => s + g.netPnl, 0)
 
-                    <div className="flex flex-wrap gap-4 text-xs">
-
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-
-                        Instruments: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>{nettingData.summary.totalInstruments || 0}</span>
-
-                      </span>
-
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-
-                        Total Trades: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>{nettingData.summary.totalTrades || 0}</span>
-
-                      </span>
-
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-
-                        Long: <span className="text-blue-400">{nettingData.summary.totalLongQuantity || 0} lots</span>
-
-                      </span>
-
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-
-                        Short: <span className="text-red-400">{nettingData.summary.totalShortQuantity || 0} lots</span>
-
-                      </span>
-
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-
-                        Net P/L: <span className={nettingData.summary.totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-
-                          {(nettingData.summary.totalNetPnl || 0) >= 0 ? '+' : '-'}${Math.abs(nettingData.summary.totalNetPnl || 0).toFixed(2)}
-
+                return (
+                  <div className="p-2">
+                    {/* Netting summary + "show all trades" toggle */}
+                    <div className={`mb-3 p-2 rounded flex items-center justify-between gap-3 ${isDarkMode ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
+                      <div className="flex flex-wrap gap-4 text-xs">
+                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          Instruments: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>{groups.length}</span>
                         </span>
-
-                      </span>
-
-                      <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-
-                        Margin: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>${nettingData.summary.totalMargin?.toFixed(2) || '0.00'}</span>
-
-                      </span>
-
+                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          Total Trades: <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>{openTrades.length}</span>
+                        </span>
+                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          Net P/L: <span className={totalNetPnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                            {totalNetPnl >= 0 ? '+' : '-'}${Math.abs(totalNetPnl).toFixed(2)}
+                          </span>
+                        </span>
+                      </div>
+                      {groups.length > 0 && (
+                        <button
+                          onClick={toggleAll}
+                          title={allExpanded ? 'Collapse all currencies' : 'Show all trades of every currency'}
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs whitespace-nowrap shrink-0 ${isDarkMode ? 'bg-[#262626] text-gray-200 hover:bg-[#333]' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-200'}`}
+                        >
+                          <Layers size={13} />
+                          {allExpanded ? 'Collapse all' : 'Show all trades'}
+                        </button>
+                      )}
                     </div>
 
-                  </div>
-
-                )}
-
-                
-
-                {/* Netting Table */}
-
-                <table className="w-full text-sm">
-
-                  <thead className={`text-gray-500 border-b sticky top-0 ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
-
-                    <tr>
-
-                      <th className="text-left py-2 px-2 font-normal">Symbol</th>
-
-                      <th className="text-left py-2 px-2 font-normal">Net Dir</th>
-
-                      <th className="text-left py-2 px-2 font-normal">Net Qty</th>
-
-                      <th className="text-left py-2 px-2 font-normal">Long</th>
-
-                      <th className="text-left py-2 px-2 font-normal">Short</th>
-
-                      <th className="text-left py-2 px-2 font-normal">Bid</th>
-
-                      <th className="text-left py-2 px-2 font-normal">Ask</th>
-
-                      <th className="text-left py-2 px-2 font-normal">Net P/L</th>
-
-                      <th className="text-left py-2 px-2 font-normal">Trades</th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {(!nettingData.positions || nettingData.positions.length === 0) ? (
-
-                      <tr>
-
-                        <td colSpan="9" className="text-center py-8 text-gray-500">No netted positions</td>
-
-                      </tr>
-
-                    ) : (
-
-                      nettingData.positions.map(pos => {
-
-                        const formatPrice = (price) => {
-
-                          if (!price) return '-'
-
-                          if (pos.symbol.includes('JPY')) return price.toFixed(3)
-
-                          if (['BTCUSD', 'ETHUSD', 'XAUUSD'].includes(pos.symbol)) return price.toFixed(2)
-
-                          return price.toFixed(5)
-
-                        }
-
-                        
-
-                        return (
-
-                          <tr key={pos.symbol} className={`border-t ${isDarkMode ? 'border-gray-800 hover:bg-[#1a1a1a]' : 'border-gray-200 hover:bg-gray-50'}`}>
-
-                            <td className={`py-2 px-2 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{pos.symbol}</td>
-
-                            <td className={`py-2 px-2 text-xs font-bold ${pos.netDirection === 'LONG' ? 'text-blue-400' : pos.netDirection === 'SHORT' ? 'text-red-400' : 'text-gray-400'}`}>
-
-                              {pos.netDirection}
-
-                            </td>
-
-                            <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{Math.abs(pos.netQuantity)}</td>
-
-                            <td className="py-2 px-2 text-xs text-blue-400">{pos.longQuantity > 0 ? `${pos.longQuantity} (${pos.longTradeCount})` : '-'}</td>
-
-                            <td className="py-2 px-2 text-xs text-red-400">{pos.shortQuantity > 0 ? `${pos.shortQuantity} (${pos.shortTradeCount})` : '-'}</td>
-
-                            <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(pos.currentBid)}</td>
-
-                            <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(pos.currentAsk)}</td>
-
-                            <td className={`py-2 px-2 text-xs font-medium ${pos.netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-
-                              {(pos.netPnl || 0) >= 0 ? '+' : '-'}${Math.abs(pos.netPnl || 0).toFixed(2)}
-
-                            </td>
-
-                            <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{pos.totalTradeCount}</td>
-
+                    {/* Grouped netting table — one row per currency with trade count, expandable to its trades */}
+                    <table className="w-full text-sm">
+                      <thead className={`text-gray-500 border-b sticky top-0 ${isDarkMode ? 'border-gray-800 bg-[#0d0d0d]' : 'border-gray-200 bg-white'}`}>
+                        <tr>
+                          <th className="text-left py-2 px-2 font-normal">Symbol</th>
+                          <th className="text-left py-2 px-2 font-normal">Net Dir</th>
+                          <th className="text-left py-2 px-2 font-normal">Net Lots</th>
+                          <th className="text-left py-2 px-2 font-normal">Entry</th>
+                          <th className="text-left py-2 px-2 font-normal">Current</th>
+                          <th className="text-left py-2 px-2 font-normal">SL</th>
+                          <th className="text-left py-2 px-2 font-normal">TP</th>
+                          <th className="text-left py-2 px-2 font-normal">P/L</th>
+                          <th className="text-left py-2 px-2 font-normal">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groups.length === 0 ? (
+                          <tr>
+                            <td colSpan="9" className="text-center py-8 text-gray-500">No open positions</td>
                           </tr>
+                        ) : (
+                          groups.map(group => {
+                            const isExpanded = expandedNettingSymbols.has(group.symbol)
+                            const netLots = group.longLots - group.shortLots
+                            const netDir = netLots > 0 ? 'LONG' : netLots < 0 ? 'SHORT' : 'FLAT'
+                            return (
+                              <Fragment key={group.symbol}>
+                                {/* Currency group header — symbol + how many trades it holds */}
+                                <tr
+                                  onClick={() => toggleSymbol(group.symbol)}
+                                  className={`border-t cursor-pointer ${isDarkMode ? 'border-gray-800 bg-[#141414] hover:bg-[#1a1a1a]' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`}
+                                >
+                                  <td className={`py-2 px-2 text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <div className="flex items-center gap-1.5">
+                                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                      <span>{group.symbol}</span>
+                                      <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+                                        {group.trades.length}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className={`py-2 px-2 text-xs font-bold ${netDir === 'LONG' ? 'text-blue-400' : netDir === 'SHORT' ? 'text-red-400' : 'text-gray-400'}`}>{netDir}</td>
+                                  <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{Math.abs(netLots).toFixed(2)}</td>
+                                  <td className="py-2 px-2 text-xs text-gray-500">—</td>
+                                  <td className="py-2 px-2 text-xs text-gray-500">—</td>
+                                  <td className="py-2 px-2 text-xs text-gray-500">—</td>
+                                  <td className="py-2 px-2 text-xs text-gray-500">—</td>
+                                  <td className={`py-2 px-2 text-xs font-medium ${group.netPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {group.netPnl >= 0 ? '+' : '-'}${Math.abs(group.netPnl).toFixed(2)}
+                                  </td>
+                                  <td className="py-2 px-2"></td>
+                                </tr>
 
-                        )
-
-                      })
-
-                    )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-              )}
+                                {/* Individual trades for this currency (shown when expanded) */}
+                                {isExpanded && group.trades.map(trade => (
+                                  <tr key={trade._id} className={`border-t ${isDarkMode ? 'border-gray-800/60 hover:bg-[#1a1a1a]' : 'border-gray-100 hover:bg-gray-50'}`}>
+                                    <td className={`py-2 pl-8 pr-2 text-xs font-medium ${trade.side === 'BUY' ? 'text-blue-400' : 'text-red-400'}`}>{trade.side}</td>
+                                    <td className="py-2 px-2 text-xs text-gray-500">{new Date(trade.openedAt || trade.createdAt).toLocaleTimeString()}</td>
+                                    <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.quantity}</td>
+                                    <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.openPrice)}</td>
+                                    <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{formatPrice(trade.symbol, trade.currentPrice)}</td>
+                                    <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.stopLoss ? formatPrice(trade.symbol, trade.stopLoss) : '-'}</td>
+                                    <td className={`py-2 px-2 text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{trade.takeProfit ? formatPrice(trade.symbol, trade.takeProfit) : '-'}</td>
+                                    <td className={`py-2 px-2 text-xs font-medium ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {trade.pnl >= 0 ? '+' : '-'}${Math.abs(trade.pnl).toFixed(2)}
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      <div className="flex items-center gap-1">
+                                        <button onClick={() => openModifyModal(trade)} className="p-1.5 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors" title="Modify SL/TP">
+                                          <Pencil size={12} />
+                                        </button>
+                                        <button onClick={() => openCloseModal(trade)} className="p-1.5 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors" title="Close Trade">
+                                          <X size={12} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </Fragment>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })()}
 
 
 
