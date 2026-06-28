@@ -309,6 +309,14 @@ const MobileTradingApp = () => {
       } else {
         approved = !!stored.kycApproved
       }
+      // Flag may be out of sync — allow if the KYC record itself is approved
+      if (!approved) {
+        try {
+          const kRes = await fetch(`${API_URL}/kyc/status/${data.user?._id || stored._id}`)
+          const kData = await kRes.json()
+          approved = kData.success && kData.kyc?.status === 'approved'
+        } catch (_) {}
+      }
       if (!approved) {
         setShowKycTradeRequiredModal(true)
         return

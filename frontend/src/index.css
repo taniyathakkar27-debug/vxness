@@ -145,6 +145,17 @@ body {
   background: #6b7280;
 }
 
+/* Hide scrollbar visually while keeping scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;   /* IE/Edge */
+  scrollbar-width: none;      /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;              /* Chrome/Safari */
+  width: 0;
+  height: 0;
+}
+
 /* Mobile animations */
 @keyframes slide-up {
   from {

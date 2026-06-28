@@ -595,7 +595,7 @@ const AdminUserManagement = () => {
 
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-dark-800 rounded-2xl w-full max-w-md border border-gray-700 overflow-hidden">
+        <div className="bg-dark-800 rounded-2xl w-full max-w-md border border-gray-700 max-h-[90vh] overflow-y-auto scrollbar-hide">
           {/* Modal Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <div className="flex items-center gap-3">

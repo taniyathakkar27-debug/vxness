@@ -488,6 +488,12 @@ const TradingPage = () => {
             detail = kData.kyc.status
           }
         } catch (_) {}
+        // KYC record is approved even if the user.kycApproved flag wasn't synced — allow trading
+        if (detail === 'approved') {
+          setKycAllowed(true)
+          setKycDetailStatus(null)
+          return
+        }
         setKycDetailStatus(detail)
         setKycAllowed(false)
       } catch (e) {
