@@ -22,6 +22,7 @@ import {
   Lock
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 
 const AdminManagement = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -208,7 +209,7 @@ const AdminManagement = () => {
   }
 
   const handleDeleteAdmin = async (admin) => {
-    if (!confirm(`Are you sure you want to delete ${admin.firstName} ${admin.lastName}?`)) return
+    if (!(await confirmToast(`Are you sure you want to delete ${admin.firstName} ${admin.lastName}?`))) return
     try {
       const res = await fetch(`${API_URL}/admin-mgmt/admins/${admin._id}`, {
         method: 'DELETE'

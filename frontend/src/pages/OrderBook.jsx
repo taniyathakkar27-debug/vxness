@@ -65,6 +65,7 @@ import {
 import { useTheme } from '../context/ThemeContext'
 
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 
 import logoImage from '../assets/logo.png'
 
@@ -698,7 +699,7 @@ const OrderBook = () => {
 
   const handleCloseTrade = async (trade) => {
 
-    if (!confirm(`Close ${trade.side} ${trade.quantity} ${trade.symbol} position?`)) return
+    if (!(await confirmToast(`Close ${trade.side} ${trade.quantity} ${trade.symbol} position?`, { confirmText: 'Close' }))) return
 
     
 
@@ -762,7 +763,7 @@ const OrderBook = () => {
 
   const handleCancelOrder = async (order) => {
 
-    if (!confirm(`Cancel pending ${order.side} ${order.quantity} ${order.symbol} order?`)) return
+    if (!(await confirmToast(`Cancel pending ${order.side} ${order.quantity} ${order.symbol} order?`, { confirmText: 'Cancel order', cancelText: 'Keep' }))) return
 
     
 

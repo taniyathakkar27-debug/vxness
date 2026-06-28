@@ -18,6 +18,7 @@ import {
   QrCode
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 
 const AdminPaymentMethods = () => {
   const navigate = useNavigate()
@@ -94,7 +95,7 @@ const AdminPaymentMethods = () => {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this payment method?')) return
+    if (!(await confirmToast('Delete this payment method?'))) return
     try {
       const res = await fetch(`${API_URL}/payment-methods/${id}`, { method: 'DELETE' })
       if (res.ok) {

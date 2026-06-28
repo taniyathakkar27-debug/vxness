@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 
 import { API_URL } from '../config/api'
+import { promptToast } from '../utils/dialogs'
 
 
 
@@ -180,7 +181,7 @@ const AdminFundManagement = () => {
 
   const handleReject = async (txnId) => {
 
-    const remarks = prompt('Enter rejection reason (optional):')
+    const remarks = await promptToast('Enter rejection reason (optional):', { confirmText: 'Reject' })
 
     try {
 

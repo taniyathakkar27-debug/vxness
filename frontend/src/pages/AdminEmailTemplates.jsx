@@ -21,6 +21,7 @@ import {
   RotateCcw
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 
 const AdminEmailTemplates = () => {
   const [templates, setTemplates] = useState([])
@@ -124,7 +125,7 @@ const AdminEmailTemplates = () => {
   }
 
   const resetTemplates = async () => {
-    if (!confirm('Are you sure you want to reset ALL templates to defaults? This will delete any customizations.')) return
+    if (!(await confirmToast('Are you sure you want to reset ALL templates to defaults? This will delete any customizations.'))) return
     try {
       const res = await fetch(`${API_URL}/email-templates/reset`, { method: 'POST' })
       const data = await res.json()
@@ -142,7 +143,7 @@ const AdminEmailTemplates = () => {
   }
 
   const deleteTemplate = async (template) => {
-    if (!confirm(`Are you sure you want to delete "${template.name}"?`)) return
+    if (!(await confirmToast(`Are you sure you want to delete "${template.name}"?`))) return
     try {
       const res = await fetch(`${API_URL}/email-templates/${template._id}`, { method: 'DELETE' })
       const data = await res.json()

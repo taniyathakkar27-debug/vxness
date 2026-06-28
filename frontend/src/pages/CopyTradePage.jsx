@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 import logoImage from '../assets/logo.png'
 import { formatPrice } from '../utils/formatPrice'
 
@@ -293,7 +294,7 @@ const CopyTradePage = () => {
   }
 
   const handleStop = async (subscriptionId) => {
-    if (!confirm('Are you sure you want to stop following this master?')) return
+    if (!(await confirmToast('Are you sure you want to stop following this master?'))) return
 
     try {
       const res = await fetch(`${API_URL}/copy/follow/${subscriptionId}/stop`, {
@@ -345,7 +346,7 @@ const CopyTradePage = () => {
   }
 
   const handleUnfollow = async (subscriptionId) => {
-    if (!confirm('Are you sure you want to unfollow this master? This will stop all future copy trades.')) return
+    if (!(await confirmToast('Are you sure you want to unfollow this master? This will stop all future copy trades.'))) return
 
     try {
       const res = await fetch(`${API_URL}/copy/follow/${subscriptionId}/unfollow`, {

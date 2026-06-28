@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../components/AdminLayout'
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 import { 
   AlertTriangle,
   Bell,
@@ -162,7 +163,7 @@ const AdminMarginAlerts = () => {
   }
 
   const handleDeleteAlert = async (alertId) => {
-    if (!confirm('Are you sure you want to delete this margin alert?')) return
+    if (!(await confirmToast('Are you sure you want to delete this margin alert?'))) return
 
     try {
       const response = await fetch(`${API_URL}/margin-alerts/${alertId}`, {

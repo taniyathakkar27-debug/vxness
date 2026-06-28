@@ -20,6 +20,7 @@ import {
   X
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast, promptToast } from '../utils/dialogs'
 
 const AdminPropFirm = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -28,6 +29,8 @@ const AdminPropFirm = () => {
   const [challenges, setChallenges] = useState([])
   const [participants, setParticipants] = useState([])
   const [payouts, setPayouts] = useState([])
+  const [participantsPage, setParticipantsPage] = useState(1)
+  const PARTICIPANTS_PER_PAGE = 5
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
@@ -226,7 +229,7 @@ const AdminPropFirm = () => {
   }
 
   const deleteChallenge = async (challengeId) => {
-    if (!confirm('Are you sure you want to delete this challenge?')) return
+    if (!(await confirmToast('Are you sure you want to delete this challenge?'))) return
     try {
       const res = await fetch(`${API_URL}/prop/admin/challenges/${challengeId}`, {
         method: 'DELETE'
@@ -244,10 +247,42 @@ const AdminPropFirm = () => {
     }
   }
 
+  const deleteParticipant = async (account) => {
+    const name = account.userId?.firstName || account.userId?.email || 'this participant'
+    if (!(await confirmToast(`Delete ${name}'s challenge account (${account.accountId})? Their trades will also be removed. This cannot be undone.`))) return
+    try {
+      const res = await fetch(`${API_URL}/prop/admin/account/${account._id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('Participant deleted')
+        fetchData()
+      } else {
+        toast.error(data.message || 'Failed to delete participant')
+      }
+    } catch (error) {
+      toast.error('Failed to delete participant')
+    }
+  }
+
+  // Filter + paginate participants (default 5 per page)
+  const filteredParticipants = participants.filter((p) => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return true
+    return (p.userId?.firstName || '').toLowerCase().includes(q) ||
+      (p.userId?.email || '').toLowerCase().includes(q) ||
+      (p.challengeId?.name || '').toLowerCase().includes(q)
+  })
+  const participantsTotalPages = Math.max(1, Math.ceil(filteredParticipants.length / PARTICIPANTS_PER_PAGE))
+  const participantsCurrentPage = Math.min(participantsPage, participantsTotalPages)
+  const pagedParticipants = filteredParticipants.slice(
+    (participantsCurrentPage - 1) * PARTICIPANTS_PER_PAGE,
+    participantsCurrentPage * PARTICIPANTS_PER_PAGE
+  )
+
   const adminId = (() => { try { return JSON.parse(localStorage.getItem('admin') || '{}')._id } catch { return null } })()
 
   const approvePayout = async (id) => {
-    if (!confirm('Approve this payout and credit the trader\'s wallet?')) return
+    if (!(await confirmToast('Approve this payout and credit the trader\'s wallet?', { confirmText: 'Approve', danger: false }))) return
     try {
       const res = await fetch(`${API_URL}/prop/admin/payout/${id}/approve`, {
         method: 'POST',
@@ -267,7 +302,7 @@ const AdminPropFirm = () => {
   }
 
   const rejectPayout = async (id) => {
-    const reason = prompt('Reason for rejection (optional):') || ''
+    const reason = (await promptToast('Reason for rejection (optional):', { confirmText: 'Reject' })) || ''
     try {
       const res = await fetch(`${API_URL}/prop/admin/payout/${id}/reject`, {
         method: 'POST',
@@ -519,13 +554,13 @@ const AdminPropFirm = () => {
 
           {/* Mobile Card View */}
           <div className="block lg:hidden p-4 space-y-3">
-            {participants.length === 0 ? (
+            {filteredParticipants.length === 0 ? (
               <div className="text-center py-12">
                 <Users size={48} className="text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-500">No participants yet</p>
               </div>
             ) : (
-              participants.map((p) => (
+              pagedParticipants.map((p) => (
                 <div key={p._id} className="bg-dark-700 rounded-xl p-4 border border-gray-700">
                   <div className="flex items-center justify-between mb-3">
                     <div>
@@ -555,6 +590,12 @@ const AdminPropFirm = () => {
                       {(p.currentBalance - p.initialBalance) >= 0 ? '+' : ''}${((p.currentBalance || 0) - (p.initialBalance || 0)).toLocaleString()}
                     </span>
                   </div>
+                  <button
+                    onClick={() => deleteParticipant(p)}
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 bg-red-500/15 text-red-400 rounded-lg text-sm hover:bg-red-500/25 transition-colors"
+                  >
+                    <Trash2 size={14} /> Delete
+                  </button>
                 </div>
               ))
             )}
@@ -575,12 +616,12 @@ const AdminPropFirm = () => {
                 </tr>
               </thead>
               <tbody>
-                {participants.length === 0 ? (
+                {filteredParticipants.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-gray-500">No participants yet</td>
                   </tr>
                 ) : (
-                  participants.map((p) => {
+                  pagedParticipants.map((p) => {
                     const pnl = (p.currentBalance || 0) - (p.initialBalance || 0)
                     return (
                       <tr key={p._id} className="border-b border-gray-800 hover:bg-dark-700/50">
@@ -598,9 +639,18 @@ const AdminPropFirm = () => {
                         </td>
                         <td className="py-4 px-4 text-gray-400">{new Date(p.createdAt).toLocaleDateString()}</td>
                         <td className="py-4 px-4">
-                          <button className="p-2 hover:bg-dark-600 rounded-lg transition-colors text-gray-400 hover:text-white">
-                            <Eye size={16} />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button className="p-2 hover:bg-dark-600 rounded-lg transition-colors text-gray-400 hover:text-white" title="View">
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              onClick={() => deleteParticipant(p)}
+                              className="p-2 hover:bg-dark-600 rounded-lg transition-colors text-gray-400 hover:text-red-500"
+                              title="Delete participant"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -609,6 +659,33 @@ const AdminPropFirm = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {filteredParticipants.length > PARTICIPANTS_PER_PAGE && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-800">
+              <span className="text-gray-500 text-sm">
+                Showing {(participantsCurrentPage - 1) * PARTICIPANTS_PER_PAGE + 1}
+                –{Math.min(participantsCurrentPage * PARTICIPANTS_PER_PAGE, filteredParticipants.length)} of {filteredParticipants.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setParticipantsPage((pg) => Math.max(1, pg - 1))}
+                  disabled={participantsCurrentPage <= 1}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-dark-700 text-gray-300 hover:bg-dark-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <span className="text-gray-400 text-sm">Page {participantsCurrentPage} of {participantsTotalPages}</span>
+                <button
+                  onClick={() => setParticipantsPage((pg) => Math.min(participantsTotalPages, pg + 1))}
+                  disabled={participantsCurrentPage >= participantsTotalPages}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-dark-700 text-gray-300 hover:bg-dark-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

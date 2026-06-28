@@ -638,6 +638,23 @@ router.get('/admin/account/:id', async (req, res) => {
   }
 })
 
+// DELETE /api/prop/admin/account/:id - Delete a challenge account (+ its trades & payouts)
+router.delete('/admin/account/:id', async (req, res) => {
+  try {
+    const account = await ChallengeAccount.findById(req.params.id)
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Account not found' })
+    }
+    const Trade = (await import('../models/Trade.js')).default
+    await Trade.deleteMany({ tradingAccountId: account._id })
+    await Transaction.deleteMany({ challengeAccountId: account._id })
+    await ChallengeAccount.findByIdAndDelete(account._id)
+    res.json({ success: true, message: 'Participant account deleted' })
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message })
+  }
+})
+
 // POST /api/prop/admin/force-pass/:id - Force pass a challenge
 router.post('/admin/force-pass/:id', async (req, res) => {
   try {

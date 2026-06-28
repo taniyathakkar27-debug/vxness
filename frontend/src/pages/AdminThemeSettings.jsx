@@ -12,6 +12,7 @@ import {
   X
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 
 const AdminThemeSettings = () => {
   const [themes, setThemes] = useState([])
@@ -97,7 +98,7 @@ const AdminThemeSettings = () => {
   }
 
   const deleteTheme = async (themeId) => {
-    if (!confirm('Are you sure you want to delete this theme?')) return
+    if (!(await confirmToast('Are you sure you want to delete this theme?'))) return
     try {
       const res = await fetch(`${API_URL}/theme/${themeId}`, {
         method: 'DELETE'

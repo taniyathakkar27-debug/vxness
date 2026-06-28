@@ -11,6 +11,7 @@ import {
   CreditCard
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 
 const AdminAccountTypes = () => {
   const [accountTypes, setAccountTypes] = useState([])
@@ -90,7 +91,7 @@ const AdminAccountTypes = () => {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this account type?')) return
+    if (!(await confirmToast('Are you sure you want to delete this account type?'))) return
 
     try {
       const res = await fetch(`${API_URL}/account-types/${id}`, {

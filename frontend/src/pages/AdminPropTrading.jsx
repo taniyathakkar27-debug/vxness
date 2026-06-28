@@ -6,6 +6,7 @@ import {
   ChevronDown, Search, Filter, MoreVertical, Shield, Target
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast, promptToast } from '../utils/dialogs'
 
 export default function AdminPropTrading() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -94,7 +95,7 @@ export default function AdminPropTrading() {
   }
 
   const handleForcePass = async (accountId) => {
-    if (!confirm('Are you sure you want to force pass this challenge?')) return
+    if (!(await confirmToast('Are you sure you want to force pass this challenge?', { confirmText: 'Force Pass', danger: false }))) return
     try {
       const res = await fetch(`${API_URL}/prop/admin/force-pass/${accountId}`, {
         method: 'POST',
@@ -113,7 +114,7 @@ export default function AdminPropTrading() {
   }
 
   const handleForceFail = async (accountId) => {
-    const reason = prompt('Enter reason for failing this challenge:')
+    const reason = await promptToast('Enter reason for failing this challenge:', { confirmText: 'Force Fail' })
     if (!reason) return
     try {
       const res = await fetch(`${API_URL}/prop/admin/force-fail/${accountId}`, {
@@ -133,7 +134,7 @@ export default function AdminPropTrading() {
   }
 
   const handleExtendTime = async (accountId) => {
-    const days = prompt('Enter number of days to extend:')
+    const days = await promptToast('Enter number of days to extend:', { confirmText: 'Extend', placeholder: 'e.g. 7' })
     if (!days || isNaN(days)) return
     try {
       const res = await fetch(`${API_URL}/prop/admin/extend-time/${accountId}`, {
@@ -152,7 +153,7 @@ export default function AdminPropTrading() {
   }
 
   const handleResetChallenge = async (accountId) => {
-    if (!confirm('Are you sure you want to reset this challenge? All progress will be lost.')) return
+    if (!(await confirmToast('Are you sure you want to reset this challenge? All progress will be lost.'))) return
     try {
       const res = await fetch(`${API_URL}/prop/admin/reset/${accountId}`, {
         method: 'POST',

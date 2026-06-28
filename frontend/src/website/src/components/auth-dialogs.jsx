@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Eye, EyeOff, Mail, Lock, User, Phone, Briefcase, Globe, MessageSquare, HeadphonesIcon } from "lucide-react"
+import toast from "react-hot-toast"
 
 
 export function LoginDialog({ trigger }) {
@@ -131,7 +132,7 @@ export function OpenAccountDialog({ trigger }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match")
+      toast.error("Passwords do not match")
       return
     }
     setIsLoading(true)

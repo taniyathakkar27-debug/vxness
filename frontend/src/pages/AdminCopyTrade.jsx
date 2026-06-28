@@ -17,6 +17,7 @@ import {
   Clock
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast, promptToast } from '../utils/dialogs'
 
 const AdminCopyTrade = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -110,7 +111,7 @@ const AdminCopyTrade = () => {
   }
 
   const handleReject = async (masterId) => {
-    const reason = prompt('Enter rejection reason:')
+    const reason = await promptToast('Enter rejection reason:', { confirmText: 'Reject' })
     if (!reason) return
     
     try {
@@ -135,7 +136,7 @@ const AdminCopyTrade = () => {
   }
 
   const handleSuspend = async (masterId) => {
-    if (!confirm('Are you sure you want to suspend this master?')) return
+    if (!(await confirmToast('Are you sure you want to suspend this master?'))) return
     
     try {
       const res = await fetch(`${API_URL}/copy/admin/suspend/${masterId}`, {

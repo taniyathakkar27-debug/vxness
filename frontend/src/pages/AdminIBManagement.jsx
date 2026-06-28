@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../components/AdminLayout'
 import { API_URL } from '../config/api'
+import { confirmToast, promptToast } from '../utils/dialogs'
 import { 
   UserCog,
   Plus,
@@ -360,7 +361,7 @@ const AdminIBManagement = () => {
   }
 
   const handleDeleteLevel = async (levelId) => {
-    if (!confirm('Are you sure you want to delete this level?')) return
+    if (!(await confirmToast('Are you sure you want to delete this level?'))) return
     
     try {
       const res = await fetch(`${API_URL}/ib/admin/levels/${levelId}`, {
@@ -423,7 +424,7 @@ const AdminIBManagement = () => {
   }
 
   const handleRejectTierRequest = async (requestId) => {
-    const reason = prompt('Rejection reason (optional):') ?? ''
+    const reason = (await promptToast('Rejection reason (optional):', { confirmText: 'Reject' })) ?? ''
     try {
       const res = await fetch(`${API_URL}/ib/admin/tier-change-requests/${requestId}/reject`, {
         method: 'PUT',
@@ -444,7 +445,7 @@ const AdminIBManagement = () => {
   }
 
   const handleReject = async (userId) => {
-    const reason = prompt('Enter rejection reason:')
+    const reason = await promptToast('Enter rejection reason:', { confirmText: 'Reject' })
     if (!reason) return
 
     try {
@@ -468,7 +469,7 @@ const AdminIBManagement = () => {
   }
 
   const handleBlock = async (userId) => {
-    const reason = prompt('Enter block reason:')
+    const reason = await promptToast('Enter block reason:', { confirmText: 'Block' })
     if (!reason) return
 
     try {
@@ -489,7 +490,7 @@ const AdminIBManagement = () => {
   }
 
   const handleSuspend = async (ibId) => {
-    if (!confirm('Are you sure you want to suspend this IB?')) return
+    if (!(await confirmToast('Are you sure you want to suspend this IB?'))) return
 
     try {
       const res = await fetch(`${API_URL}/ib/admin/suspend/${ibId}`, {
@@ -1886,7 +1887,7 @@ const IBDetailsModal = ({ ib, plans, ibCommission, setIbCommission, ibPlan, setI
             {ib.ibStatus === 'ACTIVE' && (
               <button
                 onClick={async () => {
-                  const reason = prompt('Enter block reason:')
+                  const reason = await promptToast('Enter block reason:', { confirmText: 'Block' })
                   if (!reason) return
                   try {
                     const res = await fetch(`${API_URL}/ib/admin/block/${ib._id}`, {

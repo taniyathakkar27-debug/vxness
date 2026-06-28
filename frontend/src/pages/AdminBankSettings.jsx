@@ -18,6 +18,7 @@ import {
   Percent
 } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast, promptToast } from '../utils/dialogs'
 
 const AdminBankSettings = () => {
   const [paymentMethods, setPaymentMethods] = useState([])
@@ -101,7 +102,7 @@ const AdminBankSettings = () => {
   }
 
   const handleRejectRequest = async (id) => {
-    const reason = prompt('Enter rejection reason:')
+    const reason = await promptToast('Enter rejection reason:', { confirmText: 'Reject' })
     if (!reason) return
 
     try {
@@ -174,7 +175,7 @@ const AdminBankSettings = () => {
 
   // Add all common currencies with live rates
   const addAllCurrencies = async () => {
-    if (!confirm('This will add all common currencies with live exchange rates. Continue?')) return
+    if (!(await confirmToast('This will add all common currencies with live exchange rates. Continue?', { confirmText: 'Continue', danger: false }))) return
     
     try {
       const res = await fetch(`${API_URL}/payment-methods/currencies/add-all`, {
@@ -242,7 +243,7 @@ const AdminBankSettings = () => {
   }
 
   const handleDeleteCurrency = async (id) => {
-    if (!confirm('Are you sure you want to delete this currency?')) return
+    if (!(await confirmToast('Are you sure you want to delete this currency?'))) return
     try {
       const res = await fetch(`${API_URL}/payment-methods/currencies/${id}`, { method: 'DELETE' })
       if (res.ok) {
@@ -317,7 +318,7 @@ const AdminBankSettings = () => {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this payment method?')) return
+    if (!(await confirmToast('Are you sure you want to delete this payment method?'))) return
     try {
       const res = await fetch(`${API_URL}/payment-methods/${id}`, { method: 'DELETE' })
       if (res.ok) {

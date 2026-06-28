@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import AdminLayout from '../components/AdminLayout'
 import { Plus, Edit2, Trash2, Gift, DollarSign, Percent, Calendar, Users, TrendingUp, FileText, Eye, EyeOff } from 'lucide-react'
 import { API_URL } from '../config/api'
+import { confirmToast } from '../utils/dialogs'
 
 const AdminBonusManagement = () => {
   const [bonuses, setBonuses] = useState([])
@@ -109,7 +110,7 @@ const AdminBonusManagement = () => {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this bonus?')) return
+    if (!(await confirmToast('Are you sure you want to delete this bonus?'))) return
 
     try {
       const res = await fetch(`${API_URL}/bonus/${id}`, {

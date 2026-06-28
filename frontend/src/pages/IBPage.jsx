@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { API_URL } from '../config/api'
+import { promptToast } from '../utils/dialogs'
 import logoImage from '../assets/logo.png'
 
 const IBPage = () => {
@@ -265,8 +266,8 @@ const IBPage = () => {
       toast.success('Referral link copied!')
     } catch (err) {
       console.error('Failed to copy:', err)
-      // Final fallback - show the link in a prompt
-      prompt('Copy your referral link:', link)
+      // Final fallback - show the link so the user can copy it manually
+      promptToast('Copy your referral link:', { defaultValue: link, confirmText: 'Done' })
     }
   }
 
