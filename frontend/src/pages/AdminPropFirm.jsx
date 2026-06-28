@@ -27,6 +27,7 @@ const AdminPropFirm = () => {
   const [challengeModeEnabled, setChallengeModeEnabled] = useState(false)
   const [challenges, setChallenges] = useState([])
   const [participants, setParticipants] = useState([])
+  const [payouts, setPayouts] = useState([])
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
@@ -41,12 +42,13 @@ const AdminPropFirm = () => {
   const defaultChallengeForm = {
     name: '',
     description: '',
-    stepsCount: 2,
+    stepsCount: 0,
     fundSize: 10000,
     challengeFee: 99,
     rules: {
       maxDailyDrawdownPercent: 5,
       maxOverallDrawdownPercent: 10,
+      drawdownType: 'STATIC',
       profitTargetPhase1Percent: 8,
       profitTargetPhase2Percent: 5,
       minLotSize: 0.01,
@@ -113,6 +115,13 @@ const AdminPropFirm = () => {
       if (dashData.success) {
         setStats(dashData.stats || {})
       }
+
+      // Fetch payout requests
+      const payoutsRes = await fetch(`${API_URL}/prop/admin/payouts`)
+      const payoutsData = await payoutsRes.json()
+      if (payoutsData.success) {
+        setPayouts(payoutsData.payouts || [])
+      }
     } catch (error) {
       console.error('Error fetching prop data:', error)
     }
@@ -170,7 +179,7 @@ const AdminPropFirm = () => {
     setChallengeForm({
       name: challenge.name || '',
       description: challenge.description || '',
-      stepsCount: challenge.stepsCount || 2,
+      stepsCount: challenge.stepsCount ?? 0,
       fundSize: challenge.fundSize || 10000,
       challengeFee: challenge.challengeFee || 99,
       rules: {
@@ -232,6 +241,48 @@ const AdminPropFirm = () => {
     } catch (error) {
       console.error('Error deleting challenge:', error)
       toast.error('Failed to delete challenge')
+    }
+  }
+
+  const adminId = (() => { try { return JSON.parse(localStorage.getItem('admin') || '{}')._id } catch { return null } })()
+
+  const approvePayout = async (id) => {
+    if (!confirm('Approve this payout and credit the trader\'s wallet?')) return
+    try {
+      const res = await fetch(`${API_URL}/prop/admin/payout/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('Payout approved and credited')
+        fetchData()
+      } else {
+        toast.error(data.message || 'Failed to approve payout')
+      }
+    } catch (error) {
+      toast.error('Failed to approve payout')
+    }
+  }
+
+  const rejectPayout = async (id) => {
+    const reason = prompt('Reason for rejection (optional):') || ''
+    try {
+      const res = await fetch(`${API_URL}/prop/admin/payout/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId, reason })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('Payout rejected')
+        fetchData()
+      } else {
+        toast.error(data.message || 'Failed to reject payout')
+      }
+    } catch (error) {
+      toast.error('Failed to reject payout')
     }
   }
 
@@ -363,6 +414,14 @@ const AdminPropFirm = () => {
           }`}
         >
           Participants
+        </button>
+        <button
+          onClick={() => setActiveTab('payouts')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            activeTab === 'payouts' ? 'bg-yellow-500 text-black' : 'bg-dark-700 text-gray-400 hover:text-white'
+          }`}
+        >
+          Payouts{payouts.filter(p => p.status === 'Pending').length > 0 ? ` (${payouts.filter(p => p.status === 'Pending').length})` : ''}
         </button>
       </div>
 
@@ -553,6 +612,74 @@ const AdminPropFirm = () => {
         </div>
       )}
 
+      {/* Payouts Tab */}
+      {activeTab === 'payouts' && (
+        <div className="bg-dark-800 rounded-xl border border-gray-800 overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-gray-800">
+            <h2 className="text-white font-semibold text-lg">Payout Requests</h2>
+            <p className="text-gray-500 text-sm">Approve to credit the trader's wallet with their profit share.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">User</th>
+                  <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Account</th>
+                  <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Amount</th>
+                  <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Status</th>
+                  <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Date</th>
+                  <th className="text-left text-gray-500 text-sm font-medium py-3 px-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payouts.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-gray-500">No payout requests yet</td>
+                  </tr>
+                ) : (
+                  payouts.map((p) => {
+                    const statusColor = p.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-500'
+                      : (p.status === 'Approved' || p.status === 'Completed') ? 'bg-green-500/20 text-green-500'
+                      : 'bg-red-500/20 text-red-500'
+                    return (
+                      <tr key={p._id} className="border-b border-gray-800 hover:bg-dark-700/50">
+                        <td className="py-4 px-4 text-white font-medium">{p.userId?.firstName || p.userId?.email || 'Unknown'}</td>
+                        <td className="py-4 px-4 text-gray-400">{p.challengeAccountId?.accountId || '-'}</td>
+                        <td className="py-4 px-4 text-yellow-500 font-semibold">${(p.amount || 0).toLocaleString()}</td>
+                        <td className="py-4 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs w-fit inline-block ${statusColor}`}>{p.status}</span>
+                        </td>
+                        <td className="py-4 px-4 text-gray-400">{new Date(p.createdAt).toLocaleDateString()}</td>
+                        <td className="py-4 px-4">
+                          {p.status === 'Pending' ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => approvePayout(p._id)}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => rejectPayout(p._id)}
+                                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-gray-600 text-xs">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Settings Modal */}
       {showSettingsModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -715,25 +842,132 @@ const AdminPropFirm = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-400 text-sm mb-2">Phase 1 Target %</label>
-                    <input
-                      type="number"
-                      value={challengeForm.rules.profitTargetPhase1Percent}
-                      onChange={(e) => updateFormRules('profitTargetPhase1Percent', parseFloat(e.target.value) || 0)}
+                    <label className="block text-gray-400 text-sm mb-2">Drawdown Type</label>
+                    <select
+                      value={challengeForm.rules.drawdownType || 'STATIC'}
+                      onChange={(e) => updateFormRules('drawdownType', e.target.value)}
                       className="w-full bg-dark-600 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                    />
+                    >
+                      <option value="STATIC">Static</option>
+                      <option value="TRAILING">Trailing</option>
+                    </select>
                   </div>
-                  <div>
-                    <label className="block text-gray-400 text-sm mb-2">Phase 2 Target %</label>
-                    <input
-                      type="number"
-                      value={challengeForm.rules.profitTargetPhase2Percent}
-                      onChange={(e) => updateFormRules('profitTargetPhase2Percent', parseFloat(e.target.value) || 0)}
-                      className="w-full bg-dark-600 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                      disabled={challengeForm.stepsCount < 2}
-                    />
-                  </div>
+                  {/* Instant Fund (0-Step) has no profit target; hide it */}
+                  {challengeForm.stepsCount >= 1 && (
+                    <div>
+                      <label className="block text-gray-400 text-sm mb-2">Phase 1 Target %</label>
+                      <input
+                        type="number"
+                        value={challengeForm.rules.profitTargetPhase1Percent}
+                        onChange={(e) => updateFormRules('profitTargetPhase1Percent', parseFloat(e.target.value) || 0)}
+                        className="w-full bg-dark-600 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      />
+                    </div>
+                  )}
+                  {/* Phase 2 target only applies to 2-Step challenges */}
+                  {challengeForm.stepsCount >= 2 && (
+                    <div>
+                      <label className="block text-gray-400 text-sm mb-2">Phase 2 Target %</label>
+                      <input
+                        type="number"
+                        value={challengeForm.rules.profitTargetPhase2Percent}
+                        onChange={(e) => updateFormRules('profitTargetPhase2Percent', parseFloat(e.target.value) || 0)}
+                        className="w-full bg-dark-600 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      />
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              {/* Live Preview — mirrors the public pricing card based on the form */}
+              <div className="bg-dark-700 rounded-xl p-4 border border-gray-700">
+                <h3 className="text-white font-semibold mb-4">Live Preview</h3>
+                {(() => {
+                  const f = challengeForm
+                  const steps = f.stepsCount
+                  const typeLabel = steps === 0 ? 'Instant Fund' : steps === 1 ? 'One Step' : 'Two Step'
+                  const typeSub = steps === 0 ? 'No Evaluation' : steps === 1 ? 'Single Evaluation' : 'Dual Evaluation'
+                  const size = Number(f.fundSize) || 0
+                  const sizeLabel = `$${size >= 1000 ? `${size / 1000}K` : size}`
+                  const split = f.fundedSettings?.profitSplitPercent ?? 80
+                  const lev = f.rules?.maxLeverage ?? 100
+                  const dailyP = f.rules?.maxDailyDrawdownPercent ?? 0
+                  const ddP = f.rules?.maxOverallDrawdownPercent ?? 0
+                  const t1 = f.rules?.profitTargetPhase1Percent ?? 0
+                  const t2 = f.rules?.profitTargetPhase2Percent ?? 0
+                  const trailing = f.rules?.drawdownType === 'TRAILING' ? ' Trailing' : ''
+                  const amt = (p) => `($${Math.round((size * p) / 100).toLocaleString()})`
+                  // Quick size presets per challenge type
+                  // Instant: 10K/25K/50K · One Step & Two Step: 5K..200K
+                  const sizePresets = steps === 0
+                    ? [10000, 25000, 50000]
+                    : [5000, 15000, 25000, 50000, 100000, 200000]
+                  // Auto-fee per size (by type); types without an entry keep the manual fee
+                  const feeByType = {
+                    0: { 10000: 159, 25000: 299, 50000: 499 },
+                    1: { 5000: 70, 15000: 130, 25000: 220, 50000: 333, 100000: 539, 200000: 990 },
+                    2: { 5000: 60, 15000: 110, 25000: 199, 50000: 299, 100000: 499, 200000: 900 }
+                  }
+                  const feeMap = feeByType[steps] || {}
+                  const Stat = ({ label, value, sub }) => (
+                    <div>
+                      <p className="text-gray-500 text-xs mb-0.5">{label}</p>
+                      <p className="text-white font-semibold">
+                        {value}{sub && <span className="text-gray-500 font-normal ml-1">{sub}</span>}
+                      </p>
+                    </div>
+                  )
+                  return (
+                    <div className="w-full rounded-2xl border border-gray-700 bg-dark-800 p-6">
+                      {/* Size tabs — selecting one sets the Account Size */}
+                      {sizePresets.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-5">
+                          {sizePresets.map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => {
+                                const next = { ...challengeForm, fundSize: s }
+                                if (feeMap[s] != null) next.challengeFee = feeMap[s]
+                                setChallengeForm(next)
+                              }}
+                              className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                size === s ? 'bg-yellow-500 text-dark-900' : 'bg-dark-700 text-gray-300 hover:bg-dark-600'
+                              }`}
+                            >
+                              ${s >= 1000 ? `${s / 1000}K` : s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-start justify-between mb-5">
+                        <div>
+                          <p className="text-3xl font-bold text-white">{sizeLabel}</p>
+                          <p className="text-gray-500 text-xs mt-1">Account Size</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-semibold text-yellow-500">{typeLabel}</p>
+                          <p className="text-gray-500 text-sm">{typeSub}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-y-4 gap-x-3 border-t border-gray-700 pt-4">
+                        {Stat({ label: 'Account Size', value: sizeLabel })}
+                        {Stat({ label: 'Profit Split', value: `${split}%` })}
+                        {Stat({ label: 'Leverage', value: `Upto 1:${lev}` })}
+                      </div>
+                      <div className="grid grid-cols-3 gap-y-4 gap-x-3 border-t border-gray-700 pt-4 mt-4">
+                        {steps >= 1 && Stat({ label: steps === 2 ? 'Profit Target (P1)' : 'Profit Target', value: `${t1}%`, sub: amt(t1) })}
+                        {steps === 2 && Stat({ label: 'Profit Target (P2)', value: `${t2}%`, sub: amt(t2) })}
+                        {Stat({ label: 'Max.Daily Loss', value: `${dailyP}%${trailing}`, sub: amt(dailyP) })}
+                        {Stat({ label: 'Max.Drawdown', value: `${ddP}%${trailing}`, sub: amt(ddP) })}
+                      </div>
+                      <div className="border-t border-gray-700 mt-4 pt-4">
+                        <p className="text-gray-500 text-xs">Challenge Fee</p>
+                        <p className="text-2xl font-bold text-yellow-500">${f.challengeFee}</p>
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Lot Size & Trade Limits */}

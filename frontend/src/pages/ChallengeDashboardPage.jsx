@@ -14,6 +14,7 @@ export default function ChallengeDashboardPage() {
   const [selectedAccount, setSelectedAccount] = useState(null)
   const [dashboard, setDashboard] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [requesting, setRequesting] = useState(false)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
 
   useEffect(() => {
@@ -52,6 +53,28 @@ export default function ChallengeDashboardPage() {
     } catch (error) {
       console.error('Error fetching dashboard:', error)
     }
+  }
+
+  const handleRequestPayout = async () => {
+    if (!selectedAccount) return
+    setRequesting(true)
+    try {
+      const res = await fetch(`${API_URL}/prop/payout/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user._id, challengeAccountId: selectedAccount._id })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(data.message || 'Payout requested')
+        fetchDashboard(selectedAccount._id)
+      } else {
+        toast.error(data.message || 'Payout request failed')
+      }
+    } catch (error) {
+      toast.error('Payout request failed')
+    }
+    setRequesting(false)
   }
 
   const getStatusColor = (status) => {
@@ -165,6 +188,25 @@ export default function ChallengeDashboardPage() {
                   <p className="text-green-500 font-bold">Challenge Passed!</p>
                   <p className="text-gray-400 text-sm">Congratulations! Your funded account is being prepared.</p>
                 </div>
+              </div>
+            )}
+
+            {dashboard.account.status === 'FUNDED' && (
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <Trophy size={24} className="text-purple-500" />
+                  <div>
+                    <p className="text-purple-400 font-bold">Funded Account</p>
+                    <p className="text-gray-400 text-sm">Withdraw your profit share. Payouts are reviewed by admin.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleRequestPayout}
+                  disabled={requesting}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                >
+                  {requesting ? 'Requesting...' : 'Request Payout'}
+                </button>
               </div>
             )}
 

@@ -58,7 +58,13 @@ const challengeSchema = new mongoose.Schema({
       type: Number,
       default: null
     },
-    
+    // Overall drawdown mode: STATIC (from initial balance) or TRAILING (from equity peak)
+    drawdownType: {
+      type: String,
+      enum: ['STATIC', 'TRAILING'],
+      default: 'STATIC'
+    },
+
     // Profit Rules
     profitTargetPhase1Percent: {
       type: Number,

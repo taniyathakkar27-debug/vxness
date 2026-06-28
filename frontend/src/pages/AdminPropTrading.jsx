@@ -551,13 +551,14 @@ export default function AdminPropTrading() {
 function ChallengeModal({ challenge, onClose, onSave }) {
   const [form, setForm] = useState({
     name: challenge?.name || '',
-    stepsCount: challenge?.stepsCount ?? 2,
+    stepsCount: challenge?.stepsCount ?? 0,
     fundSize: challenge?.fundSize || 10000,
     challengeFee: challenge?.challengeFee || 100,
     isActive: challenge?.isActive ?? true,
     rules: {
       maxDailyDrawdownPercent: challenge?.rules?.maxDailyDrawdownPercent || 5,
       maxOverallDrawdownPercent: challenge?.rules?.maxOverallDrawdownPercent || 10,
+      drawdownType: challenge?.rules?.drawdownType || 'STATIC',
       profitTargetPhase1Percent: challenge?.rules?.profitTargetPhase1Percent || 8,
       profitTargetPhase2Percent: challenge?.rules?.profitTargetPhase2Percent || 5,
       stopLossMandatory: challenge?.rules?.stopLossMandatory ?? true,
@@ -683,29 +684,49 @@ function ChallengeModal({ challenge, onClose, onSave }) {
                 />
               </div>
               <div>
-                <label className="block text-gray-400 text-sm mb-1">Phase 1 Target (%)</label>
-                <input
-                  type="number"
-                  value={form.rules.profitTargetPhase1Percent}
+                <label className="block text-gray-400 text-sm mb-1">Drawdown Type</label>
+                <select
+                  value={form.rules.drawdownType}
                   onChange={(e) => setForm({
                     ...form,
-                    rules: { ...form.rules, profitTargetPhase1Percent: parseFloat(e.target.value) }
+                    rules: { ...form.rules, drawdownType: e.target.value }
                   })}
                   className="w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-lg text-white"
-                />
+                >
+                  <option value="STATIC">Static (from initial balance)</option>
+                  <option value="TRAILING">Trailing (from equity peak)</option>
+                </select>
               </div>
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">Phase 2 Target (%)</label>
-                <input
-                  type="number"
-                  value={form.rules.profitTargetPhase2Percent}
-                  onChange={(e) => setForm({
-                    ...form,
-                    rules: { ...form.rules, profitTargetPhase2Percent: parseFloat(e.target.value) }
-                  })}
-                  className="w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-lg text-white"
-                />
-              </div>
+              {/* Instant Fund (0-Step) has no profit target; hide it */}
+              {form.stepsCount >= 1 && (
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">Phase 1 Target (%)</label>
+                  <input
+                    type="number"
+                    value={form.rules.profitTargetPhase1Percent}
+                    onChange={(e) => setForm({
+                      ...form,
+                      rules: { ...form.rules, profitTargetPhase1Percent: parseFloat(e.target.value) }
+                    })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-lg text-white"
+                  />
+                </div>
+              )}
+              {/* Phase 2 target only applies to 2-Step challenges */}
+              {form.stepsCount >= 2 && (
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">Phase 2 Target (%)</label>
+                  <input
+                    type="number"
+                    value={form.rules.profitTargetPhase2Percent}
+                    onChange={(e) => setForm({
+                      ...form,
+                      rules: { ...form.rules, profitTargetPhase2Percent: parseFloat(e.target.value) }
+                    })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-lg text-white"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-gray-400 text-sm mb-1">Expiry Days</label>
                 <input

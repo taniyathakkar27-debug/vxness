@@ -5,6 +5,7 @@ import PropSettings from '../models/PropSettings.js'
 import Wallet from '../models/Wallet.js'
 import Transaction from '../models/Transaction.js'
 import propTradingEngine from '../services/propTradingEngine.js'
+import { overallDrawdownPercent } from '../utils/drawdownMath.js'
 
 const router = express.Router()
 
@@ -217,10 +218,15 @@ router.get('/my-accounts/:userId', async (req, res) => {
       const dailyLoss = dayStartEquity - realTimeEquity
       const realTimeDailyDD = dailyLoss > 0 ? (dailyLoss / dayStartEquity) * 100 : 0
       
-      // Overall DD = (initialBalance - lowestEquity) / initialBalance * 100
+      // Overall DD — STATIC (from initial balance) or TRAILING (from equity peak)
       const lowestEquity = Math.min(account.lowestEquityOverall || initialBalance, realTimeEquity)
-      const overallLoss = initialBalance - lowestEquity
-      const realTimeOverallDD = overallLoss > 0 ? (overallLoss / initialBalance) * 100 : 0
+      const realTimeOverallDD = overallDrawdownPercent({
+        drawdownType: account.challengeId?.rules?.drawdownType || 'STATIC',
+        initialBalance,
+        highestEquity: Math.max(account.highestEquity || initialBalance, realTimeEquity),
+        lowestEquityOverall: lowestEquity,
+        currentEquity: realTimeEquity
+      })
       
       // Profit = (currentEquity - initialBalance) / initialBalance * 100
       const realTimeProfit = ((realTimeEquity - initialBalance) / initialBalance) * 100
@@ -332,6 +338,178 @@ router.post('/update-equity', async (req, res) => {
       overallDrawdown: result.overallDrawdown,
       profitPercent: result.profitPercent
     })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// ==================== PAYOUT ROUTES ====================
+
+// POST /api/prop/payout/request - Trader requests a profit payout from a FUNDED account
+router.post('/payout/request', async (req, res) => {
+  try {
+    const { userId, challengeAccountId, amount } = req.body
+    if (!userId || !challengeAccountId) {
+      return res.status(400).json({ success: false, message: 'userId and challengeAccountId required' })
+    }
+
+    const account = await ChallengeAccount.findById(challengeAccountId).populate('challengeId')
+    if (!account) return res.status(404).json({ success: false, message: 'Account not found' })
+    if (String(account.userId) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'Not your account' })
+    }
+    if (account.status !== 'FUNDED') {
+      return res.status(400).json({ success: false, message: 'Payouts are only available on funded accounts' })
+    }
+
+    // Realized profit only (currentBalance reflects closed trades; ignore floating)
+    const profit = account.currentBalance - account.initialBalance
+    if (profit <= 0) {
+      return res.status(400).json({ success: false, message: 'No realized profit available to withdraw' })
+    }
+
+    // Enforce withdrawal frequency
+    const freqDays = account.challengeId?.fundedSettings?.withdrawalFrequencyDays || 0
+    if (freqDays > 0 && account.lastWithdrawalDate) {
+      const nextAllowed = new Date(account.lastWithdrawalDate)
+      nextAllowed.setDate(nextAllowed.getDate() + freqDays)
+      if (new Date() < nextAllowed) {
+        return res.status(400).json({
+          success: false,
+          message: `Next payout allowed on ${nextAllowed.toLocaleDateString()}`,
+          code: 'WITHDRAWAL_TOO_SOON'
+        })
+      }
+    }
+
+    // Double-spend guard: no existing pending payout for this account
+    const existing = await Transaction.findOne({ type: 'Payout', challengeAccountId, status: 'Pending' })
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'A payout request is already pending for this account' })
+    }
+
+    // Trader's share of the realized profit
+    const split = account.profitSplitPercent || 80
+    const maxPayout = Math.round((profit * split / 100) * 100) / 100
+    const requested = amount ? Math.min(Number(amount), maxPayout) : maxPayout
+    if (requested <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid payout amount' })
+    }
+
+    const transaction = await Transaction.create({
+      userId,
+      type: 'Payout',
+      amount: requested,
+      status: 'Pending',
+      paymentMethod: 'Wallet',
+      challengeAccountId: account._id,
+      description: `Profit payout request (${split}% split) — account ${account.accountId}`
+    })
+
+    res.json({ success: true, message: 'Payout requested. Pending admin approval.', transaction })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// GET /api/prop/payouts/:userId - Trader's payout history
+router.get('/payouts/:userId', async (req, res) => {
+  try {
+    const payouts = await Transaction.find({ userId: req.params.userId, type: 'Payout' }).sort({ createdAt: -1 })
+    res.json({ success: true, payouts })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// GET /api/prop/admin/payouts - All payout requests (admin queue)
+router.get('/admin/payouts', async (req, res) => {
+  try {
+    const { status } = req.query
+    const filter = { type: 'Payout' }
+    if (status) filter.status = status
+    const payouts = await Transaction.find(filter)
+      .populate('userId', 'firstName email')
+      .populate('challengeAccountId', 'accountId currentBalance initialBalance')
+      .sort({ createdAt: -1 })
+    res.json({ success: true, payouts })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// POST /api/prop/admin/payout/:id/approve - Approve a payout, credit wallet, consume profit
+router.post('/admin/payout/:id/approve', async (req, res) => {
+  try {
+    const { adminId } = req.body
+
+    // Atomic status flip prevents double-approval / double-credit
+    const transaction = await Transaction.findOneAndUpdate(
+      { _id: req.params.id, type: 'Payout', status: 'Pending' },
+      { $set: { status: 'Approved', processedAt: new Date(), processedBy: adminId || null } },
+      { new: true }
+    )
+    if (!transaction) {
+      return res.status(400).json({ success: false, message: 'Payout not found or already processed' })
+    }
+
+    const account = await ChallengeAccount.findById(transaction.challengeAccountId)
+    if (!account || account.status !== 'FUNDED') {
+      // revert flip
+      transaction.status = 'Pending'; transaction.processedAt = null; await transaction.save()
+      return res.status(400).json({ success: false, message: 'Funded account no longer valid' })
+    }
+
+    const amount = transaction.amount
+    const available = account.currentBalance - account.initialBalance
+    if (amount > available + 1e-6) {
+      transaction.status = 'Pending'; transaction.processedAt = null; await transaction.save()
+      return res.status(400).json({ success: false, message: 'Insufficient realized profit to cover this payout' })
+    }
+
+    // Credit trader's wallet
+    let wallet = await Wallet.findOne({ userId: account.userId })
+    if (!wallet) { wallet = new Wallet({ userId: account.userId, balance: 0 }); await wallet.save() }
+    wallet.balance += amount
+    await wallet.save()
+    transaction.walletId = wallet._id
+
+    // Consume the profit from the funded account and re-anchor baselines so the
+    // withdrawal is NOT read as a drawdown (critical for trailing accounts).
+    account.currentBalance -= amount
+    account.currentEquity = account.currentBalance
+    account.totalWithdrawn = (account.totalWithdrawn || 0) + amount
+    account.lastWithdrawalDate = new Date()
+    account.highestEquity = account.currentBalance
+    account.dayStartEquity = account.currentBalance
+    account.lowestEquityToday = account.currentBalance
+    account.lowestEquityOverall = account.currentBalance
+    account.currentDailyDrawdownPercent = 0
+    account.currentOverallDrawdownPercent = 0
+    await account.save()
+
+    transaction.status = 'Completed'
+    await transaction.save()
+
+    res.json({ success: true, message: 'Payout approved and credited', transaction, newWalletBalance: wallet.balance })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// POST /api/prop/admin/payout/:id/reject - Reject a pending payout (no balance change)
+router.post('/admin/payout/:id/reject', async (req, res) => {
+  try {
+    const { adminId, reason } = req.body
+    const transaction = await Transaction.findOneAndUpdate(
+      { _id: req.params.id, type: 'Payout', status: 'Pending' },
+      { $set: { status: 'Rejected', processedAt: new Date(), processedBy: adminId || null, adminRemarks: reason || '' } },
+      { new: true }
+    )
+    if (!transaction) {
+      return res.status(400).json({ success: false, message: 'Payout not found or already processed' })
+    }
+    res.json({ success: true, message: 'Payout rejected', transaction })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }

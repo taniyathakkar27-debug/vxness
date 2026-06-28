@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { 
   Trophy, Target, TrendingUp, Shield, Clock, AlertTriangle,
   Check, ChevronRight, Zap, Award, DollarSign, ArrowLeft, FileText, X
@@ -9,6 +9,7 @@ import { API_URL } from '../config/api'
 
 export default function BuyChallengePage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [challenges, setChallenges] = useState([])
   const [loading, setLoading] = useState(true)
   const [enabled, setEnabled] = useState(false)
@@ -61,6 +62,18 @@ export default function BuyChallengePage() {
   const accountSizes = selectedType !== null 
     ? [...new Set(challenges.filter(c => c.stepsCount === selectedType).map(c => c.fundSize))].sort((a, b) => a - b)
     : []
+
+  // Preselect from ?challenge=<id> (e.g. coming from the public pricing page)
+  useEffect(() => {
+    const challengeId = searchParams.get('challenge')
+    if (challengeId && challenges.length) {
+      const match = challenges.find(c => c._id === challengeId)
+      if (match) {
+        setSelectedType(match.stepsCount)
+        setSelectedSize(match.fundSize)
+      }
+    }
+  }, [challenges, searchParams])
 
   // Find matching challenge
   useEffect(() => {

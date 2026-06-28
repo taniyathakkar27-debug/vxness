@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { overallDrawdownPercent } from '../utils/drawdownMath.js'
 
 const challengeAccountSchema = new mongoose.Schema({
   userId: {
@@ -247,8 +248,14 @@ challengeAccountSchema.methods.updateEquity = async function(newEquity) {
     }
   }
   
-  // Calculate overall drawdown
-  const overallDD = ((this.initialBalance - this.lowestEquityOverall) / this.initialBalance) * 100
+  // Calculate overall drawdown (STATIC from initial balance, or TRAILING from equity peak)
+  const overallDD = overallDrawdownPercent({
+    drawdownType: challenge?.rules?.drawdownType || 'STATIC',
+    initialBalance: this.initialBalance,
+    highestEquity: this.highestEquity,
+    lowestEquityOverall: this.lowestEquityOverall,
+    currentEquity: newEquity
+  })
   this.currentOverallDrawdownPercent = Math.max(0, overallDD)
   if (overallDD > this.maxOverallDrawdownHit) {
     this.maxOverallDrawdownHit = overallDD
@@ -283,7 +290,19 @@ challengeAccountSchema.methods.resetDailyStats = async function() {
     this.tradingDaysCount += 1
     this.lastTradingDay = new Date()
   }
-  
+
+  await this.save()
+}
+
+// Reset ONLY the daily drawdown baseline (called by the 00:00 UTC cron).
+// Unlike resetDailyStats(), this does NOT touch tradingDaysCount, so accounts
+// that didn't trade don't get their trading-day count inflated.
+challengeAccountSchema.methods.resetDailyDrawdown = async function() {
+  this.dayStartEquity = this.currentEquity
+  this.lowestEquityToday = this.currentEquity
+  this.tradesToday = 0
+  this.currentDailyDrawdownPercent = 0
+  this.updatedAt = new Date()
   await this.save()
 }
 

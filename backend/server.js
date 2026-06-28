@@ -76,6 +76,7 @@ import propTradingEngine from './services/propTradingEngine.js'
 
 import infowayService from './services/infowayService.js'
 import { SUPPORTED_SYMBOLS, CRYPTO_SYMBOLS } from './services/infowayService.js'
+import ChallengeAccount from './models/ChallengeAccount.js'
 
 
 
@@ -670,6 +671,24 @@ httpServer.listen(PORT, () => {
   })
 
   console.log('[CRON] Daily swap application scheduled for 22:00 UTC')
+
+  // Reset daily drawdown baseline for all live challenge/funded accounts at 00:00 UTC
+  cron.schedule('0 0 * * *', async () => {
+    console.log('[CRON] Resetting daily drawdown for challenge accounts...')
+    try {
+      const accounts = await ChallengeAccount.find({ status: { $in: ['ACTIVE', 'FUNDED'] } })
+      for (const acc of accounts) {
+        await acc.resetDailyDrawdown()
+      }
+      console.log(`[CRON] Daily drawdown reset for ${accounts.length} challenge accounts`)
+    } catch (error) {
+      console.error('[CRON] Error resetting daily drawdown:', error)
+    }
+  }, {
+    timezone: 'UTC'
+  })
+
+  console.log('[CRON] Daily challenge drawdown reset scheduled for 00:00 UTC')
 
 })
 

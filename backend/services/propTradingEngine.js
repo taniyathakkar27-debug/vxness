@@ -8,6 +8,7 @@ import { sendTemplateEmail } from '../services/emailService.js'
 import { resolveTradeSegment } from '../utils/tradeSegment.js'
 import { commissionDollarAmount } from '../utils/commissionMath.js'
 import { pipSize, contractSize as symbolContractSize, marginUsd } from '../utils/symbolMeta.js'
+import { overallDrawdownPercent } from '../utils/drawdownMath.js'
 import infowayService from './infowayService.js'
 
 class PropTradingEngine {
@@ -44,18 +45,25 @@ class PropTradingEngine {
       throw new Error('Challenge not found or inactive')
     }
 
-    const accountId = await ChallengeAccount.generateAccountId('CH')
+    // Instant Fund (stepsCount === 0) has NO evaluation — the account is funded
+    // immediately on purchase. Other types start as an ACTIVE evaluation account.
+    const isInstant = challenge.stepsCount === 0
+    const accountId = await ChallengeAccount.generateAccountId(isInstant ? 'FUNDED' : 'CHALLENGE')
     const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + (challenge.rules.challengeExpiryDays || 30))
+    if (isInstant) {
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1) // funded accounts last 1 year
+    } else {
+      expiresAt.setDate(expiresAt.getDate() + (challenge.rules.challengeExpiryDays || 30))
+    }
 
     const account = await ChallengeAccount.create({
       userId,
       challengeId,
       accountId,
-      accountType: 'CHALLENGE',
-      currentPhase: 1,
-      totalPhases: challenge.stepsCount || 2,
-      status: 'ACTIVE',
+      accountType: isInstant ? 'FUNDED' : 'CHALLENGE',
+      currentPhase: isInstant ? 0 : 1,
+      totalPhases: isInstant ? 0 : (challenge.stepsCount || 2),
+      status: isInstant ? 'FUNDED' : 'ACTIVE',
       initialBalance: challenge.fundSize,
       currentBalance: challenge.fundSize,
       currentEquity: challenge.fundSize,
@@ -411,7 +419,7 @@ class PropTradingEngine {
     const account = await ChallengeAccount.findById(challengeAccountId)
       .populate('challengeId')
     
-    if (!account || account.status !== 'ACTIVE') return null
+    if (!account || !['ACTIVE', 'FUNDED'].includes(account.status)) return null
 
     const rules = account.challengeId.rules
 
@@ -581,7 +589,7 @@ class PropTradingEngine {
   // Create funded account after passing challenge
   async createFundedAccount(challengeAccount) {
     const challenge = await Challenge.findById(challengeAccount.challengeId)
-    const accountId = await ChallengeAccount.generateAccountId('FND')
+    const accountId = await ChallengeAccount.generateAccountId('FUNDED')
     
     const expiresAt = new Date()
     expiresAt.setFullYear(expiresAt.getFullYear() + 1) // Funded accounts last 1 year
@@ -1000,10 +1008,15 @@ class PropTradingEngine {
     const dailyLoss = dayStartEquity - realTimeEquity
     const realTimeDailyDD = dailyLoss > 0 ? (dailyLoss / dayStartEquity) * 100 : 0
     
-    // Overall DD = (initialBalance - lowestEquity) / initialBalance * 100
+    // Overall DD — STATIC (from initial balance) or TRAILING (from equity peak)
     const lowestEquity = Math.min(account.lowestEquityOverall || initialBalance, realTimeEquity)
-    const overallLoss = initialBalance - lowestEquity
-    const realTimeOverallDD = overallLoss > 0 ? (overallLoss / initialBalance) * 100 : 0
+    const realTimeOverallDD = overallDrawdownPercent({
+      drawdownType: rules.drawdownType || 'STATIC',
+      initialBalance,
+      highestEquity: Math.max(account.highestEquity || initialBalance, realTimeEquity),
+      lowestEquityOverall: lowestEquity,
+      currentEquity: realTimeEquity
+    })
     
     // Profit = (currentEquity - initialBalance) / initialBalance * 100
     const realTimeProfit = ((realTimeEquity - initialBalance) / initialBalance) * 100

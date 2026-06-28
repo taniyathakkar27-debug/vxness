@@ -19,6 +19,7 @@ import {
   Award
 } from "lucide-react"
 import { OpenAccountDialog } from "@/components/auth-dialogs"
+import { PricingSelector } from "@/components/prop/pricing-selector"
 
 export default function PropFirmPage() {
   return (
@@ -389,6 +390,20 @@ export default function PropFirmPage() {
             <p className="text-center text-muted-foreground mt-10 max-w-2xl mx-auto">
               The result is a scalable and flexible challenge ecosystem tailored for modern proprietary trading firms.
             </p>
+          </div>
+        </section>
+
+        {/* Pricing / Pick a Challenge */}
+        <section id="pricing" className="py-20 lg:py-28 bg-muted/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <p className="text-primary font-semibold text-sm uppercase tracking-wider mb-3">Pricing</p>
+              <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">Pick. Trade. Profit.</h2>
+              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+                Choose your challenge type and account size. Get funded with high profit splits and fast payouts.
+              </p>
+            </div>
+            <PricingSelector />
           </div>
         </section>
 
