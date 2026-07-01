@@ -1065,10 +1065,16 @@ const Account = () => {
                   {/* Card Footer - Actions */}
                   <div className={`flex border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
                     <button
-                      onClick={() => ensureKycForTrading(() => {
-                        if (isMobile) navigate(`/mobile?account=${account._id}`)
-                        else navigate(`/trade/${account._id}`)
-                      })}
+                      onClick={() => {
+                        const goTrade = () => {
+                          if (isMobile) navigate(`/mobile?account=${account._id}`)
+                          else navigate(`/trade/${account._id}`)
+                        }
+                        // Demo accounts open the terminal without KYC; the KYC gate is
+                        // enforced when they place an order. Real accounts stay gated here.
+                        if (account.isDemo || account.accountTypeId?.isDemo) goTrade()
+                        else ensureKycForTrading(goTrade)
+                      }}
                       className={`flex-1 flex items-center justify-center gap-1 ${isMobile ? 'py-2 text-xs' : 'py-3'} bg-accent-green text-black font-medium hover:bg-accent-green/90 transition-colors`}
                     >
                       <ArrowRight size={isMobile ? 12 : 16} /> Trade

@@ -22,6 +22,8 @@ import { isMarketOpen, marketClosedReason } from '../utils/marketHours'
 
 import TradingViewChart from '../components/TradingViewChart'
 
+import KycTradeRequiredModal from '../components/KycTradeRequiredModal'
+
 
 
 const TradingPage = () => {
@@ -274,8 +276,23 @@ const TradingPage = () => {
 
   const [globalNotification, setGlobalNotification] = useState('')
 
-  const [kycAllowed, setKycAllowed] = useState(null)
+  // kycApproved: null = still checking, true = KYC approved, false = not approved.
+  const [kycApproved, setKycApproved] = useState(null)
   const [kycDetailStatus, setKycDetailStatus] = useState(null)
+  // Modal shown when a DEMO user without approved KYC tries to place an order.
+  const [showKycModal, setShowKycModal] = useState(false)
+
+  // Demo accounts may VIEW the trade terminal without KYC — the KYC gate is enforced
+  // only when they actually place an order (Buy/Sell). Real & challenge accounts stay
+  // fully locked until an admin approves KYC (unchanged behaviour).
+  const isDemoAccount = account?.isDemo === true || account?.accountTypeId?.isDemo === true
+  const kycAllowed = kycApproved === true
+    ? true
+    : kycApproved === null
+      ? null
+      : account
+        ? (isDemoAccount ? true : false) // approved=false: demo can view, real is locked
+        : null // approved=false but account not loaded yet → keep showing loader
 
   const categories = ['All', 'Starred', 'Forex', 'Metals', 'Crypto']
 
@@ -455,7 +472,7 @@ const TradingPage = () => {
       const stored = JSON.parse(localStorage.getItem('user') || '{}')
       if (!token || !stored._id) {
         navigate('/user/login')
-        setKycAllowed(false)
+        setKycApproved(false)
         return
       }
       try {
@@ -468,14 +485,14 @@ const TradingPage = () => {
           localStorage.removeItem('token')
           localStorage.removeItem('user')
           navigate('/user/login')
-          setKycAllowed(false)
+          setKycApproved(false)
           return
         }
         if (data.user) {
           const merged = { ...stored, ...data.user }
           localStorage.setItem('user', JSON.stringify(merged))
           if (data.user.kycApproved) {
-            setKycAllowed(true)
+            setKycApproved(true)
             setKycDetailStatus(null)
             return
           }
@@ -490,25 +507,33 @@ const TradingPage = () => {
         } catch (_) {}
         // KYC record is approved even if the user.kycApproved flag wasn't synced — allow trading
         if (detail === 'approved') {
-          setKycAllowed(true)
+          setKycApproved(true)
           setKycDetailStatus(null)
           return
         }
         setKycDetailStatus(detail)
-        setKycAllowed(false)
+        setKycApproved(false)
       } catch (e) {
         console.error('KYC gate error:', e)
-        setKycAllowed(false)
+        setKycApproved(false)
       }
     }
     verifyKyc()
   }, [navigate])
 
+  // Load the account itself regardless of KYC status. We need to know whether it's a
+  // demo account BEFORE deciding whether to lock the terminal (demo can view without KYC).
+  useEffect(() => {
+
+    if (!accountId) return
+
+    fetchAccount()
+
+  }, [accountId, accountType])
+
   useEffect(() => {
 
     if (kycAllowed !== true) return
-
-    fetchAccount()
 
     // Fetch all instruments from API
 
@@ -518,7 +543,7 @@ const TradingPage = () => {
 
     fetchLivePrices()
 
-    
+
 
     // Refresh prices every 2 seconds for real-time P/L updates
 
@@ -528,7 +553,7 @@ const TradingPage = () => {
 
     }, 2000)
 
-    
+
 
     return () => {
 
@@ -1668,6 +1693,16 @@ const TradingPage = () => {
 
   const executeMarketOrder = async (side) => {
 
+    // KYC gate: demo users can view the terminal, but placing an order requires
+    // admin-approved KYC. Show the KYC modal instead of executing.
+    if (kycApproved !== true) {
+
+      setShowKycModal(true)
+
+      return
+
+    }
+
     // Check Kill Switch
 
     if (killSwitchActive) {
@@ -1847,6 +1882,16 @@ const TradingPage = () => {
   // Execute Pending Order
 
   const executePendingOrder = async () => {
+
+    // KYC gate: demo users can view the terminal, but placing an order requires
+    // admin-approved KYC. Show the KYC modal instead of executing.
+    if (kycApproved !== true) {
+
+      setShowKycModal(true)
+
+      return
+
+    }
 
     // Check Kill Switch
 
@@ -5565,6 +5610,13 @@ const TradingPage = () => {
         }
 
       `}</style>
+
+      {/* KYC gate for demo (and any) accounts — shown when placing an order without approved KYC */}
+      <KycTradeRequiredModal
+        open={showKycModal}
+        onClose={() => setShowKycModal(false)}
+        isDarkMode={isDarkMode}
+      />
 
     </div>
 

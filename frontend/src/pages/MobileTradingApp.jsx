@@ -258,15 +258,20 @@ const MobileTradingApp = () => {
 
       setUser(effective)
 
-      if (!effective.kycApproved && accountIdFromUrl) {
-        setActiveTab('home')
-        setShowKycTradeRequiredModal(true)
-        return
-      }
-
       fetchInstruments()
-      fetchAccounts(effective._id)
       fetchLivePrices()
+      const loadedAccounts = await fetchAccounts(effective._id)
+
+      // Demo accounts may open the terminal without KYC — the KYC gate is enforced when
+      // placing an order. Real accounts opened via URL stay locked until admin approval.
+      if (!effective.kycApproved && accountIdFromUrl) {
+        const target = loadedAccounts.find(a => a._id === accountIdFromUrl)
+        const isDemo = target && (target.isDemo || target.accountTypeId?.isDemo)
+        if (!isDemo) {
+          setActiveTab('home')
+          setShowKycTradeRequiredModal(true)
+        }
+      }
     }
 
     init()
@@ -317,9 +322,14 @@ const MobileTradingApp = () => {
           approved = kData.success && kData.kyc?.status === 'approved'
         } catch (_) {}
       }
+      // Demo accounts can open the trade terminal without KYC; the gate is enforced when
+      // they place an order. Real accounts still require approval to enter the terminal.
       if (!approved) {
-        setShowKycTradeRequiredModal(true)
-        return
+        const isDemo = selectedAccount && (selectedAccount.isDemo || selectedAccount.accountTypeId?.isDemo)
+        if (!isDemo) {
+          setShowKycTradeRequiredModal(true)
+          return
+        }
       }
       setActiveTab('trade')
     } catch (e) {
@@ -632,9 +642,17 @@ const MobileTradingApp = () => {
 
       }
 
-    } catch (e) {}
+      setLoading(false)
 
-    setLoading(false)
+      return data.accounts || []
+
+    } catch (e) {
+
+      setLoading(false)
+
+      return []
+
+    }
 
   }
 
@@ -773,6 +791,16 @@ const MobileTradingApp = () => {
   const executeOrder = async (tradeSide) => {
 
     if (!selectedAccount || !selectedInstrument || isExecuting) return
+
+    // KYC gate: demo users can browse the terminal, but placing an order requires
+    // admin-approved KYC. Show the KYC modal instead of executing.
+    if (!user?.kycApproved) {
+
+      setShowKycTradeRequiredModal(true)
+
+      return
+
+    }
 
     // Weekend market-closed guard (crypto stays open 24/7)
 
