@@ -399,13 +399,15 @@ router.put('/:id/archive', async (req, res) => {
       })
     }
 
-    // Check if account has balance - require withdrawal first
-    if (account.balance > 0 && !forceArchive) {
-      return res.status(400).json({ 
-        success: false, 
+    // Check if account has a withdrawable balance - require withdrawal first.
+    // Use a 1-cent threshold so floating-point residue (e.g. 0.0001) that still
+    // displays as "$0.00" doesn't block archiving.
+    if (account.balance >= 0.01 && !forceArchive) {
+      return res.status(400).json({
+        success: false,
         requiresWithdrawal: true,
         balance: account.balance,
-        message: `Please withdraw $${account.balance.toFixed(2)} from this account before archiving.` 
+        message: `Please withdraw $${account.balance.toFixed(2)} from this account before archiving.`
       })
     }
 
