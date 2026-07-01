@@ -474,15 +474,31 @@ const AdminPropFirm = () => {
             </button>
           </div>
 
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 space-y-8">
             {challenges.length === 0 ? (
-              <div className="col-span-2 text-center py-12">
+              <div className="text-center py-12">
                 <Trophy size={48} className="text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-500">No challenges created yet</p>
                 <p className="text-gray-600 text-sm">Click "Add Challenge" to create your first challenge</p>
               </div>
             ) : (
-              challenges.map((challenge) => (
+              [
+                { key: 0, label: 'Instant Fund' },
+                { key: 1, label: 'One Step' },
+                { key: 2, label: 'Two Step' },
+              ].map((group) => {
+                const groupChallenges = challenges.filter((c) => (c.stepsCount ?? 0) === group.key)
+                if (groupChallenges.length === 0) return null
+                return (
+                  <div key={group.key}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <h3 className="text-white font-semibold text-lg">{group.label}</h3>
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-dark-600 text-gray-400">
+                        {groupChallenges.length}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {groupChallenges.map((challenge) => (
                 <div key={challenge._id} className="bg-dark-700 rounded-xl p-5 border border-gray-700">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-white font-semibold text-lg">{challenge.name}</h3>
@@ -497,15 +513,19 @@ const AdminPropFirm = () => {
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Profit Target</p>
-                      <p className="text-green-500 font-medium">{challenge.profitTarget || 8}%</p>
+                      <p className="text-green-500 font-medium">
+                        {challenge.stepsCount === 0
+                          ? 'N/A'
+                          : `${challenge.rules?.profitTargetPhase1Percent ?? 8}%`}
+                      </p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Max Drawdown</p>
-                      <p className="text-red-500 font-medium">{challenge.maxDrawdown || 10}%</p>
+                      <p className="text-red-500 font-medium">{challenge.rules?.maxOverallDrawdownPercent ?? 10}%</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Duration</p>
-                      <p className="text-white font-medium">{challenge.durationDays || 30} days</p>
+                      <p className="text-white font-medium">{challenge.rules?.challengeExpiryDays ?? 30} days</p>
                     </div>
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-gray-600">
@@ -529,7 +549,11 @@ const AdminPropFirm = () => {
                     </div>
                   </div>
                 </div>
-              ))
+                      ))}
+                    </div>
+                  </div>
+                )
+              })
             )}
           </div>
         </div>
@@ -839,13 +863,21 @@ const AdminPropFirm = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-gray-400 text-sm mb-2">Challenge Name *</label>
-                  <input
-                    type="text"
+                  <select
                     value={challengeForm.name}
                     onChange={(e) => setChallengeForm({...challengeForm, name: e.target.value})}
-                    placeholder="e.g., Starter Challenge"
                     className="w-full bg-dark-700 border border-gray-700 rounded-lg px-4 py-3 text-white"
-                  />
+                  >
+                    <option value="" disabled>Select challenge name</option>
+                    <option value="Instant Fund">Instant Fund</option>
+                    <option value="One Step">One Step</option>
+                    <option value="Two Step">Two Step</option>
+                    {/* Keep any existing custom name selectable when editing */}
+                    {challengeForm.name &&
+                      !['Instant Fund', 'One Step', 'Two Step'].includes(challengeForm.name) && (
+                        <option value={challengeForm.name}>{challengeForm.name}</option>
+                      )}
+                  </select>
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-gray-400 text-sm mb-2">Description</label>
